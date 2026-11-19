@@ -180,6 +180,10 @@
   .nav { background: linear-gradient(to bottom, #1a0f10, var(--bg)); border-bottom: 0; padding-top: 18px; padding-bottom: 18px; }
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
   .nav a.lnk:hover { color: var(--text); }
+  .nav .navsel { appearance: none; -webkit-appearance: none; background: rgba(244,241,234,.08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23D9D5DF' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 14px center; color: #D9D5DF; border: 1px solid rgba(244,241,234,.18); border-radius: 22px; padding: 9px 34px 9px 16px; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+  .nav .navsel:hover, .nav .navsel:focus-visible { color: var(--text); border-color: rgba(244,241,234,.4); }
+  .nav .navsel.on { background-color: rgba(244,241,234,.14); color: var(--text); font-weight: 600; }
+  .nav .navsel option { color: #111; }
   .nav a.lnk[aria-current="page"] { background: rgba(244,241,234,.14); color: var(--text); border-bottom: 0; font-weight: 600; }
   .fh { position: relative; margin: 8px 40px 0; border-radius: 22px; overflow: hidden; aspect-ratio: 2.2 / 1; min-height: 480px; max-height: 760px; background-color: #1a1418; background-size: cover; background-position: center right; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
   .fh .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,8,10,.92) 0%, rgba(10,8,10,.72) 28%, rgba(10,8,10,.25) 55%, rgba(10,8,10,0) 72%), linear-gradient(to top, rgba(10,8,10,.75) 0%, rgba(10,8,10,0) 40%); }
@@ -349,6 +353,8 @@
       <a class="lnk" href="/" data-r="home">Home</a>
       <a class="lnk" href="/browse" data-r="browse">Browse</a>
       <a class="lnk" href="/my-list" data-r="list">My List</a>
+      <label class="sr" for="navLang">Language</label>
+      <select id="navLang" class="navsel" title="Show titles in this language"><option value="">All languages</option></select>
       <a class="lnk" href="/admin" data-r="admin" id="adminLink" hidden>Admin</a>
     </nav>
   </div>
@@ -1518,6 +1524,23 @@ window.ReelAdmin = function (env) {
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new' }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
+  try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
+  function inNavLang(m) { return !S.navLang || langsOf(m.data).indexOf(S.navLang) !== -1; }
+  function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function fillNavLang() {
+    var sel = $('navLang'); if (!sel) return;
+    var n = {}; S.movies.forEach(function (m) { langsOf(m.data).forEach(function (l) { n[l] = (n[l] || 0) + 1; }); });
+    var langs = Object.keys(n).sort();
+    if (S.navLang && !n[S.navLang]) langs.push(S.navLang);
+    var want = [''].concat(langs).join('|');
+    if (sel.getAttribute('data-k') !== want) {
+      sel.innerHTML = '';
+      sel.appendChild(h('option', { value: '', text: 'All languages' }));
+      langs.forEach(function (l) { sel.appendChild(h('option', { value: l, text: l })); });
+      sel.setAttribute('data-k', want);
+    }
+    sel.value = S.navLang; sel.classList.toggle('on', !!S.navLang);
+  }
   var $ = function (id) { return document.getElementById(id); };
   function h(tag, attrs, kids) {
     var el = document.createElement(tag);
@@ -1726,8 +1749,14 @@ window.ReelAdmin = function (env) {
       if (a && a.closest && a.closest('.view') && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName)) { S.pending = true; return; }
     }
     if (raf) return;
-    raf = requestAnimationFrame(function () { raf = null; S.pending = false; draw(); fillNames(); });
+    raf = requestAnimationFrame(function () { raf = null; S.pending = false; fillNavLang(); draw(); fillNames(); });
   }
+  function setNavLang(v) {
+    S.navLang = v || '';
+    try { if (S.navLang) localStorage.setItem('rs_lang', S.navLang); else localStorage.removeItem('rs_lang'); } catch (e) {}
+    S.lastDrawn = null; render(true);
+  }
+  (function () { var sel = $('navLang'); if (sel) sel.addEventListener('change', function () { setNavLang(sel.value); }); })();
   document.addEventListener('focusout', function () { setTimeout(function () { if (S.pending) render(); }, 0); });
 
   function draw() {
@@ -1804,6 +1833,7 @@ window.ReelAdmin = function (env) {
     ]);
   }
   function sectionOf(name) { return S.movies.filter(function (m) { return m.data.section === name; }); }
+  function homeSection(name) { return sectionOf(name).filter(inNavLang); }
   function firstVideo(m) { return (m.data.videos || []).filter(function (v) { return safeUrl(v.url); })[0]; }
   function trailerBtn(m, cls) {
     var v = firstVideo(m);
@@ -1820,11 +1850,12 @@ window.ReelAdmin = function (env) {
     var v = $('view-home'); v.innerHTML = '';
     if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: S.loadMsg || 'Loading titles…' })])); return; }
     if (!S.movies.length) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No titles yet. Add some in Admin.' })])); return; }
-    var feat = S.featured.map(function (id) { return S.byId[id]; }).filter(Boolean);
+    var all = S.featured.map(function (id) { return S.byId[id]; }).filter(Boolean), feat = all.filter(inNavLang);
     if (!feat.length) {
-      feat = S.movies.filter(function (m) { return safeUrl(m.data.bannerUrl); });
-      sectionOf('In theatres').forEach(function (m) { if (feat.length < 4 && feat.indexOf(m) === -1) feat.push(m); });
-      if (!feat.length) feat = S.movies.slice(0, 3);
+      feat = S.movies.filter(function (m) { return inNavLang(m) && safeUrl(m.data.bannerUrl); });
+      homeSection('In theatres').forEach(function (m) { if (feat.length < 4 && feat.indexOf(m) === -1) feat.push(m); });
+      if (!feat.length) feat = S.movies.filter(inNavLang).slice(0, 3);
+      if (!feat.length) feat = all.length ? all : S.movies.slice(0, 3);
     }
     if (S.slide >= feat.length) S.slide = 0;
     S.feat = feat;
@@ -1832,19 +1863,21 @@ window.ReelAdmin = function (env) {
     v.appendChild(heroBox);
     drawHero();
 
-    var friendPicks = S.movies.filter(function (x) { return S.mine.following.length && score(x.id, S.mine.following).tot > 0; });
-    var mine = S.movies.filter(function (x) { return inList(x.id); });
-    [
+    var friendPicks = S.movies.filter(function (x) { return inNavLang(x) && S.mine.following.length && score(x.id, S.mine.following).tot > 0; });
+    var mine = S.movies.filter(function (x) { return inNavLang(x) && inList(x.id); });
+    var langNote = S.navLang ? h('div', { class: 'sect-h', style: 'margin-top:18px' }, [h('span', { class: 'sub' }, ['Showing ' + S.navLang + ' titles · ', h('a', { href: '#', on: { click: function (e) { e.preventDefault(); setNavLang(''); } }, text: 'Show all languages' })])]) : null;
+    var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
+    [langNote, none,
       mine.length ? rowSection('My List', mine, null, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
-      rowSection('In theatres', sectionOf('In theatres').slice().sort(function (a, b) {
+      rowSection('In theatres', homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      rowSection('Coming soon', sectionOf('Coming soon'), { dateBadge: true, remind: true }),
-      rowSection('New on OTT', sectionOf('On OTT')),
-      rowSection('Catch up on 2025–26 releases', sectionOf('Older releases').slice().sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
+      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
+      rowSection('New on OTT', homeSection('On OTT')),
+      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').slice().sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
   }
@@ -2304,6 +2337,7 @@ window.ReelAdmin = function (env) {
       var d = m.data;
       if (B.status !== 'All' && d.section !== B.status) return false;
       if (B.lang && langOf(d) !== B.lang) return false;
+      if (!inNavLang(m)) return false;
       if (B.genre && genreTags(d).indexOf(B.genre) === -1) return false;
       if (B.year && (d.releaseDate || '').slice(0, 4) !== B.year) return false;
       return true;
