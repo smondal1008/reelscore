@@ -77,6 +77,17 @@
   .rows { display: flex; flex-direction: column; gap: 8px; }
   .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
   .row.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 44px; }
+  .cname { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 0 4px; min-width: 0; }
+  .cname strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cname a { font-size: 12px; color: var(--muted, #A59FB3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pick { position: relative; }
+  .picklist { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; margin: 0; padding: 4px; list-style: none; background: #1C1924; border: 1px solid #3A3446; border-radius: 10px; max-height: 300px; overflow: auto; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .picklist[hidden] { display: none; }
+  .picklist li { display: flex; justify-content: space-between; gap: 8px; align-items: center; padding: 10px; border-radius: 8px; cursor: pointer; min-height: 40px; }
+  .picklist li small { color: #A59FB3; flex: 0 0 auto; }
+  .picklist li[aria-selected="true"], .picklist li:hover { background: #2E2A38; }
+  .picklist li.add { color: var(--accent, #F5C518); font-weight: 600; border-top: 1px solid #3A3446; }
+  .picklist li.none { color: #A59FB3; cursor: default; }
   .pav { width: 44px; height: 44px; border-radius: 50%; border: 1px dashed var(--line2); background: var(--panel2) center / cover no-repeat; color: var(--dim); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
   .pav.has { border: 2px solid var(--line2); color: transparent; }
   .pav:hover { border-color: var(--accent); }
@@ -937,6 +948,62 @@ window.ReelAdmin = function (env) {
     update();
     return { el: el, update: update };
   }
+  // Cast name cell: a picked person is locked (remove the row to change it); an empty row is a search-and-pick box.
+  function castNameLocked(item) {
+    var k = personKey(item.name);
+    return h('div', { class: 'cname' }, [
+      h('strong', { text: item.name }),
+      h('a', { href: '/person/' + k, target: '_blank', rel: 'noopener', text: '/person/' + k })
+    ]);
+  }
+  function castPicker(id, onPick) {
+    var wrap = h('div', { class: 'pick' });
+    var inp = h('input', { id: id, class: 'in', placeholder: 'Search cast & crew…', autocomplete: 'off', role: 'combobox', 'aria-expanded': 'false', 'aria-autocomplete': 'list', 'aria-controls': id + '_lb', disabled: !canWrite });
+    var lb = h('ul', { id: id + '_lb', class: 'picklist', role: 'listbox', hidden: true });
+    var opts = [], active = -1;
+    function close() { lb.hidden = true; inp.setAttribute('aria-expanded', 'false'); active = -1; }
+    function choose(o) { close(); if (o.add) openPersonForm({ name: o.add, onSaved: onPick }); else onPick(o.name); }
+    function setActive(i) {
+      active = i;
+      Array.prototype.forEach.call(lb.children, function (li, j) { li.setAttribute('aria-selected', String(j === i)); });
+      if (i >= 0) { inp.setAttribute('aria-activedescendant', id + '_o' + i); var li = lb.children[i]; if (li && li.scrollIntoView) li.scrollIntoView({ block: 'nearest' }); }
+      else inp.removeAttribute('aria-activedescendant');
+    }
+    function render() {
+      var q = inp.value.trim(), qk = personKey(q), ql = q.toLowerCase();
+      var list = allPeople();
+      var hits = !q ? list.slice(0, 8) : list.filter(function (p) {
+        return p.name.toLowerCase().indexOf(ql) !== -1 || (qk && p.key.indexOf(qk) !== -1);
+      }).sort(function (a, b) {
+        var as = a.name.toLowerCase().indexOf(ql) === 0 ? 0 : 1, bs = b.name.toLowerCase().indexOf(ql) === 0 ? 0 : 1;
+        return as - bs || b.titles.length - a.titles.length;
+      }).slice(0, 8);
+      if (q && hits.length < 3) similarPeople(q, list).forEach(function (p) { if (hits.length < 8 && !hits.some(function (x) { return x.key === p.key; })) hits.push(p); });
+      opts = hits.map(function (p) { return { name: p.name, key: p.key, sub: p.titles.length ? p.titles.length + (p.titles.length === 1 ? ' title' : ' titles') : 'no titles yet' }; });
+      var exact = qk && hits.some(function (p) { return p.key === qk; });
+      if (q && !exact) opts.push({ add: q });
+      lb.innerHTML = '';
+      if (!opts.length) { lb.appendChild(h('li', { class: 'none', text: 'Type a name to search' })); }
+      opts.forEach(function (o, i) {
+        var li = h('li', { id: id + '_o' + i, role: 'option', 'aria-selected': 'false', class: o.add ? 'add' : '' },
+          o.add ? ['+ Add new person “' + o.add + '”'] : [h('span', { text: o.name }), h('small', { text: o.sub })]);
+        li.addEventListener('mousedown', function (e) { e.preventDefault(); choose(o); });
+        lb.appendChild(li);
+      });
+      lb.hidden = false; inp.setAttribute('aria-expanded', 'true'); setActive(q && opts.length ? 0 : -1);
+    }
+    inp.addEventListener('input', render);
+    inp.addEventListener('focus', render);
+    inp.addEventListener('blur', function () { setTimeout(close, 120); });
+    inp.addEventListener('keydown', function (e) {
+      if (e.key === 'ArrowDown') { e.preventDefault(); if (lb.hidden) render(); setActive(Math.min(active + 1, opts.length - 1)); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); setActive(Math.max(active - 1, 0)); }
+      else if (e.key === 'Enter') { e.preventDefault(); if (!lb.hidden && active >= 0 && opts[active]) choose(opts[active]); }
+      else if (e.key === 'Escape') { close(); }
+    });
+    wrap.appendChild(inp); wrap.appendChild(lb);
+    return wrap;
+  }
   function listEditor(title, key, cols, empty) {
     var rows = h('div', { class: 'rows' });
     function draw() {
@@ -945,16 +1012,26 @@ window.ReelAdmin = function (env) {
       if (!arr.length) rows.appendChild(h('div', { class: 'note', text: empty }));
       arr.forEach(function (item, i) {
         var av = key === 'cast' ? avatarBtn(item.name || '') : null;
-        var hint = key === 'cast' ? castHint(item, function () { draw(); }) : null;
+        if (av && !(item.name || '').trim()) av.disabled = true;
         var cells = cols.map(function (c) {
           var lab = h('label', { class: 'sr', for: key + i + c.k, text: c.label + ' ' + (i + 1) });
           var el;
-          if (c.options) {
+          if (key === 'cast' && c.k === 'name') {
+            el = (item.name || '').trim() ? castNameLocked(item)
+              : castPicker(key + i + c.k, function (nm) {
+                  var dup = arr.some(function (o, j) { return j !== i && personKey(o.name) === personKey(nm); });
+                  if (dup && !confirm(nm + ' is already in this cast. Add them again (e.g. for a second role)?')) return;
+                  item.name = nm; touch(); draw();
+                  var r = rows.querySelector('#' + key + i + 'role'); if (r) r.focus();
+                });
+            if (el.classList.contains('cname')) lab = null;
+            return h('span', { style: 'min-width:0' }, [lab, el]);
+          } else if (c.options) {
             el = h('select', { id: key + i + c.k, class: 'in', disabled: !canWrite }, c.options.map(function (o) { return h('option', { value: o, text: o, selected: (item[c.k] || '').toLowerCase() === o.toLowerCase() }); }));
           } else {
-            el = h('input', { id: key + i + c.k, class: 'in', placeholder: key === 'cast' && c.k === 'name' ? 'Search or type a name' : c.label, disabled: !canWrite, list: key === 'cast' && c.k === 'name' ? 'peopleNames' : null, autocomplete: 'off' }); el.value = item[c.k] || '';
+            el = h('input', { id: key + i + c.k, class: 'in', placeholder: c.label, disabled: !canWrite, autocomplete: 'off' }); el.value = item[c.k] || '';
           }
-          el.addEventListener('input', function () { item[c.k] = el.value; touch(); if (av && c.k === 'name') { av._name = el.value; av.setAttribute('data-pkey', personKey(el.value)); refreshAvatars(); if (hint) hint.update(); } });
+          el.addEventListener('input', function () { item[c.k] = el.value; touch(); });
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
@@ -962,7 +1039,6 @@ window.ReelAdmin = function (env) {
           on: { click: function () { arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
         rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (av ? ' cast' : '') }, cells));
-        if (hint) rows.appendChild(hint.el);
       });
     }
     draw();
@@ -971,9 +1047,8 @@ window.ReelAdmin = function (env) {
       var last = rows.querySelector('.row:last-child input'); if (last) last.focus();
     } } });
     var extra = key === 'cast' ? h('button', { type: 'button', class: 'btn small', text: '+ New person', disabled: !canWrite, on: { click: function () {
-      openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelectorAll('input')[1]; if (r) r.focus(); } });
+      openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
-    if (key === 'cast') namesDatalist();
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows]);
   }
 
