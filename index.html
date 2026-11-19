@@ -260,20 +260,20 @@
   }
 </style>
 <style>.authbtn{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}.authbtn:hover{background:rgba(255,255,255,.1)}</style>
-<script src="firebase-config.js"></script>
-<script src="js/claude-shim.js"></script>
-<script type="module" src="js/firebase-adapter.js"></script>
+<script src="/firebase-config.js"></script>
+<script src="/js/claude-shim.js"></script>
+<script type="module" src="/js/firebase-adapter.js"></script>
 </head>
 <body class="r-home">
 
 <header class="nav">
   <div class="links">
-    <a class="brand" href="#home"><span class="dot"></span>REELSCORE</a>
+    <a class="brand" href="/"><span class="dot"></span>REELSCORE</a>
     <nav class="links" aria-label="Main">
-      <a class="lnk" href="#home" data-r="home">Home</a>
-      <a class="lnk" href="#browse" data-r="browse">Browse</a>
-      <a class="lnk" href="#list" data-r="list">My List</a>
-      <a class="lnk" href="#admin" data-r="admin" id="adminLink" hidden>Admin</a>
+      <a class="lnk" href="/" data-r="home">Home</a>
+      <a class="lnk" href="/browse" data-r="browse">Browse</a>
+      <a class="lnk" href="/my-list" data-r="list">My List</a>
+      <a class="lnk" href="/admin" data-r="admin" id="adminLink" hidden>Admin</a>
     </nav>
   </div>
   <div class="navr">
@@ -1118,23 +1118,71 @@ window.ReelAdmin = function (env) {
     });
   }
 
-  // ---------- routing ----------
+  // ---------- routing (clean URLs: /, /browse, /browse/<section>, /my-list, /admin, /movie/<title-year>) ----------
+  function slugify(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
+  function movieSlug(m) {
+    var base = slugify(m.data.title) || m.id, y = (m.data.releaseDate || '').slice(0, 4);
+    return /^\d{4}$/.test(y) ? base + '-' + y : base;
+  }
+  function movieUrl(m) { return typeof m === 'string' ? '/movie/' + m : '/movie/' + movieSlug(m); }
+  function findMovie(key) {
+    if (!key) return null;
+    if (S.byId[key]) return S.byId[key];
+    for (var i = 0; i < S.movies.length; i++) if (movieSlug(S.movies[i]) === key) return S.movies[i];
+    for (var j = 0; j < S.movies.length; j++) if (slugify(S.movies[j].data.title) === key) return S.movies[j];
+    return null;
+  }
+  var BROWSE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases' };
+  function legacyHashToPath(hsh) {
+    if (/^t-[A-Za-z0-9-]+$/.test(hsh)) return '/movie/' + hsh.slice(2);
+    if (hsh === 'list') return '/my-list';
+    if (hsh === 'browse') return '/browse';
+    if (hsh === 'browse-older') return '/browse/older-releases';
+    if (hsh === 'browse-ott') return '/browse/on-ott';
+    if (hsh === 'admin') return '/admin';
+    if (hsh === 'home') return '/';
+    return null;
+  }
   function parseRoute() {
     var hsh = (location.hash || '').replace(/^#/, '');
-    if (/^t-[A-Za-z0-9-]+$/.test(hsh)) { S.route = 'title'; S.param = hsh.slice(2); }
-    else if (hsh === 'list') { S.route = 'list'; S.param = null; }
-    else if (hsh === 'browse' || hsh.indexOf('browse-') === 0) { S.route = 'browse'; S.param = null; if (hsh === 'browse-older') S.browse.status = 'Older releases'; else if (hsh === 'browse-ott') S.browse.status = 'On OTT'; }
-    else if (hsh === 'admin') { S.route = 'admin'; S.param = null; }
-    else { S.route = 'home'; S.param = null; }
+    var legacy = hsh && legacyHashToPath(hsh);
+    if (legacy) history.replaceState(null, '', legacy);
+    var path = decodeURIComponent(location.pathname).replace(/\/+$/, '') || '/';
+    var mm;
+    if ((mm = path.match(/^\/movie\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
+    else if (path === '/my-list') { S.route = 'list'; S.param = null; }
+    else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) { S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All'; }
+    else if (path === '/admin') { S.route = 'admin'; S.param = null; }
+    else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
+    if (S.route !== 'title') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.rtab = 'all';
     render(true);
     window.scrollTo(0, 0);
   }
-  window.addEventListener('hashchange', parseRoute);
+  function go(href) {
+    if (href === location.pathname + location.search) { window.scrollTo(0, 0); return; }
+    history.pushState(null, '', href); parseRoute();
+  }
+  // Same-site links navigate without a page reload.
+  document.addEventListener('click', function (e) {
+    if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    var a = e.target.closest && e.target.closest('a[href]'); if (!a || a.target === '_blank' || a.hasAttribute('download')) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) !== '/' || href.charAt(1) === '/') return;
+    if (/^\/(setup|data|js)\b|\.\w+$/.test(href)) return;
+    e.preventDefault(); go(href);
+  });
+  window.addEventListener('popstate', parseRoute);
+  window.addEventListener('hashchange', function () { if (legacyHashToPath((location.hash || '').slice(1))) parseRoute(); });
+  // Keep the address bar on the canonical /movie/<title-year> once the catalogue is in.
+  function canonicalizeTitleUrl(m) {
+    var want = movieUrl(m);
+    if (S.route === 'title' && location.pathname !== want) { history.replaceState(null, '', want); S.param = movieSlug(m); S.lastDrawn = S.route + ':' + S.param; }
+  }
 
   // ---------- render scheduling ----------
   var raf = null;
@@ -1196,7 +1244,7 @@ window.ReelAdmin = function (env) {
     var on = inList(m.id);
     var kids = [
       h('div', { class: 'pw' }, [
-        h('a', { class: 'pa art', href: '#t-' + m.id, style: art(m, 'poster'), 'aria-label': d.title }, [
+        h('a', { class: 'pa art', href: movieUrl(m), style: art(m, 'poster'), 'aria-label': d.title }, [
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
           isOtt(m) && d.platform ? h('span', { class: 'plat', text: d.platform }) : null
         ]),
@@ -1205,7 +1253,7 @@ window.ReelAdmin = function (env) {
           title: on ? 'In my list' : 'Add to my list', text: on ? '✓' : '+',
           on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } })
       ]),
-      h('a', { class: 'nm', href: '#t-' + m.id, text: d.title, tabindex: '-1' }),
+      h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
       h('span', { class: 'mt', text: meta })
     ];
     if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
@@ -1252,7 +1300,7 @@ window.ReelAdmin = function (env) {
     var friendPicks = S.movies.filter(function (x) { return S.mine.following.length && score(x.id, S.mine.following).tot > 0; });
     var mine = S.movies.filter(function (x) { return inList(x.id); });
     [
-      mine.length ? rowSection('My List', mine, null, h('span', { class: 'sub' }, [h('a', { href: '#list', text: 'See all' })])) : null,
+      mine.length ? rowSection('My List', mine, null, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
       rowSection('In theatres', sectionOf('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
@@ -1261,7 +1309,7 @@ window.ReelAdmin = function (env) {
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', sectionOf('Coming soon'), { dateBadge: true, remind: true }),
       rowSection('New on OTT', sectionOf('On OTT')),
-      rowSection('Catch up on 2025–26 releases', sectionOf('Older releases').slice().sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), null, h('span', { class: 'sub' }, [h('a', { href: '#browse-older', text: 'Browse all' })]))
+      rowSection('Catch up on 2025–26 releases', sectionOf('Older releases').slice().sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
   }
@@ -1324,8 +1372,8 @@ window.ReelAdmin = function (env) {
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
             : v ? h('a', { class: 'pill play', href: v.url, target: '_blank', rel: 'noopener', title: 'Opens YouTube' }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
-            : h('a', { class: 'pill play', href: '#t-' + m.id }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
-          h('a', { class: 'pill info', href: '#t-' + m.id, text: 'More Info' }),
+            : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
+          h('a', { class: 'pill info', href: movieUrl(m), text: 'More Info' }),
           playing ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
           playing ? null : h('button', { type: 'button', class: 'roundadd', 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my list' : 'Add ' + d.title + ' to my list', title: on ? 'In my list' : 'Add to my list', text: on ? '✓' : '+',
             on: { click: function () { toggleList(m.id); } } })
@@ -1365,9 +1413,10 @@ window.ReelAdmin = function (env) {
   // ---------- title ----------
   function drawTitle() {
     var v = $('view-title'); v.innerHTML = '';
-    var m = S.byId[S.param];
+    var m = findMovie(S.param);
+    if (m) { canonicalizeTitleUrl(m); document.title = m.data.title + ' — Reelscore'; }
     if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
-    if (!m) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '#home', text: 'Back to home' })])])); return; }
+    if (!m) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
@@ -1397,7 +1446,7 @@ window.ReelAdmin = function (env) {
       h('div', {}, [
         h('div', { class: 'kicker', text: 'People you follow' }),
         fr.length >= 3 ? h('div', { class: 'big', text: friendScore.pct + '%' }) : h('div', { style: 'font-size:16px;font-weight:600;margin-top:6px', text: fr.length ? fr.length + (fr.length === 1 ? ' person you follow rated it' : ' people you follow rated it') : (S.mine.following.length ? 'None of them have rated it yet' : 'You’re not following anyone yet') }),
-        h('div', { class: 'sub', style: 'margin-top:6px' }, [fr.length >= 3 ? fr.length + ' ratings · Peer Score' : 'Peer Score appears at 3 ratings. ', fr.length >= 3 ? null : h('a', { href: '#list', text: 'Find people' })])
+        h('div', { class: 'sub', style: 'margin-top:6px' }, [fr.length >= 3 ? fr.length + ' ratings · Peer Score' : 'Peer Score appears at 3 ratings. ', fr.length >= 3 ? null : h('a', { href: '/my-list', text: 'Find people' })])
       ]),
       fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 36); })) : null
     ]);
@@ -1441,7 +1490,7 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'in' }, [
         h('div', { class: 'poster art', style: art(m, 'poster'), role: 'img', 'aria-label': d.title + ' poster' }),
         h('div', { class: 'txt' }, [
-          h('a', { href: '#home', style: 'color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', text: '← Back to home' }),
+          h('a', { href: '/', style: 'color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', text: '← Back to home' }),
           h('div', { class: 'tags' }, tags),
           h('h1', { class: 'display ttl', style: 'font-size:clamp(44px,6vw,84px)', text: d.title }),
           d.subtitle ? h('div', { class: 'display sbt', style: 'font-size:clamp(24px,3vw,36px);color:#D9D5DF', text: d.subtitle }) : null,
@@ -1589,8 +1638,8 @@ window.ReelAdmin = function (env) {
         var cb = h('input', { type: 'checkbox', checked: !!pick[u], style: 'width:18px;height:18px;accent-color:var(--accent)', on: { change: function () { pick[u] = cb.checked; } } });
         return h('label', { class: 'person', style: 'cursor:pointer' }, [cb, avatarEl(u, 32), personEl(u, 'nmx')]);
       })));
-    } else box.appendChild(h('div', { class: 'note' }, ['Follow people to invite them here, or just send the plan to anyone. ', h('a', { href: '#list', text: 'Find people' })]));
-    var msg = planText(m);
+    } else box.appendChild(h('div', { class: 'note' }, ['Follow people to invite them here, or just send the plan to anyone. ', h('a', { href: '/my-list', text: 'Find people' })]));
+    var msg = planTextWithLink(m);
     box.appendChild(h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [
       h('a', { class: 'btn primary', href: 'https://wa.me/?text=' + encodeURIComponent(msg), target: '_blank', rel: 'noopener', text: 'Send on WhatsApp' }),
       h('button', { type: 'button', class: 'btn', text: 'Copy message', on: { click: function () { copyText(msg, 'Plan copied'); } } })
@@ -1602,7 +1651,8 @@ window.ReelAdmin = function (env) {
     return isOtt(m) ? 'Watch party? ' + d.title + ' is ' + (released(m) ? 'on ' : 'coming to ') + (d.platform || 'OTT') + '. This weekend? Reply with a day that works.'
       : 'Movie plan: ' + d.title + (released(m) ? ' is in theatres.' : ' releases ' + fmtDate(d.releaseDate, true) + '.') + ' Want to go? Reply with a day and I’ll book.';
   }
-  function shareText(m) { var s = score(m.id); return m.data.title + (s.pct !== null ? ' — ' + s.pct + '% on Reelscore (' + s.tot + ' verdicts)' : ' on Reelscore'); }
+  function planTextWithLink(m) { return planText(m) + ' ' + location.origin + movieUrl(m); }
+  function shareText(m) { var s = score(m.id); return m.data.title + (s.pct !== null ? ' — ' + s.pct + '% on Reelscore (' + s.tot + ' verdicts)' : ' on Reelscore') + ' ' + location.origin + movieUrl(m); }
   function copyText(t, ok) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { toast(ok); }, function () { toast('Copy isn’t allowed here. Message: ' + t); });
     else toast(t);
@@ -1687,7 +1737,7 @@ window.ReelAdmin = function (env) {
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }),
       myV.length ? h('div', { class: 'people' }, myV.map(function (id) {
         var m = S.byId[id], vv = S.verdicts[S.uid].v[id], lab = vset(m).filter(function (x) { return x[0] === vv; })[0];
-        return h('a', { class: 'person', href: '#t-' + id, style: 'color:var(--text);text-decoration:none' }, [h('span', { class: 'nmx', text: m.data.title }), lab ? h('span', { class: 'vtag', style: 'background:' + VCOL[vv], text: lab[1].toUpperCase() }) : null]);
+        return h('a', { class: 'person', href: movieUrl(S.byId[id] || id), style: 'color:var(--text);text-decoration:none' }, [h('span', { class: 'nmx', text: m.data.title }), lab ? h('span', { class: 'vtag', style: 'background:' + VCOL[vv], text: lab[1].toUpperCase() }) : null]);
       })) : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
 
     // following
@@ -1731,11 +1781,11 @@ window.ReelAdmin = function (env) {
     if (!q) { res.hidden = true; return; }
     var hit = S.movies.filter(function (m) { var d = m.data; return [d.title, d.subtitle, d.director, (d.cast || []).map(function (c) { return c.name; }).join(' ')].join(' ').toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
     if (!hit.length) res.appendChild(h('div', { class: 'note', style: 'padding:10px', text: 'No titles match.' }));
-    hit.forEach(function (m) { res.appendChild(h('a', { href: '#t-' + m.id, on: { click: function () { sq.value = ''; res.hidden = true; } } }, [h('span', { class: 'thumb art', style: art(m, 'poster') }), h('span', {}, [h('div', { style: 'font-weight:600;font-size:14px', text: m.data.title }), h('div', { class: 'note', text: m.data.section + ' · ' + fmtDate(m.data.releaseDate) })])])); });
+    hit.forEach(function (m) { res.appendChild(h('a', { href: movieUrl(m), on: { click: function () { sq.value = ''; res.hidden = true; } } }, [h('span', { class: 'thumb art', style: art(m, 'poster') }), h('span', {}, [h('div', { style: 'font-weight:600;font-size:14px', text: m.data.title }), h('div', { class: 'note', text: m.data.section + ' · ' + fmtDate(m.data.releaseDate) })])])); });
     res.hidden = false;
   }
   sq.addEventListener('input', drawResults);
-  sq.addEventListener('keydown', function (e) { if (e.key === 'Escape') { sq.value = ''; drawResults(); } if (e.key === 'Enter') { var a = res.querySelector('a'); if (a) { location.hash = a.getAttribute('href'); sq.value = ''; drawResults(); } } });
+  sq.addEventListener('keydown', function (e) { if (e.key === 'Escape') { sq.value = ''; drawResults(); } if (e.key === 'Enter') { var a = res.querySelector('a'); if (a) { go(a.getAttribute('href')); sq.value = ''; drawResults(); } } });
   document.addEventListener('click', function (e) { if (!e.target.closest('.navr')) res.hidden = true; });
 
   // ---------- admin ----------
