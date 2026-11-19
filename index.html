@@ -1149,10 +1149,36 @@ window.ReelAdmin = function (env) {
   document.addEventListener('focusout', function () { setTimeout(function () { if (S.pending) render(); }, 0); });
 
   function draw() {
+    // Keep each horizontal row's scroll position (and keyboard focus) across re-renders of the same page.
+    var here = S.route + ':' + (S.param || ''), keep = {}, focusKey = null;
+    if (S.lastDrawn === here) {
+      document.querySelectorAll('.view .rowx').forEach(function (r) {
+        var s = r.closest('section'); if (s && s.getAttribute('aria-label')) keep[s.getAttribute('aria-label')] = r.scrollLeft;
+      });
+      var a = document.activeElement;
+      if (a && a.classList && a.classList.contains('addl')) {
+        var sec = a.closest('section'), pc = a.closest('.pc');
+        if (sec && pc) focusKey = [sec.getAttribute('aria-label'), Array.prototype.indexOf.call(pc.parentNode.children, pc)];
+      }
+    }
+    S.lastDrawn = here;
     if (S.route === 'home') drawHome();
     else if (S.route === 'title') drawTitle();
     else if (S.route === 'list') drawList();
     else if (S.route === 'browse') drawBrowse();
+    if (Object.keys(keep).length) {
+      document.querySelectorAll('.view .rowx').forEach(function (r) {
+        var s = r.closest('section'), k = s && s.getAttribute('aria-label');
+        if (k && keep[k] != null) r.scrollLeft = keep[k];
+      });
+    }
+    if (focusKey) {
+      document.querySelectorAll('.view section.sect').forEach(function (s) {
+        if (s.getAttribute('aria-label') !== focusKey[0]) return;
+        var row = s.querySelector('.rowx'), pc = row && row.children[Math.min(focusKey[1], row.children.length - 1)];
+        var b = pc && pc.querySelector('.addl'); if (b) b.focus({ preventScroll: true });
+      });
+    }
   }
 
   // ---------- components ----------
