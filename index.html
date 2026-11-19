@@ -851,7 +851,8 @@ window.ReelAdmin = function (env) {
       field('Home page section', 'section', { type: 'select', options: SECTIONS }),
       draft.section === 'On OTT' ? field('Streaming platform', 'platform', { placeholder: 'Netflix, Prime Video, Sony LIV…' }) : draft.section === 'Older releases' ? field('Now streaming on', 'platform', { placeholder: 'Leave blank if not known' }) : null,
       field(draft.section === 'On OTT' ? 'Streaming date' : 'Release date', 'releaseDate', { type: 'date' }),
-      field('Date note', 'releaseNote', { placeholder: 'e.g. Reported, not confirmed' })
+      field('Date note', 'releaseNote', { placeholder: 'e.g. Reported, not confirmed' }),
+      slugField()
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
 
@@ -887,13 +888,53 @@ window.ReelAdmin = function (env) {
 
   // ---------- writes ----------
   function slugify(t) { return (t || 'title').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'title'; }
+  // Page URL (/movie/<slug>) helpers — must match the site's rules.
+  function urlSlug(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
+  function suggestedSlug(d) { var b = urlSlug(d.title), y = (d.releaseDate || '').slice(0, 4); return b ? (/^\d{4}$/.test(y) ? b + '-' + y : b) : ''; }
+  function slugOf(m) { return urlSlug(m.data.slug) || suggestedSlug(m.data) || m.id; }
+  function slugTakenBy(slug, exceptId) {
+    return movies.find(function (m) { return m.id !== exceptId && (slugOf(m) === slug || m.id === slug); }) || null;
+  }
+  function slugField() {
+    var input = h('input', { id: 'f_slug', class: 'in', type: 'text', placeholder: suggestedSlug(draft) || 'e.g. ramayana-2026', spellcheck: 'false', autocomplete: 'off', disabled: !canWrite });
+    input.value = draft.slug || '';
+    var full = h('div', { class: 'note' }), err = h('div', { class: 'err', hidden: true });
+    function show() {
+      var v = urlSlug(input.value) || suggestedSlug(draft);
+      full.textContent = location.origin + '/movie/' + (v || '…') + (input.value.trim() ? '' : '  (from the title and year)');
+      var clash = v && slugTakenBy(v, currentId);
+      err.hidden = !clash; err.textContent = clash ? 'Already used by ' + (clash.data.title || clash.id) + '. Pick another.' : '';
+      if (input.value && input.value !== urlSlug(input.value) && !/-$/.test(input.value)) { err.hidden = false; err.textContent = 'Use lowercase letters, numbers and hyphens. It will be saved as: ' + urlSlug(input.value); }
+    }
+    input.addEventListener('input', function () { draft.slug = input.value; touch(); show(); });
+    show();
+    var reset = h('button', { type: 'button', class: 'btn small', text: 'Use title + year', disabled: !canWrite, on: { click: function () { input.value = suggestedSlug(draft); draft.slug = input.value; touch(); show(); } } });
+    return h('div', { class: 'field wide' }, [
+      h('label', { class: 'l', for: 'f_slug', text: 'Page URL' }),
+      h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, [
+        h('span', { class: 'sub', style: 'white-space:nowrap', text: '/movie/' }),
+        h('span', { style: 'flex:1;min-width:200px' }, [input]), reset
+      ]),
+      full, err,
+      (draft.slugHistory && draft.slugHistory.length) ? h('div', { class: 'note', text: 'Old addresses that still redirect here: ' + draft.slugHistory.map(function (x) { return '/movie/' + x; }).join(', ') }) : null
+    ]);
+  }
   function save() {
     if (!draft || saving || !db) return Promise.resolve(false);
     if (!draft.title.trim()) { setStatus('Add a title before saving.'); return Promise.resolve(false); }
     saving = true; setDirty(true);
     var isNew = !movies.some(function (m) { return m.id === currentId; });
+    var slug = urlSlug(draft.slug) || suggestedSlug(draft);
+    var clash = slug && slugTakenBy(slug, isNew ? null : currentId);
+    if (clash) { saving = false; setDirty(true); setStatus('The page URL /movie/' + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
     if (isNew) currentId = slugify(draft.title) + '-' + Math.random().toString(36).slice(2, 6);
     var body = clone(draft); body.updatedAt = new Date().toISOString();
+    body.slug = slug;
+    var prev = movies.find(function (m) { return m.id === currentId; });
+    var prevSlug = prev ? slugOf(prev) : '';
+    var hist = (body.slugHistory || []).filter(function (x) { return x && x !== slug; });
+    if (prevSlug && prevSlug !== slug && hist.indexOf(prevSlug) === -1) hist.push(prevSlug);
+    body.slugHistory = hist.slice(-10);
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     return db.doc('movies/' + currentId).set(body).then(function () {
@@ -1121,6 +1162,7 @@ window.ReelAdmin = function (env) {
   // ---------- routing (clean URLs: /, /browse, /browse/<section>, /my-list, /admin, /movie/<title-year>) ----------
   function slugify(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function movieSlug(m) {
+    var own = slugify(m.data.slug); if (own) return own;
     var base = slugify(m.data.title) || m.id, y = (m.data.releaseDate || '').slice(0, 4);
     return /^\d{4}$/.test(y) ? base + '-' + y : base;
   }
@@ -1129,6 +1171,7 @@ window.ReelAdmin = function (env) {
     if (!key) return null;
     if (S.byId[key]) return S.byId[key];
     for (var i = 0; i < S.movies.length; i++) if (movieSlug(S.movies[i]) === key) return S.movies[i];
+    for (var k = 0; k < S.movies.length; k++) if ((S.movies[k].data.slugHistory || []).indexOf(key) !== -1) return S.movies[k];
     for (var j = 0; j < S.movies.length; j++) if (slugify(S.movies[j].data.title) === key) return S.movies[j];
     return null;
   }

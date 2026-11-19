@@ -129,6 +129,7 @@ if (!cfg.apiKey || /PASTE/.test(cfg.apiKey)) {
             runtime: '', certificate: '', director: '', synopsis: '', cast: [], videos: [], formats: '',
             posterId: ex.posterId || '', posterUrl: ex.posterUrl || '', bannerId: ex.bannerId || '', bannerUrl: ex.bannerUrl || '',
             trailerFileId: ex.trailerFileId || '', trailerFileUrl: ex.trailerFileUrl || '',
+            slug: ex.slug || '', slugHistory: ex.slugHistory || [],
             source: 'Starter catalogue', ...rest, updatedAt: now
           });
           m.textContent = 'Loading… ' + (++n) + ' / ' + movies.length;
