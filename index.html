@@ -915,7 +915,8 @@ window.ReelAdmin = function (env) {
   // Under each cast row: tells you whether the name is a known person, offers close matches, or lets you add them.
   function knownPersonKeys() {
     var k = {}; Object.keys(people).forEach(function (x) { k[x] = 1; });
-    movies.forEach(function (m) { if (m.id === currentId) return; (m.data.cast || []).forEach(function (c) { var x = personKey(c.name); if (x) k[x] = 1; }); });
+    // saved titles (including the saved version of this one); unsaved new names count as new
+    movies.forEach(function (m) { (m.data.cast || []).forEach(function (c) { var x = personKey(c.name); if (x) k[x] = 1; }); });
     return k;
   }
   function castHint(item, redraw) {
