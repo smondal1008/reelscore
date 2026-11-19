@@ -324,7 +324,7 @@
       </button>
       <button type="button" class="item" id="peopleBtn" style="border:1px solid var(--line2);background:var(--panel)">
         <span class="thumb" aria-hidden="true" style="width:66px;height:44px;background:#C9B8F2;color:#0B0A0F;font-weight:800;font-size:18px">☺</span>
-        <span style="min-width:0;flex:1"><div class="t">Cast &amp; crew photos</div><div class="m" id="peopleCount">One photo per person, used on every title</div></span>
+        <span style="min-width:0;flex:1"><div class="t">Cast &amp; crew</div><div class="m" id="peopleCount">Everyone credited, with page URLs</div></span>
       </button>
       <div class="chips" role="group" aria-label="Filter by section" id="filters"></div>
       <div class="list" id="list"></div>
@@ -362,7 +362,7 @@ window.ReelAdmin = function (env) {
   var filter = 'All', query = '';
   var pendingSwitch = null; // id to switch to after unsaved prompt
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
-  var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false;
+  var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all';
   function personKey(name) { return (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function personPhoto(name) { var p = people[personKey(name)]; return p && safeUrl(p.photoUrl) ? p.photoUrl : ''; }
   function pickPhoto(name, btn) {
@@ -378,7 +378,7 @@ window.ReelAdmin = function (env) {
       if (btn) { btn.disabled = true; btn.setAttribute('aria-busy', 'true'); }
       setStatus('Uploading photo of ' + name + '…');
       assets.upload(f).then(function (res) {
-        return db.doc('people/' + personKey(name)).set({ name: name.trim(), photoUrl: res.url, photoId: res.id, updatedAt: new Date().toISOString() });
+        return db.doc('people/' + personKey(name)).set({ name: (people[personKey(name)] && people[personKey(name)].name) || name.trim(), photoUrl: res.url, photoId: res.id, updatedAt: new Date().toISOString() }, { merge: true });
       }).then(function () { setStatus('Photo saved for ' + name + '. It now shows on every title they’re in.'); })
         .catch(function (e) { setStatus('Couldn’t save the photo' + (e && e.message ? ': ' + e.message : '') + '.'); })
         .then(function () { if (btn) { btn.disabled = false; btn.removeAttribute('aria-busy'); } });
@@ -386,7 +386,7 @@ window.ReelAdmin = function (env) {
     fi.click();
   }
   function removePhoto(name) {
-    db.doc('people/' + personKey(name)).delete().then(function () { setStatus('Photo removed for ' + name + '.'); }).catch(function () { setStatus('Couldn’t remove the photo.'); });
+    db.doc('people/' + personKey(name)).set({ photoUrl: '', photoId: '', updatedAt: new Date().toISOString() }, { merge: true }).then(function () { setStatus('Photo removed for ' + name + '.'); }).catch(function () { setStatus('Couldn’t remove the photo.'); });
   }
   function avatarBtn(name, size) {
     var url = personPhoto(name);
@@ -416,40 +416,189 @@ window.ReelAdmin = function (env) {
   function renderPeopleCount() {
     var el = $('peopleCount'); if (!el) return;
     var list = allPeople(), withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length;
-    el.textContent = withPhoto + ' of ' + list.length + ' people have photos';
+    el.textContent = list.length + ' people · ' + withPhoto + ' with photos';
     $('peopleBtn').setAttribute('aria-current', String(peopleMode));
+  }
+  // ---------- cast & crew directory ----------
+  function compactKey(name) { return personKey(name).replace(/-/g, ''); }
+  function editDistance(a, b) {
+    if (Math.abs(a.length - b.length) > 3) return 99;
+    var prev = [], cur, i, j; for (j = 0; j <= b.length; j++) prev[j] = j;
+    for (i = 1; i <= a.length; i++) { cur = [i]; for (j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; }
+    return prev[b.length];
+  }
+  function similarPeople(name, list, exceptKey) {
+    var a = compactKey(name); if (a.length < 4) return [];
+    return (list || allPeople()).filter(function (p) {
+      if (p.key === exceptKey || p.key === personKey(name)) return false;
+      var b = compactKey(p.name); if (!b) return false;
+      if (a === b) return true;
+      var lim = Math.min(a.length, b.length) >= 10 ? 2 : 1;
+      if (editDistance(a, b) <= lim) return true;
+      var lo = a.length < b.length ? a : b, hi = a.length < b.length ? b : a;
+      return lo.length >= 6 && hi.indexOf(lo) !== -1 && hi.length - lo.length <= 4;
+    });
+  }
+  function personPageUrl(key) { return location.origin + '/person/' + key; }
+  function namesDatalist() {
+    var dl = $('peopleNames');
+    if (!dl) { dl = h('datalist', { id: 'peopleNames' }); document.body.appendChild(dl); }
+    dl.innerHTML = '';
+    allPeople().forEach(function (p) { dl.appendChild(h('option', { value: p.name })); });
+    return dl;
+  }
+  // Rename everywhere: every title's cast entry for oldKey becomes newName; the people record moves too.
+  function renamePerson(oldKey, newName, opts) {
+    opts = opts || {};
+    newName = (newName || '').trim(); var newKey = personKey(newName);
+    if (!newKey) return Promise.reject(new Error('Enter a name.'));
+    var jobs = [];
+    movies.forEach(function (m) {
+      var cast = (m.data.cast || []), hit = false;
+      var next = cast.map(function (c) { if (personKey(c.name) === oldKey) { hit = true; return { name: newName, role: c.role || '' }; } return c; });
+      if (!hit) return;
+      // drop a duplicate row if the title already had the target person with the same role
+      var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || ''); if (seen[k]) return false; seen[k] = 1; return true; });
+      jobs.push(db.doc('movies/' + m.id).update({ cast: next, updatedAt: new Date().toISOString() }));
+    });
+    var from = people[oldKey], to = people[newKey];
+    if (oldKey !== newKey) {
+      var merged = { name: (to && to.name) || newName, updatedAt: new Date().toISOString() };
+      ['photoUrl', 'photoId', 'bio'].forEach(function (f) { var v = (to && to[f]) || (from && from[f]) || ''; if (v) merged[f] = v; });
+      if (from || to) jobs.push(db.doc('people/' + newKey).set(merged, { merge: true }));
+      if (from) jobs.push(db.doc('people/' + oldKey).delete());
+    } else if (from) jobs.push(db.doc('people/' + newKey).set({ name: newName, updatedAt: new Date().toISOString() }, { merge: true }));
+    return Promise.all(jobs).then(function () { return jobs.length; });
+  }
+  // Add / edit a person: name, short bio, photo. opts: { name, key (existing), onSaved(name) }
+  function openPersonForm(opts) {
+    opts = opts || {};
+    var existing = opts.key ? people[opts.key] || {} : {};
+    var startName = opts.key ? (existing.name || opts.name || '') : (opts.name || '');
+    var back = h('div', { style: 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px' });
+    var nameIn = h('input', { class: 'in', id: 'pf_name', placeholder: 'Full name as credited', autocomplete: 'off' }); nameIn.value = startName;
+    var bioIn = h('textarea', { class: 'in', id: 'pf_bio', rows: 4, placeholder: 'Optional. One or two lines, e.g. “Hindi film actor known for…”' }); bioIn.value = existing.bio || '';
+    var photo = { url: safeUrl(existing.photoUrl) || '', id: existing.photoId || '' };
+    var pv = h('div', { style: 'width:96px;height:96px;border-radius:50%;background:#2E2A38 center top/cover no-repeat;flex:0 0 auto;' + bgUrl(photo.url) });
+    var msg = h('div', { class: 'err', hidden: true }), warn = h('div', { class: 'warn', hidden: true });
+    var url = h('div', { class: 'note' });
+    function check() {
+      var k = personKey(nameIn.value); url.textContent = k ? 'Page: ' + personPageUrl(k) : '';
+      warn.hidden = true; warn.innerHTML = '';
+      if (!k) return;
+      if (!opts.key && (people[k] || allPeople().some(function (p) { return p.key === k; }))) { warn.hidden = false; warn.textContent = 'This person already exists. Saving will update their details.'; return; }
+      var sim = similarPeople(nameIn.value, null, opts.key);
+      if (sim.length) {
+        warn.hidden = false; warn.appendChild(document.createTextNode('Similar name already listed: '));
+        sim.slice(0, 3).forEach(function (p, i) {
+          if (i) warn.appendChild(document.createTextNode(', '));
+          warn.appendChild(h('button', { type: 'button', class: 'btn small', style: 'height:28px;margin:2px 0', text: 'Use “' + p.name + '”', on: { click: function () { close(); if (opts.onSaved) opts.onSaved(p.name); } } }));
+        });
+      }
+    }
+    nameIn.addEventListener('input', check);
+    var upBtn = h('button', { type: 'button', class: 'btn small', text: photo.url ? 'Change photo' : 'Upload photo', disabled: !canUpload, on: { click: function () {
+      var fi = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', class: 'sr' }); document.body.appendChild(fi);
+      fi.addEventListener('change', function () {
+        var f = fi.files[0]; fi.remove(); if (!f) return;
+        if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { msg.hidden = false; msg.textContent = 'Use a PNG, JPEG or WebP image.'; return; }
+        if (f.size > 10 * 1024 * 1024) { msg.hidden = false; msg.textContent = 'That image is over 10 MB.'; return; }
+        upBtn.disabled = true; upBtn.textContent = 'Uploading…';
+        assets.upload(f).then(function (r) { photo = { url: r.url, id: r.id }; pv.setAttribute('style', pv.getAttribute('style').replace(/background-image:[^;]*;?/, '') + bgUrl(r.url)); upBtn.textContent = 'Change photo'; })
+          .catch(function (e) { msg.hidden = false; msg.textContent = 'Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'; upBtn.textContent = 'Upload photo'; })
+          .then(function () { upBtn.disabled = false; });
+      }); fi.click();
+    } } });
+    var saveB = h('button', { type: 'button', class: 'btn primary', text: opts.key ? 'Save' : 'Add person', on: { click: save } });
+    function close() { back.remove(); document.removeEventListener('keydown', esc); }
+    function esc(e) { if (e.key === 'Escape') close(); }
+    function save() {
+      var name = nameIn.value.trim(), k = personKey(name);
+      if (!k) { msg.hidden = false; msg.textContent = 'Enter a name.'; nameIn.focus(); return; }
+      saveB.disabled = true; saveB.textContent = 'Saving…'; msg.hidden = true;
+      var p = Promise.resolve();
+      if (opts.key && opts.key !== k) p = renamePerson(opts.key, name);
+      p.then(function () {
+        var body = { name: name, bio: bioIn.value.trim().slice(0, 600), updatedAt: new Date().toISOString() };
+        if (photo.url) { body.photoUrl = photo.url; body.photoId = photo.id; }
+        return db.doc('people/' + k).set(body, { merge: true });
+      }).then(function () {
+        setStatus((opts.key ? 'Saved ' : 'Added ') + name + '. Page: /person/' + k);
+        close(); if (opts.onSaved) opts.onSaved(name);
+      }).catch(function (e) { saveB.disabled = false; saveB.textContent = opts.key ? 'Save' : 'Add person'; msg.hidden = false; msg.textContent = 'Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'; });
+    }
+    var box = h('div', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pf_t', class: 'card', style: 'width:min(520px,100%);max-height:90vh;overflow:auto' }, [
+      h('div', { class: 'head' }, [h('h2', { id: 'pf_t', text: opts.key ? 'Edit ' + startName : 'Add a cast or crew member' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]),
+      h('div', { style: 'display:flex;gap:16px;align-items:center;flex-wrap:wrap' }, [pv, h('div', {}, [upBtn, h('div', { class: 'note', style: 'margin-top:6px', text: 'Square headshot you have the rights to use.' })])]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_name', text: 'Name' }), nameIn, url, warn,
+        opts.key ? h('div', { class: 'note', text: 'Changing the name updates it on every title they appear in.' }) : null]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_bio', text: 'Short bio' }), bioIn]),
+      msg,
+      h('div', { style: 'display:flex;gap:10px;justify-content:flex-end' }, [h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: close } }), saveB])
+    ]);
+    back.appendChild(box);
+    back.addEventListener('click', function (e) { if (e.target === back) close(); });
+    document.addEventListener('keydown', esc);
+    document.body.appendChild(back);
+    check(); nameIn.focus();
+  }
+  function copyToClipboard(t, done) {
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { setStatus(done || 'Copied'); }, function () { setStatus(t); });
+    else setStatus(t);
   }
   function renderPeople() {
     var main = $('main'); main.innerHTML = '';
     var list = allPeople();
     var q = peopleQ.trim().toLowerCase();
-    var shown = list.filter(function (p) { return (!q || p.name.toLowerCase().indexOf(q) !== -1) && (!peopleMissingOnly || !personPhoto(p.name)); });
-    var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search people' }); search.value = peopleQ;
+    var dupMap = {}; list.forEach(function (p) { var sim = similarPeople(p.name, list, p.key); if (sim.length) dupMap[p.key] = sim; });
+    var shown = list.filter(function (p) {
+      return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1) &&
+        (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]);
+    });
+    var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search by name or URL' }); search.value = peopleQ;
     search.addEventListener('input', function () { peopleQ = search.value; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
-    var withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length;
+    var withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length, dupCount = Object.keys(dupMap).length;
+    function chip(id, label) { return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(peopleFilter === id), text: label, on: { click: function () { peopleFilter = peopleFilter === id ? 'all' : id; renderPeople(); } } }); }
     var card = h('section', { class: 'card' }, [
-      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Shared across every title' }), h('h1', { text: 'Cast & crew photos' })]), h('div', { class: 'sub', text: withPhoto + ' of ' + list.length + ' with photos' })]),
-      h('div', { class: 'note', text: 'Each person has one photo. It shows on every title page that lists them, matched by name, so keep names spelled the same across titles. Use a square headshot you have the rights to use.' }),
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: list.length + ' people · ' + withPhoto + ' with photos' }), h('h1', { text: 'Cast & crew' })]),
+        h('button', { type: 'button', class: 'btn primary', text: '+ New person', disabled: !canWrite, on: { click: function () { openPersonForm({ onSaved: function () { renderPeople(); } }); } } })]),
+      h('div', { class: 'note', text: 'Everyone credited on any title, with their public page. Each person has one page and one photo, matched by name, so fix spelling mistakes with Rename or Merge rather than adding a second person.' }),
       h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
         h('label', { class: 'sr', for: 'pplQ', text: 'Search people' }), h('span', { style: 'flex:1;min-width:200px' }, [search]),
-        h('button', { type: 'button', class: 'chip', 'aria-pressed': String(peopleMissingOnly), text: 'Missing photo only', on: { click: function () { peopleMissingOnly = !peopleMissingOnly; renderPeople(); } } })
+        chip('nophoto', 'Missing photo'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : ''))
       ])
     ]);
-    var grid = h('div', { style: 'display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:10px' });
-    if (!shown.length) grid.appendChild(h('div', { class: 'empty', style: 'padding:20px', text: list.length ? 'No one matches.' : 'Add cast to titles first.' }));
+    var rows = h('div', { class: 'rows' });
+    if (!shown.length) rows.appendChild(h('div', { class: 'empty', style: 'padding:20px', text: list.length ? 'No one matches.' : 'Add cast to titles first.' }));
     shown.forEach(function (p) {
-      var url = personPhoto(p.name);
-      grid.appendChild(h('div', { style: 'display:flex;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)' }, [
-        avatarBtn(p.name, 56),
-        h('span', { style: 'flex:1;min-width:0' }, [
+      var url = personPhoto(p.name), page = personPageUrl(p.key), bio = people[p.key] && people[p.key].bio;
+      var dup = dupMap[p.key];
+      rows.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid ' + (dup ? '#5a4520' : 'var(--line)') + ';border-radius:12px;background:var(--bg)' }, [
+        avatarBtn(p.name, 52),
+        h('span', { style: 'flex:1;min-width:220px' }, [
           h('div', { style: 'font-weight:600;font-size:14px', text: p.name }),
-          h('div', { class: 'note', style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title: p.titles.join(', '), text: p.titles.length ? p.titles.length + (p.titles.length === 1 ? ' title · ' : ' titles · ') + p.titles.join(', ') : 'Not on any title' })
+          h('div', { style: 'font-size:13px;margin-top:2px;word-break:break-all' }, [h('a', { href: page, target: '_blank', rel: 'noopener', text: '/person/' + p.key })]),
+          h('div', { class: 'note', style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title: p.titles.join(', '), text: (p.titles.length ? p.titles.length + (p.titles.length === 1 ? ' title · ' : ' titles · ') + p.titles.join(', ') : 'Not on any title yet') + (bio ? ' · has bio' : '') }),
+          dup ? h('div', { class: 'warn', style: 'margin-top:4px' }, ['Possible duplicate of '].concat(dup.slice(0, 2).map(function (d2, i) {
+            return h('span', {}, [i ? ', ' : '', h('b', { text: d2.name }), ' ', h('button', { type: 'button', class: 'btn small', style: 'height:26px;padding:0 10px', disabled: !canWrite, text: 'Merge into this', on: { click: function () { mergeInto(p, d2); } } })]);
+          }))) : null
         ]),
-        url ? h('button', { type: 'button', class: 'btn small', text: 'Remove', disabled: !canWrite, on: { click: function () { removePhoto(p.name); } } }) : null
+        h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
+          h('button', { type: 'button', class: 'btn small', text: 'Copy URL', on: { click: function () { copyToClipboard(page, 'Copied ' + page); } } }),
+          h('button', { type: 'button', class: 'btn small', text: 'Edit', disabled: !canWrite, on: { click: function () { openPersonForm({ key: p.key, name: p.name, onSaved: function () { renderPeople(); } }); } } }),
+          url ? h('button', { type: 'button', class: 'btn small', text: 'Remove photo', disabled: !canWrite, on: { click: function () { removePhoto(p.name); } } }) : null
+        ])
       ]));
     });
-    card.appendChild(grid);
+    card.appendChild(rows);
     main.appendChild(card);
+  }
+  function mergeInto(from, to) {
+    if (dirty) { setStatus('Save or discard your changes first.'); return; }
+    if (!confirm('Merge “' + from.name + '” into “' + to.name + '”?\n\nEvery title that credits “' + from.name + '” will credit “' + to.name + '” instead, and /person/' + from.key + ' will stop existing.')) return;
+    setStatus('Merging…');
+    renamePerson(from.key, to.name).then(function (n) { var m = 'Merged ' + from.name + ' into ' + to.name + ' (' + n + ' updates).'; setStatus(m); setTimeout(function () { setStatus(m); }, 1200); })
+      .catch(function (e) { setStatus('Couldn’t merge' + (e && e.message ? ': ' + e.message : '') + '.'); });
   }
   var MAX_FEAT = 8;
   function isFeatured(id) { return featured.indexOf(id) !== -1; }
@@ -762,6 +911,30 @@ window.ReelAdmin = function (env) {
     if (pp) pp.setAttribute('style', bgUrl(draft.posterUrl));
   }
 
+  // Under each cast row: tells you whether the name is a known person, offers close matches, or lets you add them.
+  function knownPersonKeys() {
+    var k = {}; Object.keys(people).forEach(function (x) { k[x] = 1; });
+    movies.forEach(function (m) { if (m.id === currentId) return; (m.data.cast || []).forEach(function (c) { var x = personKey(c.name); if (x) k[x] = 1; }); });
+    return k;
+  }
+  function castHint(item, redraw) {
+    var el = h('div', { class: 'note', style: 'margin:-2px 0 6px 56px;display:flex;flex-wrap:wrap;gap:6px;align-items:center' });
+    function update() {
+      el.innerHTML = '';
+      var name = (item.name || '').trim(), k = personKey(name);
+      if (!k) { el.hidden = true; return; }
+      el.hidden = false;
+      if (knownPersonKeys()[k]) { el.appendChild(h('span', {}, ['✓ ', h('a', { href: '/person/' + k, target: '_blank', rel: 'noopener', text: '/person/' + k })])); return; }
+      var sim = similarPeople(name).slice(0, 3);
+      el.appendChild(h('span', { class: 'warn', text: sim.length ? 'Not in your cast list. Did you mean' : 'New person — not in your cast list yet.' }));
+      sim.forEach(function (p) { el.appendChild(h('button', { type: 'button', class: 'btn small', style: 'height:28px', text: p.name, on: { click: function () { item.name = p.name; touch(); redraw(); } } })); });
+      el.appendChild(h('button', { type: 'button', class: 'btn small primary', style: 'height:28px', disabled: !canWrite, text: sim.length ? 'No — add “' + name + '” as new' : 'Add with details', on: { click: function () {
+        openPersonForm({ name: name, onSaved: function (finalName) { item.name = finalName; touch(); redraw(); } });
+      } } }));
+    }
+    update();
+    return { el: el, update: update };
+  }
   function listEditor(title, key, cols, empty) {
     var rows = h('div', { class: 'rows' });
     function draw() {
@@ -770,15 +943,16 @@ window.ReelAdmin = function (env) {
       if (!arr.length) rows.appendChild(h('div', { class: 'note', text: empty }));
       arr.forEach(function (item, i) {
         var av = key === 'cast' ? avatarBtn(item.name || '') : null;
+        var hint = key === 'cast' ? castHint(item, function () { draw(); }) : null;
         var cells = cols.map(function (c) {
           var lab = h('label', { class: 'sr', for: key + i + c.k, text: c.label + ' ' + (i + 1) });
           var el;
           if (c.options) {
             el = h('select', { id: key + i + c.k, class: 'in', disabled: !canWrite }, c.options.map(function (o) { return h('option', { value: o, text: o, selected: (item[c.k] || '').toLowerCase() === o.toLowerCase() }); }));
           } else {
-            el = h('input', { id: key + i + c.k, class: 'in', placeholder: c.label, disabled: !canWrite }); el.value = item[c.k] || '';
+            el = h('input', { id: key + i + c.k, class: 'in', placeholder: key === 'cast' && c.k === 'name' ? 'Search or type a name' : c.label, disabled: !canWrite, list: key === 'cast' && c.k === 'name' ? 'peopleNames' : null, autocomplete: 'off' }); el.value = item[c.k] || '';
           }
-          el.addEventListener('input', function () { item[c.k] = el.value; touch(); if (av && c.k === 'name') { av._name = el.value; av.setAttribute('data-pkey', personKey(el.value)); refreshAvatars(); } });
+          el.addEventListener('input', function () { item[c.k] = el.value; touch(); if (av && c.k === 'name') { av._name = el.value; av.setAttribute('data-pkey', personKey(el.value)); refreshAvatars(); if (hint) hint.update(); } });
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
@@ -786,6 +960,7 @@ window.ReelAdmin = function (env) {
           on: { click: function () { arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
         rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (av ? ' cast' : '') }, cells));
+        if (hint) rows.appendChild(hint.el);
       });
     }
     draw();
@@ -793,7 +968,11 @@ window.ReelAdmin = function (env) {
       draft[key] = draft[key] || []; var o = {}; cols.forEach(function (c) { o[c.k] = c.options ? c.options[0] : ''; }); draft[key].push(o); touch(); draw();
       var last = rows.querySelector('.row:last-child input'); if (last) last.focus();
     } } });
-    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), add]), rows]);
+    var extra = key === 'cast' ? h('button', { type: 'button', class: 'btn small', text: '+ New person', disabled: !canWrite, on: { click: function () {
+      openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelectorAll('input')[1]; if (r) r.focus(); } });
+    } } }) : null;
+    if (key === 'cast') namesDatalist();
+    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows]);
   }
 
   function renderEditor() {
@@ -1003,6 +1182,7 @@ window.ReelAdmin = function (env) {
   db.collection('people').onSnapshot(function (snap) {
     var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); people = o;
     renderPeopleCount();
+    namesDatalist();
     if (peopleMode) { var a = document.activeElement; if (!(a && a.id === 'pplQ')) renderPeople(); else refreshAvatars(); }
     else refreshAvatars();
   }, function () {});
@@ -1773,6 +1953,7 @@ window.ReelAdmin = function (env) {
       h('div', { style: 'min-width:0;flex:1' }, [
         h('div', { class: 'kicker', text: 'Known for · ' + known }),
         h('h1', { class: 'display', style: 'font-size:clamp(36px,5vw,64px);margin-top:6px', text: name }),
+        stored && stored.bio ? h('p', { class: 'lede', style: 'margin:10px 0 0;max-width:720px', text: stored.bio }) : null,
         h('div', { class: 'facts2' }, [
           h('span', { class: 'tag', text: titles.length + (titles.length === 1 ? ' title' : ' titles') + ' on Reelscore' }),
           upcoming ? h('span', { class: 'tag hot', text: upcoming + ' upcoming' }) : null,
