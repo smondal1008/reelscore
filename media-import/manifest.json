@@ -1,0 +1,593 @@
+{
+"titles": [
+{
+"id": "threemonkeys",
+"kind": "banner",
+"file": "threemonkeys-banner.webp",
+"bytes": 61754
+},
+{
+"id": "threemonkeys",
+"kind": "poster",
+"file": "threemonkeys-poster.jpg",
+"bytes": 80752
+},
+{
+"id": "avengers",
+"kind": "banner",
+"file": "avengers-banner.webp",
+"bytes": 66958
+},
+{
+"id": "avengers",
+"kind": "trailer",
+"file": "avengers-trailer.mp4",
+"bytes": 12942509
+},
+{
+"id": "avengers",
+"kind": "poster",
+"file": "avengers-poster.jpg",
+"bytes": 105124
+},
+{
+"id": "bhoothbangla",
+"kind": "poster",
+"file": "bhoothbangla-poster.jpg",
+"bytes": 495913
+},
+{
+"id": "bhoothbangla",
+"kind": "banner",
+"file": "bhoothbangla-banner.jpg",
+"bytes": 99962
+},
+{
+"id": "bokshi",
+"kind": "poster",
+"file": "bokshi-poster.jpg",
+"bytes": 55167
+},
+{
+"id": "bokshi",
+"kind": "banner",
+"file": "bokshi-banner.jpg",
+"bytes": 48474
+},
+{
+"id": "border2",
+"kind": "poster",
+"file": "border2-poster.jpg",
+"bytes": 693775
+},
+{
+"id": "border2",
+"kind": "banner",
+"file": "border2-banner.jpg",
+"bytes": 217261
+},
+{
+"id": "dhurandhar",
+"kind": "poster",
+"file": "dhurandhar-poster.jpg",
+"bytes": 73968
+},
+{
+"id": "dhurandhar",
+"kind": "banner",
+"file": "dhurandhar-banner.jpg",
+"bytes": 53773
+},
+{
+"id": "dhurandhar2",
+"kind": "banner",
+"file": "dhurandhar2-banner.webp",
+"bytes": 295074
+},
+{
+"id": "dhurandhar2",
+"kind": "poster",
+"file": "dhurandhar2-poster.jpg",
+"bytes": 179094
+},
+{
+"id": "dune",
+"kind": "banner",
+"file": "dune-banner.webp",
+"bytes": 132872
+},
+{
+"id": "dune",
+"kind": "poster",
+"file": "dune-poster.jpg",
+"bytes": 149103
+},
+{
+"id": "eetha",
+"kind": "trailer",
+"file": "eetha-trailer.mp4",
+"bytes": 19329665
+},
+{
+"id": "eetha",
+"kind": "poster",
+"file": "eetha-poster.jpg",
+"bytes": 312363
+},
+{
+"id": "eetha",
+"kind": "banner",
+"file": "eetha-banner.jpg",
+"bytes": 235676
+},
+{
+"id": "golmaal5",
+"kind": "poster",
+"file": "golmaal5-poster.jpg",
+"bytes": 224213
+},
+{
+"id": "golmaal5",
+"kind": "banner",
+"file": "golmaal5-banner.jpg",
+"bytes": 1299389
+},
+{
+"id": "guarding",
+"kind": "poster",
+"file": "guarding-poster.jpg",
+"bytes": 37885
+},
+{
+"id": "guarding",
+"kind": "banner",
+"file": "guarding-banner.jpg",
+"bytes": 298181
+},
+{
+"id": "gunmaaster",
+"kind": "poster",
+"file": "gunmaaster-poster.jpg",
+"bytes": 49721
+},
+{
+"id": "gunmaaster",
+"kind": "banner",
+"file": "gunmaaster-banner.jpg",
+"bytes": 176272
+},
+{
+"id": "heartland",
+"kind": "poster",
+"file": "heartland-poster.jpg",
+"bytes": 41773
+},
+{
+"id": "heartland",
+"kind": "banner",
+"file": "heartland-banner.jpg",
+"bytes": 116997
+},
+{
+"id": "hexed",
+"kind": "banner",
+"file": "hexed-banner.webp",
+"bytes": 208214
+},
+{
+"id": "hexed",
+"kind": "trailer",
+"file": "hexed-trailer.mp4",
+"bytes": 15034861
+},
+{
+"id": "hexed",
+"kind": "poster",
+"file": "hexed-poster.jpg",
+"bytes": 379566
+},
+{
+"id": "rob",
+"kind": "banner",
+"file": "rob-banner.webp",
+"bytes": 114728
+},
+{
+"id": "rob",
+"kind": "poster",
+"file": "rob-poster.jpg",
+"bytes": 339059
+},
+{
+"id": "rocky",
+"kind": "banner",
+"file": "rocky-banner.webp",
+"bytes": 249346
+},
+{
+"id": "rocky",
+"kind": "poster",
+"file": "rocky-poster.jpg",
+"bytes": 148684
+},
+{
+"id": "kaali",
+"kind": "banner",
+"file": "kaali-banner.webp",
+"bytes": 88660
+},
+{
+"id": "kaali",
+"kind": "poster",
+"file": "kaali-poster.jpg",
+"bytes": 37887
+},
+{
+"id": "kantara1",
+"kind": "poster",
+"file": "kantara1-poster.jpg",
+"bytes": 347735
+},
+{
+"id": "kantara1",
+"kind": "banner",
+"file": "kantara1-banner.jpg",
+"bytes": 452900
+},
+{
+"id": "king",
+"kind": "poster",
+"file": "king-poster.jpg",
+"bytes": 40477
+},
+{
+"id": "king",
+"kind": "banner",
+"file": "king-banner.jpg",
+"bytes": 94264
+},
+{
+"id": "loveandwar",
+"kind": "poster",
+"file": "loveandwar-poster.jpg",
+"bytes": 241696
+},
+{
+"id": "loveandwar",
+"kind": "banner",
+"file": "loveandwar-banner.jpg",
+"bytes": 283055
+},
+{
+"id": "maatrubhumi",
+"kind": "trailer",
+"file": "maatrubhumi-trailer.mp4",
+"bytes": 15282502
+},
+{
+"id": "maatrubhumi",
+"kind": "poster",
+"file": "maatrubhumi-poster.jpg",
+"bytes": 256498
+},
+{
+"id": "maatrubhumi",
+"kind": "banner",
+"file": "maatrubhumi-banner.jpg",
+"bytes": 285267
+},
+{
+"id": "madden",
+"kind": "banner",
+"file": "madden-banner.jpg",
+"bytes": 69826
+},
+{
+"id": "madden",
+"kind": "poster",
+"file": "madden-poster.webp",
+"bytes": 384786
+},
+{
+"id": "greys",
+"kind": "banner",
+"file": "greys-banner.webp",
+"bytes": 258926
+},
+{
+"id": "greys",
+"kind": "poster",
+"file": "greys-poster.jpg",
+"bytes": 27323
+},
+{
+"id": "mysaa",
+"kind": "poster",
+"file": "mysaa-poster.jpg",
+"bytes": 52047
+},
+{
+"id": "mysaa",
+"kind": "banner",
+"file": "mysaa-banner.jpg",
+"bytes": 59170
+},
+{
+"id": "nanhey",
+"kind": "banner",
+"file": "nanhey-banner.jpg",
+"bytes": 219676
+},
+{
+"id": "nanhey",
+"kind": "poster",
+"file": "nanhey-poster.png",
+"bytes": 4644347
+},
+{
+"id": "manuranjan",
+"kind": "poster",
+"file": "manuranjan-poster.jpg",
+"bytes": 60515
+},
+{
+"id": "manuranjan",
+"kind": "banner",
+"file": "manuranjan-banner.jpg",
+"bytes": 136930
+},
+{
+"id": "party",
+"kind": "banner",
+"file": "party-banner.png",
+"bytes": 6532213
+},
+{
+"id": "party",
+"kind": "poster",
+"file": "party-poster.webp",
+"bytes": 330084
+},
+{
+"id": "pratap",
+"kind": "poster",
+"file": "pratap-poster.jpg",
+"bytes": 35504
+},
+{
+"id": "pratap",
+"kind": "banner",
+"file": "pratap-banner.jpg",
+"bytes": 194684
+},
+{
+"id": "ramayana",
+"kind": "banner",
+"file": "ramayana-banner.webp",
+"bytes": 87156
+},
+{
+"id": "ramayana",
+"kind": "trailer",
+"file": "ramayana-trailer.mp4",
+"bytes": 20036857
+},
+{
+"id": "ramayana",
+"kind": "poster",
+"file": "ramayana-poster.jpg",
+"bytes": 267691
+},
+{
+"id": "steps",
+"kind": "banner",
+"file": "steps-banner.webp",
+"bytes": 95150
+},
+{
+"id": "steps",
+"kind": "poster",
+"file": "steps-poster.jpg",
+"bytes": 122539
+},
+{
+"id": "suryaa",
+"kind": "banner",
+"file": "suryaa-banner.webp",
+"bytes": 204450
+},
+{
+"id": "suryaa",
+"kind": "poster",
+"file": "suryaa-poster.jpg",
+"bytes": 32009
+},
+{
+"id": "cat",
+"kind": "trailer",
+"file": "cat-trailer.mp4",
+"bytes": 18386079
+},
+{
+"id": "cat",
+"kind": "poster",
+"file": "cat-poster.jpg",
+"bytes": 183760
+},
+{
+"id": "cat",
+"kind": "banner",
+"file": "cat-banner.jpg",
+"bytes": 256374
+},
+{
+"id": "yehprem",
+"kind": "poster",
+"file": "yehprem-poster.jpg",
+"bytes": 47088
+},
+{
+"id": "yehprem",
+"kind": "banner",
+"file": "yehprem-banner.jpg",
+"bytes": 421851
+}
+],
+"people": [
+{
+"key": "a-r-rahman",
+"name": "A. R. Rahman",
+"file": "people/a-r-rahman.jpg"
+},
+{
+"key": "aamir-khan",
+"name": "Aamir Khan",
+"file": "people/aamir-khan.jpg"
+},
+{
+"key": "abhishek-bachchan",
+"name": "Abhishek Bachchan",
+"file": "people/abhishek-bachchan.jpg"
+},
+{
+"key": "aditi-rao-hydari",
+"name": "Aditi Rao Hydari",
+"file": "people/aditi-rao-hydari.jpg"
+},
+{
+"key": "aditya-datt",
+"name": "Aditya Datt",
+"file": "people/aditya-datt.webp"
+},
+{
+"key": "aditya-dhar",
+"name": "Aditya Dhar",
+"file": "people/aditya-dhar.jpg"
+},
+{
+"key": "aditya-sarpotdar",
+"name": "Aditya Sarpotdar",
+"file": "people/aditya-sarpotdar.jpg"
+},
+{
+"key": "ahaan-panday",
+"name": "Ahaan Panday",
+"file": "people/ahaan-panday.jpg"
+},
+{
+"key": "ahan-shetty",
+"name": "Ahan Shetty",
+"file": "people/ahan-shetty.jpg"
+},
+{
+"key": "ajay-devgn",
+"name": "Ajay Devgn",
+"file": "people/ajay-devgn.jpg"
+},
+{
+"key": "akshay-kumar",
+"name": "Akshay Kumar",
+"file": "people/akshay-kumar.jpg"
+},
+{
+"key": "akshaye-khanna",
+"name": "Akshaye Khanna",
+"file": "people/akshaye-khanna.jpg"
+},
+{
+"key": "alia-bhatt",
+"name": "Alia Bhatt",
+"file": "people/alia-bhatt.jpg"
+},
+{
+"key": "anthony-russo",
+"name": "Anthony Russo",
+"file": "people/anthony-russo.jpg"
+},
+{
+"key": "arjun-rampal",
+"name": "Arjun Rampal",
+"file": "people/arjun-rampal.jpg"
+},
+{
+"key": "ayushmann-khurrana",
+"name": "Ayushmann Khurrana",
+"file": "people/ayushmann-khurrana.webp"
+},
+{
+"key": "chris-evans",
+"name": "Chris Evans",
+"file": "people/chris-evans.webp"
+},
+{
+"key": "chris-hemsworth",
+"name": "Chris Hemsworth",
+"file": "people/chris-hemsworth.webp"
+},
+{
+"key": "christian-bale",
+"name": "Christian Bale",
+"file": "people/christian-bale.jpg"
+},
+{
+"key": "deepika-padukone",
+"name": "Deepika Padukone",
+"file": "people/deepika-padukone.jpg"
+},
+{
+"key": "emraan-hashmi",
+"name": "Emraan Hashmi",
+"file": "people/emraan-hashmi.jpg"
+},
+{
+"key": "genelia-deshmukh",
+"name": "Genelia Deshmukh",
+"file": "people/genelia-deshmukh.jpg"
+},
+{
+"key": "joe-russo",
+"name": "Joe Russo",
+"file": "people/joe-russo.webp"
+},
+{
+"key": "pankaj-tripathi",
+"name": "Pankaj Tripathi",
+"file": "people/pankaj-tripathi.jpg"
+},
+{
+"key": "r-madhavan",
+"name": "R. Madhavan",
+"file": "people/r-madhavan.jpg"
+},
+{
+"key": "ranbir-kapoor",
+"name": "Ranbir Kapoor",
+"file": "people/ranbir-kapoor.jpg"
+},
+{
+"key": "ranveer-singh",
+"name": "Ranveer Singh",
+"file": "people/ranveer-singh.jpg"
+},
+{
+"key": "rashmika-mandanna",
+"name": "Rashmika Mandanna",
+"file": "people/rashmika-mandanna.jpg"
+},
+{
+"key": "robert-downey-jr",
+"name": "Robert Downey Jr.",
+"file": "people/robert-downey-jr.webp"
+},
+{
+"key": "sunny-deol",
+"name": "Sunny Deol",
+"file": "people/sunny-deol.webp"
+},
+{
+"key": "vicky-kaushal",
+"name": "Vicky Kaushal",
+"file": "people/vicky-kaushal.jpg"
+}
+]
+}
