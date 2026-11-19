@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function isAdmin() { return signedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isOwner(uid) { return signedIn() && request.auth.uid == uid; }
+
+    // Catalogue: anyone can read, only admins can change.
+    match /movies/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /people/{id}   { allow read: if true; allow write: if isAdmin(); }
+    match /settings/{id} { allow read: if true; allow write: if isAdmin(); }
+
+    // One verdicts doc and one reviews doc per person. Public to read, only the owner writes.
+    match /verdicts/{uid} {
+      allow read: if true;
+      allow write: if isOwner(uid) && request.resource.data.size() <= 3;
+    }
+    match /reviews/{uid} {
+      allow read: if true;
+      allow write: if isOwner(uid) && request.resource.data.size() <= 3;
+    }
+
+    // Public name + avatar so friends can find and follow each other.
+    match /users/{uid} {
+      allow read: if true;
+      allow write: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['name', 'avatarUrl', 'updatedAt'])
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80;
+    }
+
+    // Private: My List, follows and release reminders.
+    match /data/users/{uid}/{doc} {
+      allow read, write: if isOwner(uid);
+    }
+
+    // Cloudinary upload settings: only admins can read. You create this doc in the console.
+    match /private/{id} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    // Admin list. Add admins from the Firebase console. Nobody can write here from the site.
+    match /admins/{uid} {
+      allow read: if isOwner(uid);
+      allow write: if false;
+    }
+  }
+}

@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Reelscore setup</title>
+<style>
+  body { margin: 0; background: #141218; color: #EDEAF2; font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  main { max-width: 680px; margin: 0 auto; padding: 40px 20px 80px; }
+  h1 { font-size: 26px; margin: 0 0 6px; }
+  .sub { color: #B9B4C2; margin: 0 0 28px; }
+  .step { background: #1E1B24; border: 1px solid #2E2A38; border-radius: 10px; padding: 18px 20px; margin-bottom: 14px; }
+  .step h2 { font-size: 16px; margin: 0 0 8px; display: flex; gap: 10px; align-items: center; }
+  .dot { width: 22px; height: 22px; border-radius: 50%; display: inline-grid; place-items: center; font-size: 13px; background: #2E2A38; color: #B9B4C2; flex: none; }
+  .ok .dot { background: #2F7D4F; color: #fff; }
+  .step p { margin: 6px 0; color: #CFCAD8; }
+  code, .uid { background: #0E0C12; border: 1px solid #2E2A38; border-radius: 6px; padding: 2px 6px; font: 13px ui-monospace, Menlo, monospace; color: #fff; }
+  .uid { display: inline-block; padding: 6px 10px; user-select: all; }
+  button { background: #E50914; color: #fff; border: 0; border-radius: 6px; padding: 9px 16px; font: inherit; font-weight: 600; cursor: pointer; }
+  button.ghost { background: transparent; border: 1px solid #555; }
+  button:disabled { opacity: .5; cursor: default; }
+  .msg { margin-top: 8px; color: #F5C451; }
+  a { color: #8AB4F8; }
+  ol { padding-left: 20px; margin: 6px 0; } li { margin: 3px 0; }
+</style>
+<script src="firebase-config.js"></script>
+</head>
+<body>
+<main>
+  <h1>Reelscore setup</h1>
+  <p class="sub">Run through this once after the site is live. It checks each step and loads the starter catalogue.</p>
+
+  <section class="step" id="s1"><h2><span class="dot">1</span> Sign in</h2>
+    <div id="s1b"><p>Checking…</p></div></section>
+
+  <section class="step" id="s2"><h2><span class="dot">2</span> Make yourself the admin</h2>
+    <div id="s2b"><p>Sign in first.</p></div></section>
+
+  <section class="step" id="s3"><h2><span class="dot">3</span> Connect Cloudinary for images and clips</h2>
+    <div id="s3b"><p>Finish step 2 first.</p></div></section>
+
+  <section class="step" id="s4"><h2><span class="dot">4</span> Load the starter catalogue</h2>
+    <div id="s4b"><p>Finish step 2 first.</p></div></section>
+
+  <p><a href="./">← Back to the site</a></p>
+</main>
+
+<script type="module">
+const V = '10.14.1', base = 'https://www.gstatic.com/firebasejs/' + V + '/';
+const cfg = window.REEL_FIREBASE_CONFIG || {};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const done = (id) => $(id).classList.add('ok');
+
+if (!cfg.apiKey || /PASTE/.test(cfg.apiKey)) {
+  $('s1b').innerHTML = '<p class="msg">firebase-config.js still has placeholder values. Paste your Firebase config into it, then upload the folder again.</p>';
+} else {
+  const [{ initializeApp }, A, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+  const app = initializeApp(cfg), auth = A.getAuth(app), db = F.getFirestore(app);
+
+  A.onAuthStateChanged(auth, async (user) => {
+    if (!user) {
+      $('s1b').innerHTML = '<p>Sign in with the Google account that will run the site.</p><button id="si">Sign in with Google</button><p class="msg" id="sim" hidden></p>';
+      $('si').onclick = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch((e) => {
+        const m = $('sim'); m.hidden = false;
+        m.textContent = /unauthorized-domain/.test(e.code) ? 'This address isn’t allowed yet. In Firebase: Authentication → Settings → Authorized domains → Add domain → ' + location.hostname : 'Sign-in failed: ' + e.code;
+      });
+      return;
+    }
+    done('s1');
+    $('s1b').innerHTML = '<p>Signed in as <b>' + esc(user.email || user.displayName) + '</b>. <button class="ghost" id="so">Sign out</button></p>';
+    $('so').onclick = () => A.signOut(auth);
+    F.setDoc(F.doc(db, 'users/' + user.uid), { name: user.displayName || 'Someone', avatarUrl: user.photoURL || '', updatedAt: new Date().toISOString() }, { merge: true }).catch(() => {});
+
+    // ---- step 2: admin ----
+    let isAdmin = false;
+    try { isAdmin = (await F.getDoc(F.doc(db, 'admins/' + user.uid))).exists(); } catch (e) { /* rules not published yet */ }
+    if (!isAdmin) {
+      $('s2b').innerHTML =
+        '<p>Your user ID:</p><p><span class="uid">' + esc(user.uid) + '</span> <button class="ghost" id="cp">Copy</button></p>' +
+        '<ol><li>Firebase console → <b>Firestore Database</b> → <b>Data</b> → <b>+ Start collection</b></li>' +
+        '<li>Collection ID: <code>admins</code> → Next</li>' +
+        '<li>Document ID: paste your user ID above</li>' +
+        '<li>Field: <code>role</code>, type string, value <code>owner</code> → Save</li></ol>' +
+        '<p>Then <button id="re">Check again</button></p>' +
+        '<p class="msg">Also make sure you published the rules (README step 3), or this check can’t see the admin list.</p>';
+      $('cp').onclick = () => navigator.clipboard && navigator.clipboard.writeText(user.uid).then(() => { $('cp').textContent = 'Copied'; });
+      $('re').onclick = () => location.reload();
+      return;
+    }
+    done('s2');
+    $('s2b').innerHTML = '<p>You’re an admin. <b>Admin</b> now shows in the site menu.</p>';
+
+    // ---- step 3: Cloudinary ----
+    let media = null;
+    try { const s = await F.getDoc(F.doc(db, 'private/media')); media = s.exists() ? s.data() : null; } catch (e) {}
+    if (media && media.cloudName && media.uploadPreset) {
+      done('s3');
+      $('s3b').innerHTML = '<p>Connected to Cloudinary cloud <code>' + esc(media.cloudName) + '</code> with preset <code>' + esc(media.uploadPreset) + '</code>.</p>';
+    } else {
+      $('s3b').innerHTML =
+        '<p>Follow README step 4 to get your Cloudinary <b>cloud name</b> and an <b>unsigned upload preset</b>, then in Firebase:</p>' +
+        '<ol><li>Firestore Database → Data → <b>+ Start collection</b> → Collection ID <code>private</code></li>' +
+        '<li>Document ID: <code>media</code></li>' +
+        '<li>Field <code>cloudName</code> (string) = your cloud name</li>' +
+        '<li>Add field <code>uploadPreset</code> (string) = your preset name → Save</li></ol>' +
+        '<p><button id="re3">Check again</button></p><p class="msg">You can skip this for now: the site works, you just can’t upload posters yet.</p>';
+      $('re3').onclick = () => location.reload();
+    }
+
+    // ---- step 4: starter catalogue ----
+    const count = (await F.getDocs(F.collection(db, 'movies'))).size;
+    if (count) done('s4');
+    $('s4b').innerHTML = '<p>' + (count ? 'The catalogue has <b>' + count + '</b> titles. Loading again refreshes their details and keeps any posters, banners and clips you’ve added.' : 'Adds the 40 titles from the prototype and the home banner selection.') + '</p>' +
+      '<button id="ld">' + (count ? 'Reload starter titles' : 'Load 40 starter titles') + '</button> <span id="lm" class="msg"></span>';
+    $('ld').onclick = async () => {
+      const b = $('ld'), m = $('lm'); b.disabled = true; m.textContent = 'Loading…';
+      try {
+        const movies = await (await fetch('data/movies.json', { cache: 'no-store' })).json();
+        const settings = await (await fetch('data/settings.json', { cache: 'no-store' })).json();
+        const now = new Date().toISOString();
+        let n = 0;
+        for (const { id, ...rest } of movies) {
+          const ref = F.doc(db, 'movies/' + id);
+          const ex = (await F.getDoc(ref)).data() || {};
+          await F.setDoc(ref, {
+            title: '', subtitle: '', section: 'Coming soon', platform: '', releaseDate: '', releaseNote: '', languages: '', genre: '',
+            runtime: '', certificate: '', director: '', synopsis: '', cast: [], videos: [], formats: '',
+            posterId: ex.posterId || '', posterUrl: ex.posterUrl || '', bannerId: ex.bannerId || '', bannerUrl: ex.bannerUrl || '',
+            trailerFileId: ex.trailerFileId || '', trailerFileUrl: ex.trailerFileUrl || '',
+            source: 'Starter catalogue', ...rest, updatedAt: now
+          });
+          m.textContent = 'Loading… ' + (++n) + ' / ' + movies.length;
+        }
+        if (settings.home) await F.setDoc(F.doc(db, 'settings/home'), { ...settings.home, updatedAt: now });
+        done('s4'); m.textContent = '✓ Loaded ' + n + ' titles. Open the site.';
+      } catch (e) { m.textContent = 'Failed: ' + (e.code || e.message) + '. Check that the rules are published and you’re an admin.'; b.disabled = false; }
+    };
+  });
+}
+</script>
+</body>
+</html>
