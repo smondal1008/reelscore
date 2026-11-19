@@ -418,7 +418,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'Missing info'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'Missing info', 'Missing photos'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Song', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
@@ -779,7 +779,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'Missing info': 'missing-info' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos' };
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
   function readListState() {
     var q = new URLSearchParams(location.search);
@@ -825,7 +825,8 @@ window.ReelAdmin = function (env) {
     });
     if (!ss.value) ss.appendChild(h('option', { value: sortKey + ':' + sortDir, text: SORTS[sortKey] + (sortDir === 'asc' ? ' ↑' : ' ↓'), selected: true }));
   }
-  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : d.section === f); }
+  function missingPhotos(d) { return !safeUrl(d.posterUrl) || !safeUrl(d.bannerUrl); }
+  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : d.section === f); }
   function passQL(d) {
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
     var q = query.trim().toLowerCase(); if (!q) return true;
@@ -893,7 +894,8 @@ window.ReelAdmin = function (env) {
         h('td', {}, [
           h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
-          h('div', { class: 'ts', text: [d.section === 'On OTT' && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', '/movie/' + slugOf(m)].filter(Boolean).join(' · ') })
+          h('div', { class: 'ts', text: [d.section === 'On OTT' && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', '/movie/' + slugOf(m)].filter(Boolean).join(' · ') }),
+          filter === 'Missing photos' ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
         h('td', { class: 'c-sec' }, [h('span', { class: 'sec', text: d.section || '—' })]),
         h('td', { class: 'nw', text: fmtDate(d.releaseDate) }),
