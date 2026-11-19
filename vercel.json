@@ -39,6 +39,10 @@
       "destination": "/"
     },
     {
+      "source": "/admin/:path*",
+      "destination": "/"
+    },
+    {
       "source": "/person/:slug",
       "destination": "/"
     }

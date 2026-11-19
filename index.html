@@ -22,6 +22,31 @@
   .brand .dot { width: 11px; height: 11px; border-radius: 50%; background: var(--accent); }
   .brand small { font-family: Inter, sans-serif; font-size: 12px; font-weight: 700; letter-spacing: .8px; color: var(--muted); padding: 4px 8px; border: 1px solid var(--line2); border-radius: 4px; }
   .status { font-size: 13px; color: var(--muted); }
+  .ahead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 24px; padding: 18px 28px 0; }
+  .ahead-l { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 28px; }
+  .atabs { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 26px; background: var(--panel); border: 1px solid var(--line); }
+  .atabs a { display: inline-flex; align-items: center; gap: 8px; height: 40px; padding: 0 16px; border-radius: 20px; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
+  .atabs a:hover { color: var(--text); }
+  .atabs a[aria-current="page"] { background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
+  .atabs .cnt { font-size: 12px; font-weight: 700; color: var(--dim); }
+  .atabs a[aria-current="page"] .cnt { color: var(--accent); }
+  .apage { padding: 20px 28px 120px; }
+  .apage[hidden] { display: none; }
+  #editPage .main { max-width: 1040px; margin: 0 auto; }
+  .ttools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+  #titlesPage .chips { margin-bottom: 8px; }
+  .tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 12px; }
+  .tgrid .group-h { grid-column: 1 / -1; margin: 18px 4px 2px; }
+  .tgrid .empty { grid-column: 1 / -1; }
+  .tgrid .item { border-color: var(--line); background: var(--panel); text-decoration: none; color: inherit; }
+  .tgrid .item:hover { border-color: var(--line2); }
+  .crumbs { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; font-size: 14px; }
+  .crumbs a { color: var(--muted); text-decoration: none; font-weight: 600; }
+  .crumbs a:hover { color: var(--text); }
+  .jump { position: sticky; top: 0; z-index: 5; display: flex; gap: 6px; overflow-x: auto; padding: 10px 0; margin: 16px 0 0; background: var(--bg); scrollbar-width: none; }
+  .jump::-webkit-scrollbar { display: none; }
+  .jump .chip { flex: 0 0 auto; }
+  @media (max-width: 720px) { .ahead { padding: 14px 16px 0; } .apage { padding: 16px 16px 120px; } .atabs a { padding: 0 12px; } }
   .wrap { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 24px; padding: 24px 28px 120px; }
   .side { flex: 1 1 320px; max-width: 420px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
   .main { flex: 999 1 560px; min-width: 0; }
@@ -316,32 +341,31 @@
 <div class="view" id="view-person"></div>
 
 <div class="view" id="view-admin">
-  <div style="display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;padding:18px 28px 0">
-    <h1 class="display" style="font-size:34px">Admin · Titles</h1>
-    <div class="status" id="status">Connecting…</div>
+  <div class="ahead">
+    <div class="ahead-l">
+      <h1 class="display" style="font-size:30px">Admin</h1>
+      <nav class="atabs" aria-label="Admin sections">
+        <a href="/admin/titles" data-p="titles">All titles <span class="cnt" id="titleCount"></span></a>
+        <a href="/admin/people" data-p="people">Cast &amp; crew <span class="cnt" id="peopleCount"></span></a>
+        <a href="/admin/home-banner" data-p="banner">Home banner <span class="cnt" id="featCount"></span></a>
+      </nav>
+    </div>
+    <div class="status" id="status" role="status">Connecting…</div>
   </div>
-  <div class="wrap">
-    <aside class="side" aria-label="Titles">
-      <div style="display:flex; gap:10px; align-items:center;">
-        <div class="search" style="flex:1;">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B9B4C2" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
-          <label for="q" class="sr">Search titles</label>
-          <input id="q" type="search" placeholder="Search titles, cast">
-        </div>
-        <button type="button" class="btn primary" id="addBtn">+ Add</button>
+  <div class="apage" id="titlesPage" hidden>
+    <div class="ttools">
+      <div class="search" style="flex:1;min-width:220px;max-width:460px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B9B4C2" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
+        <label for="q" class="sr">Search titles</label>
+        <input id="q" type="search" placeholder="Search titles, director, cast">
       </div>
-      <button type="button" class="item" id="featBtn" style="border:1px solid var(--line2);background:var(--panel)">
-        <span class="thumb" aria-hidden="true" style="width:66px;height:44px;background:var(--accent);color:#0B0A0F;font-weight:800;font-size:18px">★</span>
-        <span style="min-width:0;flex:1"><div class="t">Home banner</div><div class="m" id="featCount">Choose the titles in the first scroll</div></span>
-      </button>
-      <button type="button" class="item" id="peopleBtn" style="border:1px solid var(--line2);background:var(--panel)">
-        <span class="thumb" aria-hidden="true" style="width:66px;height:44px;background:#C9B8F2;color:#0B0A0F;font-weight:800;font-size:18px">☺</span>
-        <span style="min-width:0;flex:1"><div class="t">Cast &amp; crew</div><div class="m" id="peopleCount">Everyone credited, with page URLs</div></span>
-      </button>
-      <div class="chips" role="group" aria-label="Filter by section" id="filters"></div>
-      <div class="list" id="list"></div>
-    </aside>
-    <main class="main" id="main"><div class="empty">Loading titles…</div></main>
+      <a class="btn primary" id="addBtn" href="/admin/titles/new">+ Add title</a>
+    </div>
+    <div class="chips" role="group" aria-label="Filter by section" id="filters"></div>
+    <div class="list tgrid" id="list"></div>
+  </div>
+  <div class="apage" id="editPage" hidden>
+    <main class="main" id="main"><div class="empty">Loading…</div></main>
   </div>
   <div class="savebar" id="savebar" hidden>
     <div class="msg" id="saveMsg"></div>
@@ -372,7 +396,8 @@ window.ReelAdmin = function (env) {
   var dirty = false;
   var saving = false;
   var filter = 'All', query = '';
-  var pendingSwitch = null; // id to switch to after unsaved prompt
+  var pendingSwitch = null; // unused since titles open on their own page
+  var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
   var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all';
   function personKey(name) { return (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
@@ -428,8 +453,7 @@ window.ReelAdmin = function (env) {
   function renderPeopleCount() {
     var el = $('peopleCount'); if (!el) return;
     var list = allPeople(), withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length;
-    el.textContent = list.length + ' people · ' + withPhoto + ' with photos';
-    $('peopleBtn').setAttribute('aria-current', String(peopleMode));
+    el.textContent = String(list.length); el.title = withPhoto + ' with photos';
   }
   // ---------- cast & crew directory ----------
   function compactKey(name) { return personKey(name).replace(/-/g, ''); }
@@ -628,8 +652,7 @@ window.ReelAdmin = function (env) {
   }
   function renderFeatCount() {
     var el = $('featCount'); if (!el) return;
-    el.textContent = featured.length ? featured.length + ' of ' + MAX_FEAT + ' slots used' : 'Not set · home shows titles in theatres';
-    $('featBtn').setAttribute('aria-current', String(featuredMode));
+    el.textContent = featured.length + '/' + MAX_FEAT;
   }
   function renderFeatured() {
     var main = $('main'); main.innerHTML = '';
@@ -655,7 +678,7 @@ window.ReelAdmin = function (env) {
         h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { var n = featured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j - 1, 0, m.id); writeFeatured(n, 'Order saved'); } } }),
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' down', text: '↓', disabled: i === items.length - 1 || !canWrite, on: { click: function () { var n = featured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j + 1, 0, m.id); writeFeatured(n, 'Order saved'); } } }),
-          h('button', { type: 'button', class: 'btn small', text: 'Edit title', on: { click: function () { featuredMode = false; renderFeatCount(); select(m.id); } } }),
+          h('a', { class: 'btn small', href: titleHref(m), text: 'Edit title' }),
           h('button', { type: 'button', class: 'btn small danger', text: 'Remove', disabled: !canWrite, on: { click: function () { toggleFeatured(m.id); } } })
         ])
       ]));
@@ -740,7 +763,8 @@ window.ReelAdmin = function (env) {
   function renderList() {
     var box = $('list'); box.innerHTML = '';
     var vis = visible();
-    if (!movies.length) { box.appendChild(h('div', { class: 'empty', text: 'No titles yet. Use + Add to create one.' })); return; }
+    var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
+    if (!movies.length) { box.appendChild(h('div', { class: 'empty', text: 'No titles yet. Use + Add title to create one.' })); return; }
     if (!vis.length) { box.appendChild(h('div', { class: 'empty', text: 'No titles match.' })); return; }
     var groups = filter === 'All' ? SECTIONS : [null];
     groups.forEach(function (g) {
@@ -751,8 +775,7 @@ window.ReelAdmin = function (env) {
         var d = m.data, p = pct(d);
         var thumb = h('span', { class: 'thumb', style: bgUrl(d.posterUrl), 'aria-hidden': 'true' }, [d.posterUrl ? null : 'No poster']);
         var meta = (d.section === 'On OTT' && d.platform ? d.platform + ' · ' : '') + fmtDate(d.releaseDate);
-        box.appendChild(h('button', { type: 'button', class: 'item', 'aria-current': String(m.id === currentId),
-          on: { click: function () { requestSwitch(m.id); } } }, [
+        box.appendChild(h('a', { class: 'item', href: titleHref(m) }, [
           thumb,
           h('span', { style: 'min-width:0;flex:1' }, [
             h('div', { class: 't', text: d.title || 'Untitled' }),
@@ -764,19 +787,58 @@ window.ReelAdmin = function (env) {
     });
   }
 
-  // ---------- switching ----------
-  function requestSwitch(id) {
-    if (featuredMode || peopleMode) { featuredMode = false; peopleMode = false; renderFeatCount(); renderPeopleCount(); if (id === currentId) { renderEditor(); return; } }
-    if (id === currentId) return;
-    if (dirty) { pendingSwitch = id; renderEditor(); window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-    select(id);
+  // ---------- pages: /admin/titles, /admin/titles/<slug>, /admin/titles/new, /admin/people, /admin/home-banner ----------
+  function titleHref(m) { return '/admin/titles/' + slugOf(m); }
+  function findBySlug(k) {
+    return movies.find(function (m) { return m.id === k || slugOf(m) === k; }) ||
+      movies.find(function (m) { return (m.data.slugHistory || []).indexOf(k) !== -1; }) || null;
+  }
+  function showPage() {
+    $('titlesPage').hidden = page !== 'titles';
+    $('editPage').hidden = page === 'titles';
+    document.querySelectorAll('.atabs a').forEach(function (a) {
+      var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
+      a.setAttribute('aria-current', on ? 'page' : 'false');
+    });
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', banner: 'Home banner' };
+    document.title = names[page] + ' · Admin · Reelscore';
+  }
+  function resolveTitle() {
+    if (page !== 'title' || !wantSlug) return;
+    if (wantSlug === 'new') { if (currentId !== '__new__') { currentId = '__new__'; draft = blank(); setDirty(true); } return; }
+    var m = findBySlug(wantSlug);
+    if (m) {
+      if (m.id !== currentId) select(m.id);
+      if (location.pathname !== titleHref(m)) history.replaceState(null, '', titleHref(m));
+    } else if (movies.length || moviesLoaded) { currentId = null; draft = null; }
+  }
+  function route(sub) {
+    var parts = String(sub || '').split('/').filter(Boolean);
+    featuredMode = false; peopleMode = false; wantSlug = null;
+    if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
+    else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
+    else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
+    else { page = 'titles'; if (location.pathname !== '/admin/titles') history.replaceState(null, '', '/admin/titles'); }
+    if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
+    resolveTitle();
+    showPage();
+    if (page === 'titles') renderList(); else renderEditor();
+    if (page === 'title' && wantSlug === 'new') { var t = $('f_title'); if (t) t.focus(); }
+  }
+  function canLeave(nextPath) {
+    if (!dirty || page !== 'title') return true;
+    if (nextPath && nextPath === location.pathname) return true;
+    if (!confirm('You have unsaved changes to ' + ((draft && draft.title) || 'this title') + '. Leave without saving?')) return false;
+    var m = movies.find(function (x) { return x.id === currentId; });
+    draft = m ? clone(m.data) : null; if (!m) currentId = null; setDirty(false);
+    return true;
   }
   function select(id) {
     currentId = id; pendingSwitch = null; remoteChanged = false; confirmDelete = false;
     var m = movies.find(function (x) { return x.id === id; });
     draft = m ? clone(m.data) : null;
     setDirty(false);
-    renderList(); renderEditor();
+    if (page === 'title') { showPage(); renderEditor(); }
   }
   function setDirty(v) {
     dirty = v;
@@ -1053,13 +1115,37 @@ window.ReelAdmin = function (env) {
   }
 
   function renderEditor() {
+    if (page === 'titles') { renderList(); return; }
+    renderEditorInner();
+    if (page === 'title' && draft) addJumpBar();
+    showPage();
+  }
+  function addJumpBar() {
+    var main = $('main'), cards = main.querySelectorAll(':scope > section.card');
+    if (cards.length < 3) return;
+    var bar = h('nav', { class: 'jump', 'aria-label': 'Jump to section' });
+    Array.prototype.forEach.call(cards, function (c, i) {
+      if (!i) return;
+      var t = c.querySelector('h2'); if (!t) return;
+      var label = t.textContent.split(' · ')[0];
+      bar.appendChild(h('button', { type: 'button', class: 'chip', text: label, on: { click: function () { c.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } }));
+    });
+    if (cards[1]) main.insertBefore(bar, cards[1]);
+  }
+  function renderEditorInner() {
     if (peopleMode) { renderPeople(); return; }
     if (featuredMode) { renderFeatured(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
-      main.appendChild(h('div', { class: 'empty', text: movies.length ? 'Pick a title on the left to edit it.' : 'No titles yet. Use + Add to create one.' }));
+      main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/titles', text: '← All titles' })]));
+      main.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No title at this address. It may have been deleted or renamed.' : 'Loading…' }));
       return;
     }
+    var live = movies.find(function (m) { return m.id === currentId; });
+    main.appendChild(h('div', { class: 'crumbs' }, [
+      h('a', { href: '/admin/titles', text: '← All titles' }),
+      live ? h('a', { href: '/movie/' + slugOf(live), target: '_blank', rel: 'noopener', text: 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not published yet' })
+    ]));
     if (pendingSwitch) {
       var target = movies.find(function (m) { return m.id === pendingSwitch; });
       main.appendChild(h('div', { class: 'banner-note', role: 'status' }, [
@@ -1206,7 +1292,8 @@ window.ReelAdmin = function (env) {
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     return db.doc('movies/' + currentId).set(body).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
-      renderList(); if (!pendingSwitch) renderEditor();
+      if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
+      renderEditor();
       return true;
     }).catch(function (e) {
       saving = false; setDirty(true);
@@ -1219,19 +1306,14 @@ window.ReelAdmin = function (env) {
     var id = currentId;
     db.doc('movies/' + id).delete().then(function () {
       setStatus('Deleted ' + (draft.title || 'title'));
-      currentId = null; draft = null; confirmDelete = false; setDirty(false); renderList(); renderEditor();
+      currentId = null; draft = null; confirmDelete = false; setDirty(false); go('/admin/titles');
     }).catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });
   }
 
   $('saveBtn').addEventListener('click', function () { save(); });
   $('discardBtn').addEventListener('click', function () {
     var m = movies.find(function (x) { return x.id === currentId; });
-    if (m) select(currentId); else { currentId = null; draft = null; setDirty(false); renderList(); renderEditor(); }
-  });
-  $('addBtn').addEventListener('click', function () {
-    if (dirty) { setStatus('Save or discard your changes first.'); return; }
-    currentId = '__new__'; draft = blank(); setDirty(true); renderList(); renderEditor();
-    var t = document.getElementById('f_title'); if (t) t.focus();
+    if (m) select(currentId); else { currentId = null; draft = null; setDirty(false); go('/admin/titles'); }
   });
   $('q').addEventListener('input', function (e) { query = e.target.value; renderList(); });
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
@@ -1240,22 +1322,16 @@ window.ReelAdmin = function (env) {
 
   // ---------- connect (from the prototype shell) ----------
   db = env.db; assets = env.assets; canWrite = env.canWrite !== false; canUpload = !!assets && canWrite;
+  if (env.go) go = env.go;
+  var moviesLoaded = false;
   var timer = setTimeout(function () { setStatus('Can’t reach the catalogue yet. Check your connection.'); }, 10000);
   db.doc('settings/home').onSnapshot(function (snap) {
     if (featWriting) return;
     var d = snap.exists ? snap.data() : {};
     featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
     featLoaded = true; renderFeatCount();
-    if (featuredMode) renderFeatured(); else if (!dirty && !peopleMode) renderEditor();
+    if (featuredMode) renderFeatured(); else if (page === 'title' && !dirty) renderEditor();
   }, function () {});
-  $('featBtn').addEventListener('click', function () {
-    if (dirty) { setStatus('Save or discard your changes first.'); return; }
-    featuredMode = true; peopleMode = false; currentId = null; draft = null; renderFeatCount(); renderPeopleCount(); renderList(); renderFeatured();
-  });
-  $('peopleBtn').addEventListener('click', function () {
-    if (dirty) { setStatus('Save or discard your changes first.'); return; }
-    peopleMode = true; featuredMode = false; currentId = null; draft = null; renderFeatCount(); renderPeopleCount(); renderList(); renderPeople();
-  });
   db.collection('people').onSnapshot(function (snap) {
     var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); people = o;
     renderPeopleCount();
@@ -1275,10 +1351,13 @@ window.ReelAdmin = function (env) {
         if (changed) remoteChanged = true;
       }
       renderPeopleCount();
-      if (!currentId && movies.length && !featuredMode && !peopleMode) { currentId = movies[0].id; draft = clone(movies[0].data); }
+      if (!snap.metadata.fromCache) moviesLoaded = true;
+      if (page === 'title' && !currentId) resolveTitle();
       renderList();
-      if (!(dirty && document.activeElement && document.activeElement.closest && document.activeElement.closest('#main'))) renderEditor();
+      if (page !== 'titles' && !(dirty && document.activeElement && document.activeElement.closest && document.activeElement.closest('#main'))) renderEditor();
   }, function (e) { clearTimeout(timer); setStatus('Lost connection to the catalogue. Reload to retry.'); });
+  route(env.sub);
+  return { route: route, canLeave: canLeave };
 };
 
 </script>
@@ -1464,19 +1543,21 @@ window.ReelAdmin = function (env) {
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) { S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All'; }
-    else if (path === '/admin') { S.route = 'admin'; S.param = null; }
+    else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
     if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
+    S.lastPath = location.pathname;
     S.rtab = 'all';
     render(true);
     window.scrollTo(0, 0);
   }
   function go(href) {
     if (href === location.pathname + location.search) { window.scrollTo(0, 0); return; }
+    if (S.adminApi && S.route === 'admin' && !S.adminApi.canLeave(href)) return;
     history.pushState(null, '', href); parseRoute();
   }
   // Same-site links navigate without a page reload.
@@ -1488,7 +1569,10 @@ window.ReelAdmin = function (env) {
     if (/^\/(setup|data|js)\b|\.\w+$/.test(href)) return;
     e.preventDefault(); go(href);
   });
-  window.addEventListener('popstate', parseRoute);
+  window.addEventListener('popstate', function () {
+    if (S.adminApi && S.route === 'admin' && S.lastPath && location.pathname !== S.lastPath && !S.adminApi.canLeave()) { history.pushState(null, '', S.lastPath); return; }
+    parseRoute();
+  });
   window.addEventListener('hashchange', function () { if (legacyHashToPath((location.hash || '').slice(1))) parseRoute(); });
   // Keep the address bar on the canonical /movie/<title-year> once the catalogue is in.
   function canonicalizeTitleUrl(m) {
@@ -2186,10 +2270,11 @@ window.ReelAdmin = function (env) {
 
   // ---------- admin ----------
   function startAdmin() {
+    if (S.adminApi) { S.adminApi.route(S.adminSub); return; }
     if (S.adminStarted || !S.db) return;
-    if (!S.canEdit) { $('main').innerHTML = ''; $('main').appendChild(h('div', { class: 'empty', text: 'Admin is for editors. Sign in with an admin account.' })); return; }
+    if (!S.canEdit) { $('editPage').hidden = false; $('titlesPage').hidden = true; $('main').innerHTML = ''; $('main').appendChild(h('div', { class: 'empty', text: 'Admin is for editors. Sign in with an admin account.' })); return; }
     S.adminStarted = true;
-    window.ReelAdmin({ db: S.db, assets: S.assets, canWrite: true });
+    S.adminApi = window.ReelAdmin({ db: S.db, assets: S.assets, canWrite: true, sub: S.adminSub, go: go });
   }
 
   // ---------- connect ----------
