@@ -19,8 +19,24 @@
   ],
   "rewrites": [
     {
-      "source": "/((?!js/|data/|setup|firebase-config\\.js|favicon).*)",
-      "destination": "/index.html"
+      "source": "/movie/:slug",
+      "destination": "/"
+    },
+    {
+      "source": "/browse",
+      "destination": "/"
+    },
+    {
+      "source": "/browse/:section",
+      "destination": "/"
+    },
+    {
+      "source": "/my-list",
+      "destination": "/"
+    },
+    {
+      "source": "/admin",
+      "destination": "/"
     }
   ],
   "trailingSlash": false
