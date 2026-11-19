@@ -35,6 +35,35 @@
   #editPage .main { max-width: 1040px; margin: 0 auto; }
   .ttools { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
   #titlesPage .chips { margin-bottom: 8px; }
+  select.in.tsel { width: auto; min-width: 150px; height: 44px; }
+  .tsum { font-size: 13px; color: var(--muted); margin: 6px 2px 10px; }
+  .ttable-wrap { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; overflow: clip; background: var(--panel); }
+  .ttable-wrap[hidden] { display: none; }
+  .ttable { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .ttable th { position: sticky; top: 0; z-index: 2; background: var(--panel2); text-align: left; font-size: 12px; font-weight: 700; letter-spacing: .5px; text-transform: uppercase; color: var(--dim); padding: 0 12px; height: 40px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+  .ttable th button { all: unset; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; height: 40px; }
+  .ttable th button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .ttable th[aria-sort="ascending"] button::after { content: "↑"; color: var(--accent); }
+  .ttable th[aria-sort="descending"] button::after { content: "↓"; color: var(--accent); }
+  .ttable td { padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .ttable tbody tr { cursor: pointer; }
+  .ttable tbody tr:hover { background: rgba(255,255,255,.03); }
+  .ttable tbody tr:last-child td { border-bottom: 0; }
+  .ttable .pc { width: 36px; padding-right: 0; }
+  .ttable .pc img, .ttable .pc span { width: 32px; height: 48px; border-radius: 4px; object-fit: cover; display: block; background: #2E2A38; }
+  .ttable a.tt { color: var(--text); font-weight: 600; text-decoration: none; }
+  .ttable a.tt:hover { text-decoration: underline; }
+  .ttable .ts { font-size: 12px; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 360px; }
+  .ttable .nw { white-space: nowrap; color: var(--muted); }
+  .ttable .cpl { display: flex; align-items: center; gap: 8px; white-space: nowrap; color: var(--muted); font-size: 13px; }
+  .ttable .cpl .bar { width: 56px; margin: 0; }
+  .ttable .star { color: var(--accent); font-size: 13px; }
+  .sec { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line2); white-space: nowrap; }
+  .pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-top: 14px; }
+  .pager .chip[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+  .pager .gap { color: var(--dim); padding: 0 4px; }
+  @media (max-width: 860px) { .ttable .c-lang, .ttable .c-upd { display: none; } }
+  @media (max-width: 600px) { .ttable .c-sec, .ttable .c-cpl { display: none; } .ttable .ts { max-width: 200px; } }
   .tgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 8px 12px; }
   .tgrid .group-h { grid-column: 1 / -1; margin: 18px 4px 2px; }
   .tgrid .empty { grid-column: 1 / -1; }
@@ -354,15 +383,22 @@
   </div>
   <div class="apage" id="titlesPage" hidden>
     <div class="ttools">
-      <div class="search" style="flex:1;min-width:220px;max-width:460px">
+      <div class="search" style="flex:1 1 260px;max-width:460px">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#B9B4C2" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"></circle><path d="M20 20l-3.5-3.5"></path></svg>
         <label for="q" class="sr">Search titles</label>
-        <input id="q" type="search" placeholder="Search titles, director, cast">
+        <input id="q" type="search" placeholder="Search title, director, cast" autocomplete="off">
       </div>
+      <label class="sr" for="langSel">Language</label>
+      <select id="langSel" class="in tsel"></select>
+      <label class="sr" for="sortSel">Sort by</label>
+      <select id="sortSel" class="in tsel"></select>
+      <span style="flex:1"></span>
       <a class="btn primary" id="addBtn" href="/admin/titles/new">+ Add title</a>
     </div>
     <div class="chips" role="group" aria-label="Filter by section" id="filters"></div>
-    <div class="list tgrid" id="list"></div>
+    <div class="tsum" id="tsum" aria-live="polite"></div>
+    <div class="ttable-wrap"><table class="ttable" id="list"></table></div>
+    <nav class="pager" id="pager" aria-label="Pages"></nav>
   </div>
   <div class="apage" id="editPage" hidden>
     <main class="main" id="main"><div class="empty">Loading…</div></main>
@@ -395,7 +431,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', query = '';
+  var filter = 'All', query = '', langF = '', sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -742,49 +778,148 @@ window.ReelAdmin = function (env) {
   }
 
   // ---------- list ----------
+  var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'Missing info': 'missing-info' };
+  function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function readListState() {
+    var q = new URLSearchParams(location.search);
+    if (!location.search) return;
+    query = q.get('q') || ''; langF = q.get('lang') || '';
+    var sec = q.get('section'); filter = 'All';
+    Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) filter = k; });
+    sortKey = SORTS[q.get('sort')] ? q.get('sort') : 'release';
+    sortDir = q.get('dir') === 'asc' ? 'asc' : (q.get('dir') === 'desc' ? 'desc' : defaultDir(sortKey));
+    pageNo = Math.max(1, parseInt(q.get('page'), 10) || 1);
+  }
+  function defaultDir(k) { return k === 'title' || k === 'section' || k === 'complete' ? 'asc' : 'desc'; }
+  function writeListState() {
+    if (page !== 'titles') return;
+    var q = new URLSearchParams();
+    if (query.trim()) q.set('q', query.trim());
+    if (filter !== 'All') q.set('section', SEC_SLUG[filter]);
+    if (langF) q.set('lang', langF);
+    if (sortKey !== 'release' || sortDir !== 'desc') { q.set('sort', sortKey); if (sortDir !== defaultDir(sortKey)) q.set('dir', sortDir); }
+    if (pageNo > 1) q.set('page', String(pageNo));
+    var url = '/admin/titles' + (q.toString() ? '?' + q.toString() : '');
+    if (location.pathname + location.search !== url) history.replaceState(null, '', url);
+  }
+  function setList(fn) { fn(); renderList(); }
   function renderFilters() {
     var box = $('filters'); box.innerHTML = '';
+    var base = movies.filter(function (m) { return passQL(m.data); });
     FILTERS.forEach(function (f) {
-      box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(filter === f), text: f,
-        on: { click: function () { filter = f; renderFilters(); renderList(); } } }));
+      var n = f === 'All' ? base.length : base.filter(function (m) { return matchSection(m.data, f); }).length;
+      box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(filter === f), text: f + ' · ' + n,
+        on: { click: function () { setList(function () { filter = f; pageNo = 1; }); } } }));
     });
+    var ls = $('langSel'), counts = {};
+    movies.forEach(function (m) { langsOf(m.data).forEach(function (l) { counts[l] = (counts[l] || 0) + 1; }); });
+    var langs = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); });
+    if (langF && langs.indexOf(langF) === -1) langs.unshift(langF);
+    ls.innerHTML = '';
+    ls.appendChild(h('option', { value: '', text: 'All languages' }));
+    langs.forEach(function (l) { ls.appendChild(h('option', { value: l, text: l + ' (' + (counts[l] || 0) + ')', selected: l === langF })); });
+    var ss = $('sortSel'); ss.innerHTML = '';
+    [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section']].forEach(function (o) {
+      ss.appendChild(h('option', { value: o[0] + ':' + o[1], text: o[2], selected: sortKey === o[0] && sortDir === o[1] }));
+    });
+    if (!ss.value) ss.appendChild(h('option', { value: sortKey + ':' + sortDir, text: SORTS[sortKey] + (sortDir === 'asc' ? ' ↑' : ' ↓'), selected: true }));
+  }
+  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : d.section === f); }
+  function passQL(d) {
+    if (langF && langsOf(d).indexOf(langF) === -1) return false;
+    var q = query.trim().toLowerCase(); if (!q) return true;
+    var hay = [d.title, d.subtitle, d.director, d.platform, slugOf({ data: d, id: '' }), (d.cast || []).map(function (c) { return c.name; }).join(' ')].join(' ').toLowerCase();
+    return q.split(/\s+/).every(function (w) { return hay.indexOf(w) !== -1; });
   }
   function visible() {
-    var q = query.trim().toLowerCase();
-    return movies.filter(function (m) {
+    var secIdx = {}; SECTIONS.forEach(function (x, i) { secIdx[x] = i; });
+    var list = movies.filter(function (m) { return matchSection(m.data, filter) && passQL(m.data); });
+    var dir = sortDir === 'asc' ? 1 : -1;
+    function val(m) {
       var d = m.data;
-      if (filter === 'Missing info' && !missing(d).length) return false;
-      if (filter !== 'All' && filter !== 'Missing info' && d.section !== filter) return false;
-      if (!q) return true;
-      var hay = [d.title, d.subtitle, d.director, (d.cast || []).map(function (c) { return c.name; }).join(' ')].join(' ').toLowerCase();
-      return hay.indexOf(q) !== -1;
+      if (sortKey === 'title') return (d.title || '').toLowerCase();
+      if (sortKey === 'complete') return pct(d);
+      if (sortKey === 'updated') return d.updatedAt || '';
+      if (sortKey === 'section') return secIdx[d.section] != null ? secIdx[d.section] : 9;
+      return d.releaseDate || '';
+    }
+    return list.sort(function (a, b) {
+      var x = val(a), y = val(b);
+      if (x === '' && y !== '') return 1; if (y === '' && x !== '') return -1; // blanks last
+      if (x < y) return -dir; if (x > y) return dir;
+      return (a.data.title || '').localeCompare(b.data.title || '');
     });
   }
+  function fmtAgo(iso) {
+    if (!iso) return '—';
+    var t = Date.parse(iso); if (isNaN(t)) return '—';
+    var d = Math.floor((Date.now() - t) / 86400000);
+    if (d <= 0) return 'Today'; if (d === 1) return 'Yesterday'; if (d < 30) return d + ' days ago';
+    return fmtDate(iso.slice(0, 10));
+  }
   function renderList() {
-    var box = $('list'); box.innerHTML = '';
-    var vis = visible();
     var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
-    if (!movies.length) { box.appendChild(h('div', { class: 'empty', text: 'No titles yet. Use + Add title to create one.' })); return; }
-    if (!vis.length) { box.appendChild(h('div', { class: 'empty', text: 'No titles match.' })); return; }
-    var groups = filter === 'All' ? SECTIONS : [null];
-    groups.forEach(function (g) {
-      var items = g ? vis.filter(function (m) { return m.data.section === g; }) : vis;
-      if (!items.length) return;
-      if (g) box.appendChild(h('div', { class: 'group-h', text: g + ' · ' + items.length }));
-      items.forEach(function (m) {
-        var d = m.data, p = pct(d);
-        var thumb = h('span', { class: 'thumb', style: bgUrl(d.posterUrl), 'aria-hidden': 'true' }, [d.posterUrl ? null : 'No poster']);
-        var meta = (d.section === 'On OTT' && d.platform ? d.platform + ' · ' : '') + fmtDate(d.releaseDate);
-        box.appendChild(h('a', { class: 'item', href: titleHref(m) }, [
-          thumb,
-          h('span', { style: 'min-width:0;flex:1' }, [
-            h('div', { class: 't', text: d.title || 'Untitled' }),
-            h('div', { class: 'm', text: meta + ' · ' + p + '% complete' }),
-            h('div', { class: 'bar', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + p + '%' })])
-          ])
-        ]));
-      });
+    if (page !== 'titles') return;
+    var qi = $('q'); if (qi && document.activeElement !== qi) qi.value = query;
+    renderFilters();
+    var table = $('list'), pager = $('pager'), sum = $('tsum');
+    table.innerHTML = ''; pager.innerHTML = '';
+    var vis = visible(), total = vis.length, pages = Math.max(1, Math.ceil(total / PAGE));
+    if (pageNo > pages) pageNo = pages;
+    writeListState();
+    var from = (pageNo - 1) * PAGE, slice = vis.slice(from, from + PAGE);
+    sum.textContent = !movies.length ? '' : total ? 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + total + (total !== movies.length ? ' (filtered from ' + movies.length + ')' : '') : '';
+    $('list').parentNode.hidden = !total;
+    if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
+    if (!total) {
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; filter = 'All'; pageNo = 1; }); } } })]));
+      return;
+    }
+    function th(key, label, cls) {
+      var st = sortKey === key ? (sortDir === 'asc' ? 'ascending' : 'descending') : null;
+      return h('th', { class: cls || '', scope: 'col', 'aria-sort': st }, key ? [h('button', { type: 'button', text: label, on: { click: function () {
+        setList(function () { if (sortKey === key) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = key; sortDir = defaultDir(key); } pageNo = 1; });
+      } } })] : [label ? h('span', { class: 'sr', text: label }) : null]);
+    }
+    table.appendChild(h('thead', {}, [h('tr', {}, [
+      th(null, 'Poster', 'pc'), th('title', 'Title'), th('section', 'Section', 'c-sec'), th('release', 'Release'), h('th', { scope: 'col', class: 'c-lang', text: 'Language' }), th('complete', 'Complete', 'c-cpl'), th('updated', 'Edited', 'c-upd')
+    ])]));
+    var tb = h('tbody');
+    slice.forEach(function (m) {
+      var d = m.data, p = pct(d), href = titleHref(m), poster = safeUrl(d.posterUrl), miss = missing(d);
+      var tr = h('tr', {}, [
+        h('td', { class: 'pc' }, [poster ? h('img', { src: poster, alt: '', loading: 'lazy', decoding: 'async' }) : h('span')]),
+        h('td', {}, [
+          h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
+          isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
+          h('div', { class: 'ts', text: [d.section === 'On OTT' && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', '/movie/' + slugOf(m)].filter(Boolean).join(' · ') })
+        ]),
+        h('td', { class: 'c-sec' }, [h('span', { class: 'sec', text: d.section || '—' })]),
+        h('td', { class: 'nw', text: fmtDate(d.releaseDate) }),
+        h('td', { class: 'nw c-lang', text: langsOf(d).slice(0, 2).join(', ') + (langsOf(d).length > 2 ? ' +' + (langsOf(d).length - 2) : '') || '—' }),
+        h('td', { class: 'c-cpl' }, [h('span', { class: 'cpl', title: miss.length ? 'Missing: ' + miss.map(function (r) { return r[1]; }).join(', ') : 'All key fields filled' }, [
+          h('span', { class: 'bar', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + p + '%' })]), p + '%'])]),
+        h('td', { class: 'nw c-upd', text: fmtAgo(d.updatedAt) })
+      ]);
+      tr.addEventListener('click', function (e) { if (e.target.closest('a')) return; go(href); });
+      tb.appendChild(tr);
     });
+    table.appendChild(tb);
+    if (pages > 1) {
+      function pbtn(n, label, dis) {
+        return h('button', { type: 'button', class: 'chip', text: label || String(n), disabled: dis, 'aria-current': n === pageNo && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n,
+          on: { click: function () { setList(function () { pageNo = n; }); window.scrollTo({ top: 0 }); } } });
+      }
+      pager.appendChild(pbtn(pageNo - 1, '← Prev', pageNo === 1));
+      var shown = {}; [1, 2, pageNo - 1, pageNo, pageNo + 1, pages - 1, pages].forEach(function (n) { if (n >= 1 && n <= pages) shown[n] = 1; });
+      var last = 0;
+      Object.keys(shown).map(Number).sort(function (a, b) { return a - b; }).forEach(function (n) {
+        if (n - last > 1) pager.appendChild(h('span', { class: 'gap', text: '…' }));
+        pager.appendChild(pbtn(n)); last = n;
+      });
+      pager.appendChild(pbtn(pageNo + 1, 'Next →', pageNo === pages));
+    }
   }
 
   // ---------- pages: /admin/titles, /admin/titles/<slug>, /admin/titles/new, /admin/people, /admin/home-banner ----------
@@ -818,7 +953,7 @@ window.ReelAdmin = function (env) {
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
-    else { page = 'titles'; if (location.pathname !== '/admin/titles') history.replaceState(null, '', '/admin/titles'); }
+    else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
     resolveTitle();
     showPage();
@@ -1315,10 +1450,11 @@ window.ReelAdmin = function (env) {
     var m = movies.find(function (x) { return x.id === currentId; });
     if (m) select(currentId); else { currentId = null; draft = null; setDirty(false); go('/admin/titles'); }
   });
-  $('q').addEventListener('input', function (e) { query = e.target.value; renderList(); });
+  var qTimer = null;
+  $('q').addEventListener('input', function (e) { var v = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(function () { setList(function () { query = v; pageNo = 1; }); }, 120); });
+  $('langSel').addEventListener('change', function (e) { setList(function () { langF = e.target.value; pageNo = 1; }); });
+  $('sortSel').addEventListener('change', function (e) { var v = e.target.value.split(':'); setList(function () { sortKey = v[0]; sortDir = v[1]; pageNo = 1; }); });
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
-
-  renderFilters(); renderList();
 
   // ---------- connect (from the prototype shell) ----------
   db = env.db; assets = env.assets; canWrite = env.canWrite !== false; canUpload = !!assets && canWrite;
