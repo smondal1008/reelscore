@@ -234,6 +234,10 @@
     for (var j = 0; j < S.movies.length; j++) if (slugify(S.movies[j].data.title) === key) return S.movies[j];
     return null;
   }
+  // Hub page titles, the same as the pre-rendered hub pages (scripts/build.mjs HUBS).
+  var BROWSE_TITLES = { All: 'Browse Indian Movies & Series | Reelscore', 'In theatres': 'Indian Movies in Theatres Now | Reelscore', 'Coming soon': 'Upcoming Indian Movies | Reelscore',
+    'On OTT': 'Indian Movies on OTT | Reelscore', 'Older releases': 'Older Indian Movies | Reelscore', 'TV shows': 'Indian TV Shows & Series | Reelscore' };
+  var PEOPLE_TITLE = 'Indian Actors & Filmmakers | Reelscore';
   var BROWSE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases', 'tv-shows': 'TV shows' };
   function legacyHashToPath(hsh) {
     if (/^t-[A-Za-z0-9-]+$/.test(hsh)) return '/movie/' + hsh.slice(2);
@@ -265,7 +269,9 @@
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
-    if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
+    if (S.route === 'browse') document.title = BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All;
+    else if (S.route === 'people') document.title = PEOPLE_TITLE;
+    else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.lastPath = location.pathname;
     if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
@@ -408,7 +414,9 @@
 
   // ---------- home ----------
   function drawHome() {
-    var v = $('view-home'); v.innerHTML = '';
+    var v = $('view-home');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    v.innerHTML = '';
     if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: S.loadMsg || 'Loading titles…' })])); return; }
     if (!S.movies.length) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No titles yet. Add some in Admin.' })])); return; }
     var all = S.featured.map(function (id) { return S.byId[id]; }).filter(Boolean), feat = all.filter(inNavLang);
@@ -958,9 +966,11 @@
     return Object.keys(idx).map(function (k) { return idx[k]; });
   }
   function drawPeople() {
-    var v = $('view-people'); v.innerHTML = '';
+    var v = $('view-people');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    v.innerHTML = '';
     var P = S.ppl, w = h('div', { class: 'wrapx' }); v.appendChild(w);
-    document.title = 'People — Reelscore';
+    document.title = PEOPLE_TITLE;
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'People' }));
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Actors, directors and crew across every title on Reelscore.' }));
     if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
@@ -1035,7 +1045,9 @@
   }
 
   function drawBrowse() {
-    var v = $('view-browse'); v.innerHTML = '';
+    var v = $('view-browse');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    v.innerHTML = '';
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var B = S.browse;
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'Browse' }));

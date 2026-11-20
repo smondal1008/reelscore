@@ -185,19 +185,19 @@ function copyDir(from, to) {
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
 const OG_DEFAULT = '/og-default.png';
-function page(shell, { title, description, canonical, ogType, image, wide, jsonld, route, body, robots }) {
+function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots }) {
   // Pages without a poster or photo share the site-wide card (1200x630).
   const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
     '<title>' + esc(title) + '</title>',
     '<meta name="description" content="' + esc(description) + '">',
     robots ? '<meta name="robots" content="' + robots + '">' : '',
-    '<link rel="canonical" href="' + esc(SITE + canonical) + '">',
+    canonical ? '<link rel="canonical" href="' + esc(SITE + canonical) + '">' : '',
     '<meta property="og:site_name" content="Reelscore">',
     '<meta property="og:type" content="' + ogType + '">',
     '<meta property="og:title" content="' + esc(title) + '">',
     '<meta property="og:description" content="' + esc(description) + '">',
-    '<meta property="og:url" content="' + esc(SITE + canonical) + '">',
+    '<meta property="og:url" content="' + esc(SITE + (canonical || ogPath || '/')) + '">',
     '<meta property="og:image" content="' + esc(image) + '">',
     fallback ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Reelscore: verdicts on Indian movies and series">' : '',
     '<meta name="twitter:card" content="' + (wide ? 'summary_large_image' : 'summary') + '">',
@@ -403,11 +403,6 @@ async function main() {
     nPeople++;
   }
 
-  // ----- sitemap + robots -----
-  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
-    sitemap.map(u => '<url><loc>' + esc(SITE + u.loc) + '</loc>' + (/^\d{4}-\d{2}-\d{2}$/.test(u.lastmod || '') ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '<priority>' + u.pri + '</priority></url>').join('\n') + '\n</urlset>\n';
-  if (sitemap.length > 50000) throw new Error('Sitemap over 50,000 URLs: split it into a sitemap index');
-  write('sitemap.xml', xml);
   // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
   const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
   const cat = { builtAt: data.builtAt, fullAt: data.fullAt,
@@ -420,10 +415,72 @@ async function main() {
     { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Reelscore', url: SITE + '/', description: 'Verdicts and reviews for Bollywood and regional Indian movies and series.', inLanguage: 'en-IN' },
     { '@context': 'https://schema.org', '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: SITE + OG_DEFAULT }
   ];
-  const homeHead = '<meta property="og:url" content="' + SITE + '/">\n<meta property="og:image" content="' + SITE + OG_DEFAULT + '">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n' +
-    '<meta property="og:image:alt" content="Reelscore: verdicts on Indian movies and series">\n<meta name="twitter:image" content="' + SITE + OG_DEFAULT + '">\n' + homeLd.map(ld).join('\n') + '\n';
-  const homeHtml = shell.replace('<meta name="twitter:card" content="summary">', '<meta name="twitter:card" content="summary_large_image">').replace('<!--/seo-->', homeHead + '<!--/seo-->');
+  // ----- hub pages: home, Browse (all + each section), People -----
+  // Pre-rendered so every title and person can be reached from the home page through plain links. index.html is also
+  // the shell other routes fall back to; it carries no canonical (the app sets it), and its pre-rendered home block
+  // only shows on "/" (the app switches views at once elsewhere). Titles match app/main.js BROWSE_TITLES / PEOPLE_TITLE.
+  const HUBS = [
+    ['in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts: theatre, OTT or skip.'],
+    ['coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
+    ['on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
+    ['older-releases', 'Older releases', 'Older Indian Movies | Reelscore', 'Older Bollywood and regional Indian films, with cast, crew and verdicts.'],
+    ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series, with cast and verdicts.']
+  ];
+  const sectionOf = m => m.data.section === 'Releasing this week' ? 'In theatres' : (m.data.section || 'Older releases');
+  const today = new Date().toISOString().slice(0, 10);
+  const bySection = {}; HUBS.forEach(h => { bySection[h[1]] = []; });
+  movies.forEach(m => { const k = sectionOf(m); (bySection[k] = bySection[k] || []).push(m); });
+  const newest = (a, b) => String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')) || String(a.data.title).localeCompare(String(b.data.title));
+  const soonest = (a, b) => String(a.data.releaseDate || '9999').localeCompare(String(b.data.releaseDate || '9999')) || String(a.data.title).localeCompare(String(b.data.title));
+  Object.keys(bySection).forEach(k => bySection[k].sort(k === 'Coming soon' ? soonest : newest));
+  const titleLi = m => '<li><a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a> <span class="note">' +
+    esc([isTv(m.data) ? tvYears(m.data) : (/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate > today ? fmtDate(m.data.releaseDate) : year(m.data)), String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>';
+  const hubPeople = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a) || personName(a).localeCompare(personName(b)));
+  const personLi = k => '<li><a href="/person/' + k + '">' + esc(personName(k)) + '</a> <span class="note">' + titleCount(k) + ' title' + (titleCount(k) === 1 ? '' : 's') + '</span></li>';
+  const langs = {}; movies.forEach(m => { const l = String(m.data.languages || '').split(/[,;]/)[0].trim(); if (l) langs[l] = (langs[l] || 0) + 1; });
+  const langList = Object.keys(langs).sort((a, b) => langs[b] - langs[a]).filter(l => langs[l] >= 5);
+  const block = (h2, list, more) => list.length ? '<h2>' + h2 + '</h2><ul>' + list.join('') + '</ul>' + (more ? '<p><a href="' + more[0] + '">' + more[1] + '</a></p>' : '') : '';
+  const writeHub = (rel, opts) => { write(rel, page(shell, { ogType: 'website', image: null, ...opts })); };
+
+  // Home
+  const released = m => isTv(m.data) || !(m.data.releaseDate > today);
+  let homeBody = '<h1>Verdicts on Indian movies and series</h1><p>Reelscore tracks ' + movies.length + ' Bollywood and regional Indian films and shows. ' +
+    'For each one, people say whether it is worth the theatre, worth streaming on OTT, or worth skipping.</p>';
+  homeBody += block('In theatres now', bySection['In theatres'].slice(0, 18).map(titleLi), ['/browse/in-theatres', 'All ' + bySection['In theatres'].length + ' in theatres →']);
+  homeBody += block('Coming soon', bySection['Coming soon'].slice(0, 18).map(titleLi), ['/browse/coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
+  homeBody += block('On OTT', bySection['On OTT'].slice(0, 18).map(titleLi), ['/browse/on-ott', 'All ' + bySection['On OTT'].length + ' on OTT →']);
+  homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-releases', 'All older releases →']);
+  homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);
+  homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
+    langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
+  const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
+    canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
   write('index.html', homeHtml);
+
+  // Browse: all sections, then one page per section listing every title in it
+  let browseBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Browse</nav><h1>Browse Indian movies and series</h1><p>' + movies.length + ' titles in ' + langList.length + '+ languages.</p>';
+  HUBS.forEach(h => { browseBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
+  browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
+  writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', ogPath: '/browse', route: 'browse', body: browseBody });
+  for (const [slug, name, title, desc] of HUBS) {
+    const list = bySection[name];
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><p>' + list.length + ' title' + (list.length === 1 ? '' : 's') + '. ' + esc(desc) + '</p>' +
+      (list.length ? '<ul>' + list.map(titleLi).join('') + '</ul>' : '<p>Nothing here right now.</p>') +
+      '<h2>Other sections</h2><ul>' + HUBS.filter(x => x[0] !== slug).map(x => '<li><a href="/browse/' + x[0] + '">' + x[1] + '</a></li>').join('') + '</ul>';
+    writeHub('browse/' + slug + '.html', { title, description: desc, ogPath: '/browse/' + slug, route: 'browse', body });
+    sitemap.push({ loc: '/browse/' + slug, pri: '0.7' });
+  }
+
+  // People
+  const peopleBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › People</nav><h1>Indian actors and filmmakers</h1><p>' + hubPeople.length +
+    ' actors, directors and crew, busiest first.</p><ul>' + hubPeople.map(personLi).join('') + '</ul>';
+  writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', ogPath: '/people', route: 'people', body: peopleBody });
+
+  // ----- sitemap + robots -----
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +
+    sitemap.map(u => '<url><loc>' + esc(SITE + u.loc) + '</loc>' + (/^\d{4}-\d{2}-\d{2}$/.test(u.lastmod || '') ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '<priority>' + u.pri + '</priority></url>').join('\n') + '\n</urlset>\n';
+  if (sitemap.length > 50000) throw new Error('Sitemap over 50,000 URLs: split it into a sitemap index');
+  write('sitemap.xml', xml);
 
   // /llms.txt: a short Markdown guide to the site for AI tools (llmstxt.org format).
   const sections = [['In theatres', '/browse/in-theatres'], ['Coming soon', '/browse/coming-soon'], ['On OTT', '/browse/on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-releases']];
