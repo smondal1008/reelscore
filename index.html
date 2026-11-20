@@ -393,6 +393,7 @@
       <nav class="atabs" aria-label="Admin sections">
         <a href="/admin/titles" data-p="titles">All titles <span class="cnt" id="titleCount"></span></a>
         <a href="/admin/people" data-p="people">Cast &amp; crew <span class="cnt" id="peopleCount"></span></a>
+        <a href="/admin/popular" data-p="popular">Popular cast <span class="cnt" id="popCount"></span></a>
         <a href="/admin/home-banner" data-p="banner">Home banner <span class="cnt" id="featCount"></span></a>
       </nav>
     </div>
@@ -452,6 +453,7 @@ window.ReelAdmin = function (env) {
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
+  var popularMode = false, popOrder = [], popLoaded = false, popWriting = false, popDragging = false, popVerdicts = null, popShowAll = false;
   var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all', peoplePage = 1, PEOPLE_PAGE = 50, dupCache = { sig: null, map: {} };
   function personKey(name) { return (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function personPhoto(name) { var p = people[personKey(name)]; return p && safeUrl(p.photoUrl) ? p.photoUrl : ''; }
@@ -477,9 +479,147 @@ window.ReelAdmin = function (env) {
   }
   var POP_OPTS = [['', 'Popular: automatic'], ['pin', 'Popular: always'], ['hide', 'Popular: never']];
   function setPopular(key, name, v) {
-    var body = { popular: v, updatedAt: new Date().toISOString() }; if (!people[key]) body.name = name;
-    return db.doc('people/' + key).set(body, { merge: true }).then(function () { setStatus(name + (v === 'pin' ? ' will always show in Popular.' : v === 'hide' ? ' won’t show in Popular.' : ' is back to automatic for Popular.')); })
+    var body = { popular: v === 'hide' ? 'hide' : '', updatedAt: new Date().toISOString() }; if (!people[key]) body.name = name;
+    var order = pinnedKeys().filter(function (k) { return k !== key; }); if (v === 'pin') order.push(key);
+    var p1 = writePopOrder(order), p2 = (v === 'hide' || (people[key] && people[key].popular)) ? db.doc('people/' + key).set(body, { merge: true }) : Promise.resolve();
+    return Promise.all([p1, p2]).then(function () { setStatus(name + (v === 'pin' ? ' will always show in Popular.' : v === 'hide' ? ' won’t show in Popular.' : ' is back to automatic for Popular.')); })
       .catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
+  // ---------- popular cast (settings/popular.order = pinned people, in order; people/<key>.popular = 'hide' keeps someone out) ----------
+  function pinnedKeys() {
+    var out = popOrder.slice();
+    Object.keys(people).forEach(function (k) { if (people[k].popular === 'pin' && out.indexOf(k) === -1) out.push(k); }); // older per-person pins
+    return out.filter(function (k) { return !(people[k] && people[k].popular === 'hide'); });
+  }
+  function popState(k) { return pinnedKeys().indexOf(k) !== -1 ? 'pin' : (people[k] && people[k].popular === 'hide') ? 'hide' : ''; }
+  function writePopOrder(next) {
+    popWriting = true; popOrder = next.slice(); renderPopCount(); if (popularMode) renderPopular();
+    return db.doc('settings/popular').set({ order: next, updatedAt: new Date().toISOString() }).then(function () {
+      popWriting = false;
+      // older per-person pins now live in the list; clear them so there is one source of truth
+      Object.keys(people).forEach(function (k) { if (people[k].popular === 'pin') db.doc('people/' + k).set({ popular: '' }, { merge: true }); });
+    }).catch(function (e) { popWriting = false; setStatus('Couldn’t save the Popular list' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
+  function renderPopCount() { var el = $('popCount'); if (el) el.textContent = popLoaded ? String(pinnedKeys().length) : ''; }
+  // Same ranking as the People page: billing, recent work, verdicts, photo.
+  function autoPopular() {
+    var CREW = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
+    var td = new Date(), today = td.getFullYear() + '-' + String(td.getMonth() + 1).padStart(2, '0') + '-' + String(td.getDate()).padStart(2, '0');
+    var cutoff = String(td.getFullYear() - 2), idx = {};
+    movies.forEach(function (m) {
+      var d = m.data, cast = d.cast || [], seen = {};
+      var up = d.releaseDate ? d.releaseDate > today : d.section === 'Coming soon';
+      var fresh = (d.releaseDate || '') >= cutoff || up ? 1.5 : 1, buzz = 1 + Math.min((popVerdicts && popVerdicts[m.id]) || 0, 50) / 25, ai = 0;
+      function add(name, w, crew) {
+        var k = personKey(name); if (!k) return;
+        var p = idx[k] || (idx[k] = { key: k, name: name.trim(), pop: 0, n: 0, acting: false });
+        if (!crew) p.acting = true;
+        if (seen[k]) return; seen[k] = 1; p.n++; p.pop += w;
+      }
+      cast.forEach(function (c) {
+        if (!(c.name || '').trim()) return;
+        var crew = CREW.test(c.role || ''), bill = crew ? (/direct|music|composer/i.test(c.role) ? 2 : 1) : (ai < 3 ? 4 : ai < 6 ? 2 : 1);
+        if (!crew) ai++; add(c.name, bill * fresh * buzz, crew);
+      });
+      String(d.director || '').split(/,| and /).forEach(function (x) { x = x.trim(); if (x) add(x, 2 * fresh * buzz, true); });
+    });
+    return Object.keys(idx).map(function (k) { var p = idx[k]; if (people[k] && people[k].name) p.name = people[k].name; if (personPhoto(p.name)) p.pop *= 1.2; return p; })
+      .sort(function (a, b) { return b.pop - a.pop || a.name.localeCompare(b.name); });
+  }
+  function renderPopular() {
+    var main = $('main'); main.innerHTML = '';
+    if (!popVerdicts) {
+      popVerdicts = {};
+      db.collection('verdicts').get().then(function (snap) { var c = {}; snap.docs.forEach(function (d) { var v = (d.data() || {}).v || {}; Object.keys(v).forEach(function (id) { c[id] = (c[id] || 0) + 1; }); }); popVerdicts = c; if (popularMode && !popDragging) renderPopular(); }).catch(function () {});
+    }
+    var TOTAL = 120, ranked = autoPopular(), byKey = {}; ranked.forEach(function (p) { byKey[p.key] = p; });
+    var pins = pinnedKeys(), hidden = Object.keys(people).filter(function (k) { return people[k].popular === 'hide'; });
+    function nameOf(k) { return (people[k] && people[k].name) || (byKey[k] && byKey[k].name) || k; }
+    function meta(k) { var p = byKey[k]; return p ? p.n + (p.n === 1 ? ' title' : ' titles') : 'Not on any title yet'; }
+    var autoList = ranked.filter(function (p) { return pins.indexOf(p.key) === -1 && hidden.indexOf(p.key) === -1; }).slice(0, Math.max(0, TOTAL - pins.length));
+    var rowStyle = 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)';
+    var head = h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'People page · Popular' }), h('h1', { text: 'Popular cast' })]),
+        h('div', { class: 'sub', text: pins.length + ' added by hand · ' + Math.min(TOTAL, pins.length + autoList.length) + ' shown in total' })]),
+      h('div', { class: 'note', text: 'Popular on the People page shows the people you add here first, in this order, then fills the rest of the ' + TOTAL + ' places automatically by billing, recent work and audience verdicts. Drag rows (or use ↑ ↓) to reorder. Hidden people never appear in Popular.' })
+    ]);
+    // add someone
+    var addIn = h('input', { class: 'in', id: 'popAdd', list: 'peopleNames', placeholder: 'Type a name…', autocomplete: 'off', disabled: !canWrite });
+    namesDatalist();
+    var addMsg = h('div', { class: 'err', hidden: true });
+    function doAdd() {
+      var k = personKey(addIn.value); addMsg.hidden = true;
+      if (!k) { addMsg.hidden = false; addMsg.textContent = 'Type a name first.'; return; }
+      var known = people[k] || byKey[k] || allPeople().some(function (p) { return p.key === k; });
+      if (!known) { addMsg.hidden = false; addMsg.textContent = 'No one called “' + addIn.value.trim() + '” on Reelscore yet. Pick a name from the list.'; return; }
+      if (pins.indexOf(k) !== -1) { addMsg.hidden = false; addMsg.textContent = nameOf(k) + ' is already in the list.'; return; }
+      setPopular(k, nameOf(k), 'pin'); addIn.value = '';
+    }
+    addIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+    head.appendChild(h('div', { class: 'field' }, [h('label', { class: 'l', for: 'popAdd', text: 'Add someone to Popular' }),
+      h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [h('span', { style: 'flex:1;min-width:220px' }, [addIn]), h('button', { type: 'button', class: 'btn primary', text: 'Add to Popular', disabled: !canWrite, on: { click: doAdd } })]), addMsg]));
+    main.appendChild(head);
+
+    // pinned, draggable
+    var pinCard = h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: 'Added by hand · shown first' }), h('span', { class: 'sub', text: pins.length ? 'Drag to reorder' : '' })])]);
+    var list = h('div', { class: 'rows', id: 'popPins' });
+    if (!pins.length) list.appendChild(h('div', { class: 'empty', style: 'padding:20px', text: 'No one added yet. Add someone above, or use Pin on an automatic pick below.' }));
+    function move(from, to) { if (to < 0 || to >= pins.length || from === to) return; var n = pins.slice(), x = n.splice(from, 1)[0]; n.splice(to, 0, x); writePopOrder(n).then(function () { setStatus('Order saved'); }); }
+    var dragFrom = null;
+    pins.forEach(function (k, i) {
+      var nm = nameOf(k);
+      var row = h('div', { class: 'poprow', draggable: canWrite ? 'true' : 'false', 'data-i': String(i), style: rowStyle + ';cursor:' + (canWrite ? 'grab' : 'default') }, [
+        h('span', { 'aria-hidden': 'true', style: 'color:var(--dim);font-size:18px;letter-spacing:-2px;user-select:none', text: '⋮⋮' }),
+        h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+        avatarBtn(nm, 44),
+        h('span', { style: 'flex:1;min-width:160px' }, [h('div', { style: 'font-weight:600', text: nm }), h('div', { class: 'note', text: meta(k) })]),
+        h('span', { style: 'display:flex;gap:6px' }, [
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + nm + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { move(i, i - 1); } } }),
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + nm + ' down', text: '↓', disabled: i === pins.length - 1 || !canWrite, on: { click: function () { move(i, i + 1); } } }),
+          h('button', { type: 'button', class: 'btn small danger', text: 'Remove', disabled: !canWrite, on: { click: function () { setPopular(k, nm, ''); } } })
+        ])
+      ]);
+      row.addEventListener('dragstart', function (e) { dragFrom = i; popDragging = true; row.style.opacity = '.4'; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); } catch (x) {} });
+      row.addEventListener('dragend', function () { row.style.opacity = ''; popDragging = false; list.querySelectorAll('.poprow').forEach(function (r) { r.style.boxShadow = ''; }); });
+      row.addEventListener('dragover', function (e) { if (dragFrom === null) return; e.preventDefault(); var r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2; list.querySelectorAll('.poprow').forEach(function (x) { x.style.boxShadow = ''; }); row.style.boxShadow = after ? '0 3px 0 var(--accent)' : '0 -3px 0 var(--accent)'; });
+      row.addEventListener('drop', function (e) {
+        e.preventDefault(); if (dragFrom === null) return;
+        var r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2, to = i + (after ? 1 : 0);
+        if (dragFrom < to) to--;
+        var f = dragFrom; dragFrom = null; popDragging = false; move(f, to);
+      });
+      list.appendChild(row);
+    });
+    pinCard.appendChild(list); main.appendChild(pinCard);
+
+    // automatic picks
+    var autoCard = h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: 'Filled automatically · next ' + autoList.length }), h('span', { class: 'sub', text: 'Pin to move someone into your list' })])]);
+    var al = h('div', { class: 'rows' });
+    (popShowAll ? autoList : autoList.slice(0, 30)).forEach(function (p, i) {
+      al.appendChild(h('div', { style: rowStyle }, [
+        h('span', { style: 'width:28px;text-align:center;color:var(--muted);font-weight:700', text: String(pins.length + i + 1) }),
+        avatarBtn(p.name, 36),
+        h('span', { style: 'flex:1;min-width:160px' }, [h('div', { style: 'font-weight:600', text: p.name }), h('div', { class: 'note', text: p.n + (p.n === 1 ? ' title' : ' titles') + (p.acting ? '' : ' · crew') })]),
+        h('span', { style: 'display:flex;gap:6px' }, [
+          h('button', { type: 'button', class: 'btn small', text: 'Pin', disabled: !canWrite, on: { click: function () { setPopular(p.key, p.name, 'pin'); } } }),
+          h('button', { type: 'button', class: 'btn small', text: 'Hide', disabled: !canWrite, on: { click: function () { setPopular(p.key, p.name, 'hide'); } } })
+        ])
+      ]));
+    });
+    autoCard.appendChild(al);
+    if (autoList.length > 30) autoCard.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-top:10px', text: popShowAll ? 'Show fewer' : 'Show all ' + autoList.length, on: { click: function () { popShowAll = !popShowAll; renderPopular(); } } }));
+    main.appendChild(autoCard);
+
+    // hidden
+    var hidCard = h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: 'Hidden from Popular' + (hidden.length ? ' · ' + hidden.length : '') })])]);
+    var hl = h('div', { class: 'rows' });
+    if (!hidden.length) hl.appendChild(h('div', { class: 'note', text: 'No one hidden. Use Hide on an automatic pick to keep someone out of Popular.' }));
+    hidden.forEach(function (k) {
+      var nm = nameOf(k);
+      hl.appendChild(h('div', { style: rowStyle }, [avatarBtn(nm, 36), h('span', { style: 'flex:1;min-width:160px' }, [h('div', { style: 'font-weight:600', text: nm }), h('div', { class: 'note', text: meta(k) })]),
+        h('button', { type: 'button', class: 'btn small', text: 'Unhide', disabled: !canWrite, on: { click: function () { setPopular(k, nm, ''); } } })]));
+    });
+    hidCard.appendChild(hl); main.appendChild(hidCard);
   }
   function removePhoto(name) {
     db.doc('people/' + personKey(name)).set({ photoUrl: '', photoId: '', updatedAt: new Date().toISOString() }, { merge: true }).then(function () { setStatus('Photo removed for ' + name + '.'); }).catch(function () { setStatus('Couldn’t remove the photo.'); });
@@ -595,6 +735,8 @@ window.ReelAdmin = function (env) {
       if (from && from.name && personKey(from.name) !== newKey) { var ak = (merged.aka || []).slice(); if (ak.indexOf(from.name) === -1) ak.push(from.name); merged.aka = ak.slice(0, 10); }
       if (from || to) jobs.push(db.doc('people/' + newKey).set(merged, { merge: true }));
       if (from) jobs.push(db.doc('people/' + oldKey).delete());
+      var oi = popOrder.indexOf(oldKey);
+      if (oi !== -1) { var no = popOrder.slice(); if (no.indexOf(newKey) === -1) no[oi] = newKey; else no.splice(oi, 1); jobs.push(writePopOrder(no)); }
     } else if (from) jobs.push(db.doc('people/' + newKey).set({ name: newName, updatedAt: new Date().toISOString() }, { merge: true }));
     return Promise.all(jobs).then(function () { return jobs.length; });
   }
@@ -609,7 +751,7 @@ window.ReelAdmin = function (env) {
     var bdayIn = h('input', { class: 'in', id: 'pf_bday', type: 'date', min: '1880-01-01', max: new Date().toISOString().slice(0, 10) }); bdayIn.value = existing.birthday || '';
     var bplaceIn = h('input', { class: 'in', id: 'pf_bplace', maxlength: 120, placeholder: 'e.g. Kotagiri, Tamil Nadu, India' }); bplaceIn.value = existing.birthplace || '';
     var genderIn = h('select', { class: 'in', id: 'pf_gender' }, [['', 'Not set'], ['Female', 'Female'], ['Male', 'Male'], ['Non-binary', 'Non-binary']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: (existing.gender || '') === o[0] }); }));
-    var popIn = h('select', { class: 'in', id: 'pf_pop' }, POP_OPTS.map(function (o) { return h('option', { value: o[0], text: o[1].replace('Popular: ', '').replace(/^./, function (c) { return c.toUpperCase(); }), selected: (existing.popular || '') === o[0] }); }));
+    var popIn = h('select', { class: 'in', id: 'pf_pop' }, POP_OPTS.map(function (o) { return h('option', { value: o[0], text: o[1].replace('Popular: ', '').replace(/^./, function (c) { return c.toUpperCase(); }), selected: (opts.key ? popState(opts.key) : '') === o[0] }); }));
     var akaIn = h('input', { class: 'in', id: 'pf_aka', placeholder: 'Other spellings or names, separated by commas' }); akaIn.value = (existing.aka || []).join(', ');
     var photo = { url: safeUrl(existing.photoUrl) || '', id: existing.photoId || '' };
     var pv = h('div', { style: 'width:96px;height:96px;border-radius:50%;background:#2E2A38 center top/cover no-repeat;flex:0 0 auto;' + bgUrl(photo.url) });
@@ -654,10 +796,10 @@ window.ReelAdmin = function (env) {
       p.then(function () {
         var body = { name: name, bio: bioIn.value.trim().slice(0, 600), updatedAt: new Date().toISOString(),
           birthday: /^\d{4}-\d{2}-\d{2}$/.test(bdayIn.value) ? bdayIn.value : '',
-          birthplace: bplaceIn.value.trim().slice(0, 120), gender: genderIn.value, popular: popIn.value,
+          birthplace: bplaceIn.value.trim().slice(0, 120), gender: genderIn.value,
           aka: akaIn.value.split(',').map(function (x) { return x.trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10) };
         if (photo.url) { body.photoUrl = photo.url; body.photoId = photo.id; }
-        return db.doc('people/' + k).set(body, { merge: true });
+        return db.doc('people/' + k).set(body, { merge: true }).then(function () { if (popIn.value !== popState(k)) return setPopular(k, name, popIn.value); });
       }).then(function () {
         setStatus((opts.key ? 'Saved ' : 'Added ') + name + '. Page: /person/' + k);
         close(); if (opts.onSaved) opts.onSaved(name);
@@ -719,7 +861,7 @@ window.ReelAdmin = function (env) {
       dupCache = { sig: sig, map: dm };
     }
     var dupMap = dupCache.map;
-    function popOf(k) { return (people[k] && people[k].popular) || ''; }
+    function popOf(k) { return popState(k); }
     var pinN = list.filter(function (p) { return popOf(p.key) === 'pin'; }).length, hideN = list.filter(function (p) { return popOf(p.key) === 'hide'; }).length;
     var shown = list.filter(function (p) {
       return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1 || ((people[p.key] && people[p.key].aka) || []).join(' ').toLowerCase().indexOf(q) !== -1) &&
@@ -761,7 +903,7 @@ window.ReelAdmin = function (env) {
         h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
           (function () {
             var sel = h('select', { class: 'in', style: 'height:36px;width:auto;font-size:13px', 'aria-label': 'Popular list setting for ' + p.name, disabled: !canWrite }, POP_OPTS.map(function (o) { return h('option', { value: o[0], text: o[1], selected: popOf(p.key) === o[0] }); }));
-            sel.addEventListener('change', function () { setPopular(p.key, p.name, sel.value).then(function () { if (!people[p.key]) people[p.key] = { name: p.name }; people[p.key].popular = sel.value; renderPeople(); }); });
+            sel.addEventListener('change', function () { setPopular(p.key, p.name, sel.value).then(function () { renderPeople(); }); });
             return sel;
           })(),
           h('button', { type: 'button', class: 'btn small', text: 'Copy URL', on: { click: function () { copyToClipboard(page, 'Copied ' + page); } } }),
@@ -1063,7 +1205,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', banner: 'Home banner' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1077,8 +1219,9 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; peopleMode = false; wantSlug = null;
+    featuredMode = false; peopleMode = false; popularMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
+    else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
@@ -1405,6 +1548,7 @@ window.ReelAdmin = function (env) {
   }
   function renderEditorInner() {
     if (peopleMode) { renderPeople(); return; }
+    if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
@@ -1608,8 +1752,16 @@ window.ReelAdmin = function (env) {
     featLoaded = true; renderFeatCount();
     if (featuredMode) renderFeatured(); else if (page === 'title' && !dirty) renderEditor();
   }, function () {});
+  db.doc('settings/popular').onSnapshot(function (snap) {
+    if (popWriting) return;
+    var d = snap.exists ? snap.data() : {};
+    popOrder = Array.isArray(d.order) ? d.order.filter(function (x) { return typeof x === 'string'; }) : [];
+    popLoaded = true; renderPopCount();
+    if (popularMode && !popDragging) renderPopular();
+  }, function () {});
   db.collection('people').onSnapshot(function (snap) {
     var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); people = o;
+    renderPopCount(); if (popularMode && !popDragging) renderPopular();
     renderPeopleCount();
     namesDatalist();
     if (peopleMode) { var a = document.activeElement; if (!(a && a.id === 'pplQ')) renderPeople(); else refreshAvatars(); }
@@ -1626,7 +1778,7 @@ window.ReelAdmin = function (env) {
         var changed = snap.docChanges().some(function (c) { return c.doc.id === currentId && c.type === 'modified'; });
         if (changed) remoteChanged = true;
       }
-      renderPeopleCount();
+      renderPeopleCount(); renderPopCount();
       if (!snap.metadata.fromCache) moviesLoaded = true;
       if (page === 'title' && !currentId) resolveTitle();
       renderList();
@@ -1652,7 +1804,7 @@ window.ReelAdmin = function (env) {
   // ---------- state ----------
   var S = {
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
-    featured: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
+    featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
@@ -2511,7 +2663,7 @@ window.ReelAdmin = function (env) {
       weight = 2 * fresh * buzz;
       String(m.data.director || '').split(/,| and /).forEach(function (d) { d = d.trim(); if (d && !cast.some(function (c) { return personSlug(c.name) === personSlug(d); })) add(d, m, true); });
     });
-    Object.keys(idx).forEach(function (k) { var st = S.people[k], p = idx[k]; if (st && st.name) p.name = st.name; p.aka = (st && st.aka) || []; p.gender = (st && st.gender) || ''; p.pin = (st && st.popular) || ''; if (personPhotoUrl(p.name)) p.pop *= 1.2; });
+    Object.keys(idx).forEach(function (k) { var st = S.people[k], p = idx[k]; if (st && st.name) p.name = st.name; p.aka = (st && st.aka) || []; p.gender = (st && st.gender) || ''; var hid = st && st.popular === 'hide', oi = S.popOrder.indexOf(k); p.pin = hid ? 'hide' : (oi !== -1 || (st && st.popular === 'pin')) ? 'pin' : ''; p.pinAt = oi !== -1 ? oi : 9999; if (personPhotoUrl(p.name)) p.pop *= 1.2; });
     return Object.keys(idx).map(function (k) { return idx[k]; });
   }
   function drawPeople() {
@@ -2559,7 +2711,7 @@ window.ReelAdmin = function (env) {
       });
       list.sort(function (a, b) {
         if (P.sort === 'az') return a.name.localeCompare(b.name);
-        if (P.sort === 'popular') return ((b.pin === 'pin') - (a.pin === 'pin')) || ((a.pin === 'hide') - (b.pin === 'hide')) || b.pop - a.pop || a.name.localeCompare(b.name);
+        if (P.sort === 'popular') return ((b.pin === 'pin') - (a.pin === 'pin')) || (a.pin === 'pin' ? a.pinAt - b.pinAt : 0) || ((a.pin === 'hide') - (b.pin === 'hide')) || b.pop - a.pop || a.name.localeCompare(b.name);
         if (P.sort === 'recent') return b.last.localeCompare(a.last) || b.n - a.n || a.name.localeCompare(b.name);
         return b.n - a.n || a.name.localeCompare(b.name);
       });
@@ -2786,6 +2938,11 @@ window.ReelAdmin = function (env) {
       var d = snap.exists ? snap.data() : {};
       S.featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
       S.slide = 0; render();
+    }, function () {});
+    db.doc('settings/popular').onSnapshot(function (snap) {
+      var d = snap.exists ? snap.data() : {};
+      S.popOrder = Array.isArray(d.order) ? d.order.filter(function (x) { return typeof x === 'string'; }) : [];
+      if (S.route === 'people') render();
     }, function () {});
     db.collection('reviews').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (s) { o[s.id] = s.data(); });
