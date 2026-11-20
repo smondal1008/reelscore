@@ -32,7 +32,7 @@
       <a class="lnk" href="/my-list" data-r="list">My List</a>
       <label class="sr" for="navLang">Language</label>
       <select id="navLang" class="navsel" title="Show titles in this language"><option value="">All languages</option></select>
-      <a class="lnk" href="/admin" data-r="admin" id="adminLink" hidden>Admin</a>
+      <a class="lnk" data-r="admin" id="adminLink" hidden>Admin</a>
     </nav>
   </div>
   <div class="navr">
@@ -53,7 +53,7 @@
 <div class="view" id="view-person"></div>
 <div class="view" id="view-people"></div>
 
-<div class="view" id="view-admin">
+<div class="view" id="view-admin"><template id="adminTpl">
   <div class="ahead">
     <div class="ahead-l">
       <h1 class="display" style="font-size:30px">Admin</h1>
@@ -95,11 +95,10 @@
       <button type="button" class="btn primary" id="saveBtn">Save changes</button>
     </div>
   </div>
-</div>
+</template></div>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/app/admin.js"></script>
 <script src="/app/main.js"></script>
 </body>
 </html>

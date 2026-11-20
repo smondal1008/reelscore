@@ -172,6 +172,30 @@
     var base = slugify(m.data.title) || m.id, y = (m.data.releaseDate || '').slice(0, 4);
     return /^\d{4}$/.test(y) ? base + '-' + y : base;
   }
+  // Page titles: the same format the build writes into pre-rendered pages (scripts/build.mjs), so the title
+  // search engines see does not change once the app has loaded. Keep the two in step.
+  var dupTitles = { list: null, map: {} };
+  function titleKey(m) { var d = m.data; return String(d.title || '').trim().toLowerCase() + '|' + (isTv(m) ? 'tv ' + tvYears(d) : (d.releaseDate || '').slice(0, 4)); }
+  function movieTitleTag(m) {
+    if (dupTitles.list !== S.movies) { dupTitles = { list: S.movies, map: {} }; S.movies.forEach(function (x) { var k = titleKey(x); dupTitles.map[k] = (dupTitles.map[k] || 0) + 1; }); }
+    var d = m.data, parts = [isTv(m) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (d.releaseDate || '').slice(0, 4)];
+    if (dupTitles.map[titleKey(m)] > 1 && langOf(d)) parts.push(langOf(d));
+    parts = parts.filter(Boolean);
+    var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : ''), full = base + ' – Verdicts & Reviews | Reelscore';
+    return full.length <= 60 ? full : base + ' | Reelscore';
+  }
+  function personTitleTag(name) {
+    var a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
+    return a.length <= 60 ? a : b.length <= 60 ? b : name + ' | Reelscore';
+  }
+  // noindex on "not found" screens, so unknown URLs (which the server answers with the app) are not indexed.
+  function setNoindex(on) {
+    var el = document.querySelector('meta[name="robots"]');
+    if (!on) { if (el && el.getAttribute('data-app')) el.remove(); return; }
+    if (!el) { el = document.createElement('meta'); el.name = 'robots'; el.setAttribute('data-app', '1'); document.head.appendChild(el); }
+    el.content = 'noindex';
+  }
+
   // ?page=N on Browse and People, so every page of results has its own crawlable URL.
   function qPage() { var n = parseInt(new URLSearchParams(location.search).get('page'), 10); return n > 1 ? n : 1; }
   function sectionSlug(status) { for (var k in BROWSE_SECTIONS) if (BROWSE_SECTIONS[k] === status) return k; return ''; }
@@ -244,6 +268,7 @@
     if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.lastPath = location.pathname;
+    if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
     else if (S.route === 'browse' || S.route === 'people') setCanonical(listCanonical());
     else if (S.route !== 'title' && S.route !== 'person') setCanonical(location.pathname);
@@ -522,7 +547,8 @@
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
     v.innerHTML = '';
     var m = findMovie(S.param);
-    if (m) { canonicalizeTitleUrl(m); document.title = m.data.title + ' — Reelscore'; setCanonical(movieUrl(m)); }
+    if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
+    setNoindex(!m && S.loaded);
     if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
     if (!m) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
@@ -839,10 +865,11 @@
     var stored = S.people[slug];
     if (!credits.length && !stored) {
       v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, [S.loaded ? 'We couldn’t find this person on Reelscore. ' : 'Loading… ', h('a', { href: '/', text: 'Back to home' })])]));
-      document.title = 'Reelscore'; return;
+      document.title = 'Reelscore'; setNoindex(S.loaded); return;
     }
+    setNoindex(false);
     var name = (credits[0] && credits[0].name) || (stored && stored.name) || slug;
-    document.title = name + ' — Reelscore';
+    document.title = personTitleTag(name);
     var photo = personPhotoUrl(name);
     // group: one entry per title, roles joined
     var byTitle = {}, order = [];
@@ -1156,12 +1183,25 @@
   document.addEventListener('click', function (e) { if (!e.target.closest('.navr')) res.hidden = true; });
 
   // ---------- admin ----------
+  // The admin screen's markup lives in a <template> and its code in /app/admin.js, so public pages carry neither.
+  function adminDom() {
+    var t = $('adminTpl'); if (t) { t.parentNode.appendChild(t.content); t.remove(); }
+  }
+  function loadAdminCode(done) {
+    if (window.ReelAdmin) return done();
+    var sc = document.createElement('script'); sc.src = '/app/admin.js';
+    sc.onload = done; sc.onerror = function () { S.adminStarted = false; toast('Couldn’t load the admin tools. Reload to retry.'); };
+    document.head.appendChild(sc);
+  }
   function startAdmin() {
+    adminDom();
     if (S.adminApi) { S.adminApi.route(S.adminSub); return; }
     if (S.adminStarted || !S.db) return;
     if (!S.canEdit) { $('editPage').hidden = false; $('titlesPage').hidden = true; $('main').innerHTML = ''; $('main').appendChild(h('div', { class: 'empty', text: 'Admin is for editors. Sign in with an admin account.' })); return; }
     S.adminStarted = true;
-    S.adminApi = window.ReelAdmin({ db: S.db, assets: S.assets, canWrite: true, sub: S.adminSub, go: go });
+    loadAdminCode(function () {
+      S.adminApi = window.ReelAdmin({ db: S.db, assets: S.assets, canWrite: true, sub: S.adminSub, go: go });
+    });
   }
 
   // ---------- connect ----------
@@ -1234,7 +1274,7 @@
     if (!u) return;
     return u.me().then(function (me) {
       S.uid = me.id; S.canEdit = !!me.canEdit;
-      if (S.canEdit) $('adminLink').hidden = false;
+      if (S.canEdit) { $('adminLink').hidden = false; $('adminLink').setAttribute('href', '/admin'); }
       var av = $('meAvatar'); if (me.avatarUrl) { av.src = me.avatarUrl; av.alt = me.name || 'You'; av.hidden = false; }
     });
   }).catch(function () {}).then(function () {

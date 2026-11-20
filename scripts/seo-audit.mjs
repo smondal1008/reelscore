@@ -58,7 +58,8 @@ function main() {
   for (const f of walk(DIST)) {
     const rel = path.relative(DIST, f).replace(/\\/g, '/');
     const url = rel === 'index.html' ? '/' : '/' + rel.replace(/\.html$/, '').replace(/\/index$/, '');
-    const html = fs.readFileSync(f, 'utf8');
+    // <template> content is inert: browsers and crawlers do not render it or follow its links.
+    const html = fs.readFileSync(f, 'utf8').replace(/<template\b[\s\S]*?<\/template>/gi, '');
     const pr = prerendered(html);
     const body = pr ?? html.slice(html.indexOf('<body'));
     const links = [...body.matchAll(/<a\b[^>]*>/gi)].map(m => attr(m[0], 'href')).filter(h => h && h.startsWith('/') && !h.startsWith('//')).map(h => h.split('#')[0]);

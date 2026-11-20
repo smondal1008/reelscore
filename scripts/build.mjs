@@ -184,7 +184,10 @@ function copyDir(from, to) {
 }
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
+const OG_DEFAULT = '/og-default.png';
 function page(shell, { title, description, canonical, ogType, image, wide, jsonld, route, body, robots }) {
+  // Pages without a poster or photo share the site-wide card (1200x630).
+  const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
     '<title>' + esc(title) + '</title>',
     '<meta name="description" content="' + esc(description) + '">',
@@ -195,9 +198,10 @@ function page(shell, { title, description, canonical, ogType, image, wide, jsonl
     '<meta property="og:title" content="' + esc(title) + '">',
     '<meta property="og:description" content="' + esc(description) + '">',
     '<meta property="og:url" content="' + esc(SITE + canonical) + '">',
-    image ? '<meta property="og:image" content="' + esc(image) + '">' : '',
-    '<meta name="twitter:card" content="' + (image && wide ? 'summary_large_image' : 'summary') + '">',
-    image ? '<meta name="twitter:image" content="' + esc(image) + '">' : '',
+    '<meta property="og:image" content="' + esc(image) + '">',
+    fallback ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Reelscore: verdicts on Indian movies and series">' : '',
+    '<meta name="twitter:card" content="' + (wide ? 'summary_large_image' : 'summary') + '">',
+    '<meta name="twitter:image" content="' + esc(image) + '">',
     ...(jsonld || []).map(ld)
   ].filter(Boolean).join('\n');
   let html = shell.replace(/<!--seo-->[\s\S]*?<!--\/seo-->/, '<!--seo-->\n' + head + '\n<!--/seo-->');
@@ -272,6 +276,22 @@ async function main() {
   }
   const langLinks = v => String(v || '').split(/\s*[,;]\s*/).filter(Boolean).map(l => '<a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a>').join(', ');
 
+  // Page titles, kept in step with app/main.js (movieTitleTag, personTitleTag) so they don't change once the app
+  // loads: language added when a name and year repeat, the "Verdicts & Reviews" part dropped past 60 characters.
+  const titleKey = m => String(m.data.title || '').trim().toLowerCase() + '|' + (isTv(m.data) ? 'tv ' + tvYears(m.data) : year(m.data));
+  const dupTitle = {}; movies.forEach(m => { const k = titleKey(m); dupTitle[k] = (dupTitle[k] || 0) + 1; });
+  function movieTitleTag(m) {
+    const d = m.data, parts = [isTv(d) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : year(d)];
+    const lang = String(d.languages || '').split(/[,;]/)[0].trim();
+    if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
+    const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : ''), full = base + ' – Verdicts & Reviews | Reelscore';
+    return full.length <= 60 ? full : base + ' | Reelscore';
+  }
+  function personTitleTag(name) {
+    const a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
+    return a.length <= 60 ? a : b.length <= 60 ? b : name + ' | Reelscore';
+  }
+
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
   const seen = new Set(); let nTitles = 0, nRated = 0, nPeople = 0;
 
@@ -289,7 +309,7 @@ async function main() {
     const poster = safeUrl(d.posterUrl), banner = safeUrl(d.bannerUrl);
     const label = tv ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (y || '');
 
-    const title = d.title + (label ? ' (' + label + ')' : '') + ' – Verdicts & Reviews | Reelscore';
+    const title = movieTitleTag(m);
     const auto = d.title + (y ? ' (' + y + ')' : '') + ' is ' + (lang ? (/^[aeiou]/i.test(lang) ? 'an ' : 'a ') + lang + ' ' : 'a ') +
       (d.genre ? String(d.genre).toLowerCase() + ' ' : '') + (tv ? 'series' : 'film') +
       (directors.length ? ' directed by ' + list(directors.slice(0, 2)) : '') +
@@ -300,7 +320,7 @@ async function main() {
       .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
     const section = tv ? ['TV shows', '/browse/tv-shows'] : ['Movies', '/browse'];
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="' + section[1] + '">' + section[0] + '</a> › ' + esc(d.title) + '</nav>';
-    body += '<div class="pr-top">' + (poster ? '<img class="pr-poster" src="' + esc(poster) + '" alt="' + esc(d.title) + ' poster" width="200" height="300">' : '') + '<div>';
+    body += '<div class="pr-top">' + (poster ? '<img class="pr-poster" src="' + esc(poster) + '" alt="' + esc(d.title) + ' poster" width="200" height="300" fetchpriority="high">' : '') + '<div>';
     body += '<h1>' + esc(d.title) + '</h1>' + (d.subtitle ? '<div class="pr-sub">' + esc(d.subtitle) + '</div>' : '');
     body += metaLine ? '<div class="pr-meta">' + metaLine + '</div>' : '';
     if (sc.tot) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
@@ -358,12 +378,12 @@ async function main() {
     const famous = (acting.length ? acting : crewT).filter(t => t.when && t.when <= new Date().toISOString().slice(0, 10)).slice(0, 4).map(t => t.m.data.title);
     const photo = safeUrl(st.photoUrl);
 
-    const title = name + ' – Movies, TV Shows & Filmography | Reelscore';
+    const title = personTitleTag(name);
     const description = clip(st.bio ? st.bio : name + ' filmography: ' + titles.length + ' title' + (titles.length === 1 ? '' : 's') + (span ? ' (' + span + ')' : '') +
       (famous.length ? ', including ' + list(famous) : '') + '. Roles, verdicts and reviews on Reelscore.', 158);
     const li = t => '<li><a href="' + movieUrl(t.m) + '">' + esc(t.m.data.title) + '</a> <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', ')].filter(Boolean).join(' · ')) + '</span></li>';
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav>';
-    body += '<div class="pr-top">' + (photo ? '<img class="pr-photo" src="' + esc(photo) + '" alt="' + esc(name) + '" width="160" height="160">' : '') + '<div>';
+    body += '<div class="pr-top">' + (photo ? '<img class="pr-photo" src="' + esc(photo) + '" alt="' + esc(name) + '" width="160" height="160" fetchpriority="high">' : '') + '<div>';
     body += '<h1>' + esc(name) + '</h1><div class="pr-meta">' + esc([known, titles.length + ' title' + (titles.length === 1 ? '' : 's'), span].filter(Boolean).join(' · ')) + '</div>';
     if (/^\d{4}-\d{2}-\d{2}$/.test(st.birthday || '') || st.birthplace) body += '<div class="pr-meta">Born ' + esc([fmtDate(st.birthday), st.birthplace ? 'in ' + st.birthplace : ''].filter(Boolean).join(' ')) + '</div>';
     if ((st.aka || []).filter(Boolean).length) body += '<div class="pr-meta">Also known as ' + esc(st.aka.filter(Boolean).join(', ')) + '</div>';
@@ -395,6 +415,30 @@ async function main() {
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
   console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
+  // Home page (also the app shell other routes fall back to): share image and WebSite / Organization data.
+  const homeLd = [
+    { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Reelscore', url: SITE + '/', description: 'Verdicts and reviews for Bollywood and regional Indian movies and series.', inLanguage: 'en-IN' },
+    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: SITE + OG_DEFAULT }
+  ];
+  const homeHead = '<meta property="og:url" content="' + SITE + '/">\n<meta property="og:image" content="' + SITE + OG_DEFAULT + '">\n<meta property="og:image:width" content="1200">\n<meta property="og:image:height" content="630">\n' +
+    '<meta property="og:image:alt" content="Reelscore: verdicts on Indian movies and series">\n<meta name="twitter:image" content="' + SITE + OG_DEFAULT + '">\n' + homeLd.map(ld).join('\n') + '\n';
+  const homeHtml = shell.replace('<meta name="twitter:card" content="summary">', '<meta name="twitter:card" content="summary_large_image">').replace('<!--/seo-->', homeHead + '<!--/seo-->');
+  write('index.html', homeHtml);
+
+  // /llms.txt: a short Markdown guide to the site for AI tools (llmstxt.org format).
+  const sections = [['In theatres', '/browse/in-theatres'], ['Coming soon', '/browse/coming-soon'], ['On OTT', '/browse/on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-releases']];
+  const recent = movies.filter(m => isTv(m.data) || (m.data.releaseDate || '') <= new Date().toISOString().slice(0, 10)).sort((a, b) => String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || ''))).slice(0, 25);
+  const busiest = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a)).slice(0, 25);
+  write('llms.txt', [
+    '# Reelscore', '',
+    '> Reelscore collects verdicts and reviews for Bollywood and regional Indian movies and series. Each title page shows cast, crew and release details; people say whether a film is worth the theatre, worth streaming on OTT, or worth skipping. A title shows a score once it has ' + MIN_VERDICTS + ' or more verdicts.', '',
+    `The catalogue has ${movies.length} titles in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali and other languages, and pages for ${nPeople} actors and filmmakers.`, '',
+    '## Browse', '', '- [All titles](' + SITE + '/browse)', ...sections.map(([n, u]) => '- [' + n + '](' + SITE + u + ')'), '- [People](' + SITE + '/people): actors and filmmakers', '',
+    '## Recent titles', '', ...recent.map(m => '- [' + m.data.title + ' (' + (isTv(m.data) ? 'TV' : year(m.data)) + ')](' + SITE + movieUrl(m) + ')'), '',
+    '## Prolific people', '', ...busiest.map(k => '- [' + personName(k) + '](' + SITE + '/person/' + k + ')'), '',
+    '## Optional', '', '- [Sitemap](' + SITE + '/sitemap.xml): every title and person page', ''
+  ].join('\n'));
+
   write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
 
   console.log(`[seo] wrote ${nTitles} title pages (${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
