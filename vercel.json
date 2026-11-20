@@ -29,6 +29,10 @@
       "destination": "/"
     },
     {
+      "source": "/year/:y",
+      "destination": "/"
+    },
+    {
       "source": "/people",
       "destination": "/"
     },

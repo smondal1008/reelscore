@@ -476,6 +476,8 @@ async function main() {
   homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
     langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
   homeBody += '<h2>Genres</h2><ul>' + genreLinks() + '</ul>';
+  { const ny = new Date().getFullYear(), ys = []; for (let k = ny; k > ny - 10; k--) ys.push(k);
+    homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
     canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
   write('index.html', homeHtml);
@@ -505,6 +507,22 @@ async function main() {
     writeHub('genre/' + slug + '.html', { title: 'Indian ' + g + ' Movies & Series | Reelscore', description: clip(desc, 158), canonical: '/genre/' + slug, ogPath: '/genre/' + slug, route: 'genre', body,
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'Browse', item: SITE + '/browse' }, { '@type': 'ListItem', position: 3, name: g, item: SITE + '/genre/' + slug }] }] });
     sitemap.push({ loc: '/genre/' + slug, pri: '0.7' });
+  }
+
+  // Year landing pages: /year/<yyyy>, movies only, most popular first (same rule as app/main.js popularityOf).
+  const byYear = {};
+  movies.forEach(m => { if (isTv(m.data)) return; const y = String(m.data.releaseDate || '').slice(0, 4); if (/^\d{4}$/.test(y)) (byYear[y] = byYear[y] || []).push(m); });
+  const popOf = m => score(m.id).tot * 1000 + (m.data.cast || []).filter(c => !CREW_RE.test(c.role || '')).slice(0, 4).reduce((t, c) => t + titleCount(personSlug(c.name)), 0) + (m.data.posterUrl ? 5 : 0);
+  const thisYear = new Date().getFullYear();
+  for (const y of Object.keys(byYear)) {
+    const list = byYear[y].map(m => [m, popOf(m)]).sort((a, b) => b[1] - a[1] || String(b[0].data.releaseDate || '').localeCompare(String(a[0].data.releaseDate || '')) || String(a[0].data.title).localeCompare(String(b[0].data.title))).map(x => x[0]);
+    const desc = list.length + ' Bollywood and regional Indian movies ' + (+y > thisYear ? 'due in ' : 'released in ') + y + ', most popular first, with cast, directors and verdicts.';
+    const near = []; for (let k = Math.min(thisYear, +y + 3); k >= Math.max(+y - 3, 1950); k--) if (String(k) !== y && byYear[k]) near.push(String(k));
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + y + '</nav><h1>Indian movies of ' + y + '</h1><p>' + esc(desc) + '</p><ul>' + list.map(titleLi).join('') + '</ul>' +
+      (near.length ? '<h2>Other years</h2><ul>' + near.map(k => '<li><a href="/year/' + k + '">' + k + '</a> <span class="note">' + byYear[k].length + '</span></li>').join('') + '</ul>' : '');
+    writeHub('year/' + y + '.html', { title: 'Indian Movies of ' + y + ' | Reelscore', description: clip(desc, 158), canonical: '/year/' + y, ogPath: '/year/' + y, route: 'year', body,
+      jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'Browse', item: SITE + '/browse' }, { '@type': 'ListItem', position: 3, name: y, item: SITE + '/year/' + y }] }] });
+    sitemap.push({ loc: '/year/' + y, pri: +y >= thisYear - 9 ? '0.7' : '0.5' });
   }
 
   // People
