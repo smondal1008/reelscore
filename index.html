@@ -651,6 +651,25 @@ window.ReelAdmin = function (env) {
     document.body.appendChild(back);
     check(); nameIn.focus();
   }
+  // In-page confirm. Native confirm() dialogs are silently blocked in some browsers and app webviews
+  // (they return false without showing anything), which made these actions look broken.
+  function askConfirm(title, body, okLabel, danger) {
+    return new Promise(function (resolve) {
+      var back = h('div', { style: 'position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:60;display:flex;align-items:center;justify-content:center;padding:16px' });
+      var done = function (v) { document.removeEventListener('keydown', esc, true); back.remove(); resolve(v); };
+      var esc = function (e) { if (e.key === 'Escape') { e.stopPropagation(); done(false); } };
+      var ok = h('button', { type: 'button', class: 'btn ' + (danger ? 'danger' : 'primary'), text: okLabel || 'OK', on: { click: function () { done(true); } } });
+      var box = h('div', { role: 'alertdialog', 'aria-modal': 'true', 'aria-labelledby': 'ac_t', 'aria-describedby': 'ac_b', class: 'card', style: 'width:min(480px,100%)' }, [
+        h('h2', { id: 'ac_t', style: 'margin:0', text: title }),
+        h('div', { id: 'ac_b', class: 'note', style: 'white-space:pre-line;font-size:14px', text: body || '' }),
+        h('div', { style: 'display:flex;gap:10px;justify-content:flex-end' }, [h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: function () { done(false); } } }), ok])
+      ]);
+      back.appendChild(box);
+      back.addEventListener('click', function (e) { if (e.target === back) done(false); });
+      document.addEventListener('keydown', esc, true);
+      document.body.appendChild(back); ok.focus();
+    });
+  }
   function copyToClipboard(t, done) {
     if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { setStatus(done || 'Copied'); }, function () { setStatus(t); });
     else setStatus(t);
@@ -729,10 +748,12 @@ window.ReelAdmin = function (env) {
   }
   function mergeInto(from, to) {
     if (dirty) { setStatus('Save or discard your changes first.'); return; }
-    if (!confirm('Merge “' + from.name + '” into “' + to.name + '”?\n\nEvery title that credits “' + from.name + '” will credit “' + to.name + '” instead, and /person/' + from.key + ' will stop existing.')) return;
-    setStatus('Merging…');
-    renamePerson(from.key, to.name).then(function (n) { var m = 'Merged ' + from.name + ' into ' + to.name + ' (' + n + ' updates).'; setStatus(m); setTimeout(function () { setStatus(m); }, 1200); })
-      .catch(function (e) { setStatus('Couldn’t merge' + (e && e.message ? ': ' + e.message : '') + '.'); });
+    askConfirm('Merge “' + from.name + '” into “' + to.name + '”?', 'Every title that credits “' + from.name + '” will credit “' + to.name + '” instead, and /person/' + from.key + ' will stop existing. This can’t be undone.', 'Merge', true).then(function (yes) {
+      if (!yes) return;
+      setStatus('Merging…');
+      renamePerson(from.key, to.name).then(function (n) { var m = 'Merged ' + from.name + ' into ' + to.name + ' (' + n + ' updates).'; setStatus(m); setTimeout(function () { setStatus(m); }, 1200); })
+        .catch(function (e) { setStatus('Couldn’t merge' + (e && e.message ? ': ' + e.message : '') + '.'); });
+    });
   }
   var MAX_FEAT = 8;
   function isFeatured(id) { return featured.indexOf(id) !== -1; }
@@ -1027,11 +1048,19 @@ window.ReelAdmin = function (env) {
   function canLeave(nextPath) {
     if (!dirty || page !== 'title') return true;
     if (nextPath && nextPath === location.pathname) return true;
-    if (!confirm('You have unsaved changes to ' + ((draft && draft.title) || 'this title') + '. Leave without saving?')) return false;
-    var m = movies.find(function (x) { return x.id === currentId; });
-    draft = m ? clone(m.data) : null; if (!m) currentId = null; setDirty(false);
-    return true;
+    var target = nextPath || (location.pathname + location.search);
+    if (leaveAsking) return false;
+    leaveAsking = true;
+    askConfirm('Leave without saving?', 'You have unsaved changes to ' + ((draft && draft.title) || 'this title') + '.', 'Discard changes', true).then(function (yes) {
+      leaveAsking = false;
+      if (!yes) return;
+      var m = movies.find(function (x) { return x.id === currentId; });
+      draft = m ? clone(m.data) : null; if (!m) currentId = null; setDirty(false);
+      history.pushState(null, '', target); window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+    return false;
   }
+  var leaveAsking = false;
   function select(id) {
     currentId = id; pendingSwitch = null; remoteChanged = false; confirmDelete = false;
     var m = movies.find(function (x) { return x.id === id; });
@@ -1281,9 +1310,9 @@ window.ReelAdmin = function (env) {
             el = (item.name || '').trim() ? castNameLocked(item)
               : castPicker(key + i + c.k, function (nm) {
                   var dup = arr.some(function (o, j) { return j !== i && personKey(o.name) === personKey(nm); });
-                  if (dup && !confirm(nm + ' is already in this cast. Add them again (e.g. for a second role)?')) return;
-                  item.name = nm; touch(); draw();
-                  var r = rows.querySelector('#' + key + i + 'role'); if (r) r.focus();
+                  var apply = function () { item.name = nm; touch(); draw(); var r = rows.querySelector('#' + key + i + 'role'); if (r) r.focus(); };
+                  if (!dup) { apply(); return; }
+                  askConfirm(nm + ' is already in this cast', 'Add them again, for example for a second role?', 'Add again').then(function (yes) { if (yes) apply(); });
                 });
             if (el.classList.contains('cname')) lab = null;
             return h('span', { style: 'min-width:0' }, [lab, el]);
