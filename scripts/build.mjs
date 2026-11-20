@@ -500,7 +500,7 @@ async function main() {
     const list = byGenre[g].slice().sort(newest), lc = g.toLowerCase(), slug = genreSlug(g);
     const desc = 'Indian ' + lc + ' movies and series: ' + list.length + ' Bollywood and regional titles in theatres, coming soon and on OTT, with verdicts on whether each is worth watching.';
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(g) + '</nav><h1>Indian ' + esc(lc) + ' movies and series</h1><p>' + esc(desc) + '</p>';
-    HUBS.forEach(hb => { const inSec = list.filter(m => sectionOf(m) === hb[1]); if (hb[1] === 'Coming soon') inSec.sort(soonest); body += block(esc(g) + ' · ' + hb[1].toLowerCase().replace('on ott', 'on OTT').replace('tv shows', 'TV shows') + ' <span class="note">' + inSec.length + '</span>', inSec.map(titleLi)); });
+    body += '<ul>' + list.map(titleLi).join('') + '</ul>';
     body += '<h2>Other genres</h2><ul>' + genreList.filter(x => x !== g).map(x => '<li><a href="/genre/' + genreSlug(x) + '">' + esc(x) + '</a> <span class="note">' + byGenre[x].length + '</span></li>').join('') + '</ul>';
     writeHub('genre/' + slug + '.html', { title: 'Indian ' + g + ' Movies & Series | Reelscore', description: clip(desc, 158), canonical: '/genre/' + slug, ogPath: '/genre/' + slug, route: 'genre', body,
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'Browse', item: SITE + '/browse' }, { '@type': 'ListItem', position: 3, name: g, item: SITE + '/genre/' + slug }] }] });

@@ -14,7 +14,7 @@
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
     featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
-    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', sort: 'new', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
+    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
   try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
   function inNavLang(m) { return !S.navLang || langsOf(m.data).indexOf(S.navLang) !== -1; }
@@ -262,7 +262,6 @@
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
       S.route = 'genre'; S.param = mm[1].toLowerCase();
       var gq = new URLSearchParams(location.search);
-      if (S.gen.genre !== S.param) S.gen.sort = 'new';
       S.gen.genre = S.param; S.gen.lang = gq.get('lang') || ''; S.gen.page = qPage();
     }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) {
@@ -485,21 +484,8 @@
       return h('a', { class: 'chip', href: genreUrl(x), 'aria-current': x === g ? 'page' : null, 'aria-pressed': String(x === g), text: x });
     })));
     if (!S.loaded) return;
-    var by = function (sec) { return all.filter(function (m) { return m.data.section === sec; }); };
-    var newest = function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); };
-    var sc = {}; all.forEach(function (m) { sc[m.id] = score(m.id); });
-    var top = all.filter(function (m) { return sc[m.id].tot >= 3 && sc[m.id].pct !== null; }).sort(function (a, b) { return sc[b.id].pct - sc[a.id].pct || sc[b.id].tot - sc[a.id].tot; }).slice(0, 24);
     var lc = g.toLowerCase();
-    [
-      rowSection('In theatres', by('In theatres').sort(newest)),
-      rowSection('Coming soon', by('Coming soon').sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); }), { dateBadge: true, remind: true }),
-      top.length >= 4 ? rowSection('Top rated ' + lc, top) : null,
-      rowSection('New on OTT', by('On OTT').sort(newest)),
-      rowSection(g + ' TV shows', by('TV shows').sort(newest))
-    ].forEach(function (r) { if (r) v.appendChild(r); });
-
-    var w = h('section', { class: 'wrapx', style: 'padding-top:12px', 'aria-labelledby': 'h-gall' }); v.appendChild(w);
-    w.appendChild(h('h2', { id: 'h-gall', style: 'margin:0 0 14px;font-size:24px', text: 'All ' + lc + ' titles' }));
+    var w = h('section', { class: 'wrapx', style: 'padding-top:18px', 'aria-label': g + ' titles' }); v.appendChild(w);
     var langs = {}; all.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; });
     function sel(id, label, val, opts, onc) {
       var e = h('select', { class: 'in', id: id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === val }); }));
@@ -507,18 +493,10 @@
       return h('div', { class: 'field', style: 'min-width:160px;flex:0 1 220px' }, [h('label', { class: 'l', for: id, text: label }), e]);
     }
     w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px' }, [
-      sel('gLang', 'Language', G.lang, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })), function (x) { G.lang = x; }),
-      sel('gSort', 'Sort by', G.sort, [['new', 'Newest first'], ['old', 'Oldest first'], ['score', 'Highest score'], ['votes', 'Most verdicts'], ['az', 'A–Z']], function (x) { G.sort = x; })
+      sel('gLang', 'Language', G.lang, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })), function (x) { G.lang = x; })
     ]));
     var list = all.filter(function (m) { return !G.lang || langOf(m.data) === G.lang; });
-    list.sort(function (a, b) {
-      var A = a.data, B = b.data;
-      if (G.sort === 'old') return (A.releaseDate || '9').localeCompare(B.releaseDate || '9');
-      if (G.sort === 'score') return (sc[b.id].pct === null ? -1 : sc[b.id].pct) - (sc[a.id].pct === null ? -1 : sc[a.id].pct) || sc[b.id].tot - sc[a.id].tot;
-      if (G.sort === 'votes') return sc[b.id].tot - sc[a.id].tot;
-      if (G.sort === 'az') return (A.title || '').localeCompare(B.title || '');
-      return (B.releaseDate || '').localeCompare(A.releaseDate || '');
-    });
+    list.sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') || (a.data.title || '').localeCompare(b.data.title || ''); });
     if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'No ' + lc + ' titles here yet.' })); v.appendChild(footer()); return; }
     var PER = 60, pages = Math.ceil(list.length / PER); G.page = Math.min(Math.max(1, G.page || 1), pages);
     syncListUrl(genreHref(G, G.page));
