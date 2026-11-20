@@ -445,11 +445,30 @@
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
+      genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
       rowSection('TV shows', homeSection('TV shows')),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
+  }
+  // Genre tiles on the home page; each opens Browse filtered to that genre (and the nav language, if set).
+  var GENRE_COL = { Action: ['#1F5F86', '#2E86AB'], Comedy: ['#5B2A86', '#7B3FB0'], Drama: ['#6A4A2E', '#8C6A48'], Thriller: ['#2B2F3D', '#4A5068'], Horror: ['#5A1A1F', '#8A2A30'], Romance: ['#8A2650', '#B3406E'], Family: ['#2F6B3A', '#4C8F45'], Animated: ['#1F6E6A', '#2E918B'], Biopic: ['#7A4A12', '#A8661E'], Mythological: ['#6B3A10', '#9A5A18'], War: ['#3D4A2A', '#5B6B3C'], 'Sci-fi': ['#22306E', '#3A4BA0'] };
+  function genreSection() {
+    var tiles = GENRES.map(function (g) {
+      var n = S.movies.filter(function (m) { return inNavLang(m) && genreTags(m.data).indexOf(g) !== -1; }).length;
+      return [g, n];
+    }).filter(function (x) { return x[1] >= 3; });
+    if (tiles.length < 3) return null;
+    return h('section', { class: 'sect', 'aria-label': 'Genres' }, [
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'Genres' }), h('span', { class: 'sub' }, [h('a', { href: '/browse', text: 'Browse all' })])]),
+      h('div', { class: 'rowx gtiles' }, tiles.map(function (x) {
+        var c = GENRE_COL[x[0]] || ['#2B2F3D', '#4A5068'];
+        return h('a', { class: 'gtile', href: browseHref({ status: 'All', lang: S.navLang, genre: x[0] }, 1), style: '--g1:' + c[0] + ';--g2:' + c[1], 'aria-label': x[0] + ', ' + x[1] + ' titles' }, [
+          h('span', { class: 'gn', text: x[0] }), h('span', { class: 'gc', 'aria-hidden': 'true', text: x[1] + ' titles' })
+        ]);
+      }))
+    ]);
   }
   var LANG_AB = { hindi: 'Hin', english: 'Eng', telugu: 'Tel', tamil: 'Tam', kannada: 'Kan', malayalam: 'Mal', bengali: 'Ben', marathi: 'Mar', punjabi: 'Pun' };
   function langShort(d) {
