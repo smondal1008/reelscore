@@ -1669,6 +1669,8 @@ window.ReelAdmin = function (env) {
   }
   function today() { var d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
   function released(m) { return !!m.data.releaseDate && m.data.releaseDate <= today(); }
+  // Not out yet: a future date, or listed as Coming soon. Undated titles in other sections count as released.
+  function isUpcoming(m) { var d = m.data.releaseDate; return d ? d > today() : m.data.section === 'Coming soon'; }
   function isOtt(m) { return m.data.section === 'On OTT'; }
   function fmtDate(iso, withYear) { if (!iso) return 'Date TBA'; var p = iso.split('-'); return (+p[2]) + ' ' + MONTHS[+p[1] - 1] + (withYear ? ' ' + p[0] : ''); }
   function isOld(m) { return m.data.section === 'Older releases'; }
@@ -2391,7 +2393,7 @@ window.ReelAdmin = function (env) {
     var titles = order.map(function (id) { return byTitle[id]; }).sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
     var acting = titles.filter(function (t) { return t.acting; }), crew = titles.filter(function (t) { return t.crew; });
     var known = acting.length >= crew.length ? 'Acting' : (crew[0] && /direct/i.test(crew[0].roles.join(' ')) ? 'Directing' : 'Crew');
-    var upcoming = titles.filter(function (t) { return !released(t.m); }).length;
+    var upcoming = titles.filter(function (t) { return isUpcoming(t.m); }).length;
     var years = titles.map(function (t) { return (t.m.data.releaseDate || '').slice(0, 4); }).filter(Boolean).sort();
     v.appendChild(h('a', { href: 'javascript:history.back()', style: 'display:inline-block;margin:24px 40px 0;color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', on: { click: function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } else { e.preventDefault(); go('/'); } } }, text: '← Back' }));
     v.appendChild(h('section', { class: 'ph' }, [
@@ -2414,12 +2416,19 @@ window.ReelAdmin = function (env) {
         h('h2', { style: 'margin:0 0 14px;font-size:22px', text: title + ' (' + list.length + ')' }),
         h('div', { class: 'grid-posters' }, list.map(function (t) {
           var card = posterCard(t.m, t.m.data.section === 'Coming soon' ? { dateBadge: true } : null);
-          var r = t.roles.filter(function (x) { return title === 'Acting' ? !CREW_RE.test(x) : CREW_RE.test(x); });
-          if (r.length) card.appendChild(h('span', { class: 'pcrole', text: (title === 'Acting' ? 'as ' : '') + r.join(' · ') }));
+          var r = title === 'Upcoming' ? t.roles : t.roles.filter(function (x) { return title === 'Acting' ? !CREW_RE.test(x) : CREW_RE.test(x); });
+          var ch = r.filter(function (x) { return !CREW_RE.test(x); }), cr = r.filter(function (x) { return CREW_RE.test(x); });
+          var label = title === 'Acting' ? 'as ' + r.join(' · ') : title === 'Upcoming' ? (ch.length ? 'as ' + ch.join(' · ') : '') + (ch.length && cr.length ? ' · ' : '') + cr.join(' · ') : r.join(' · ');
+          if (label) card.appendChild(h('span', { class: 'pcrole', text: label }));
           return card;
         }))
       ]);
     }
+    // Unreleased titles first, in their own section (soonest first; undated last), then released work.
+    var soon = titles.filter(function (t) { return isUpcoming(t.m); }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
+    var out = titles.filter(function (t) { return !isUpcoming(t.m); });
+    v.appendChild(section('Upcoming', soon) || h('span'));
+    acting = out.filter(function (t) { return t.acting; }); crew = out.filter(function (t) { return t.crew; });
     v.appendChild(section('Acting', acting) || h('span'));
     v.appendChild(section(acting.length ? 'Behind the camera' : 'Credits', crew) || h('span'));
     v.appendChild(h('div', { style: 'height:40px' }));
