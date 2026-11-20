@@ -441,7 +441,7 @@ window.ReelAdmin = function (env) {
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
-  var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all';
+  var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all', peoplePage = 1, PEOPLE_PAGE = 50, dupCache = { sig: null, map: {} };
   function personKey(name) { return (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function personPhoto(name) { var p = people[personKey(name)]; return p && safeUrl(p.photoUrl) ? p.photoUrl : ''; }
   function pickPhoto(name, btn) {
@@ -512,10 +512,41 @@ window.ReelAdmin = function (env) {
       var b = compactKey(p.name); if (!b) return false;
       if (a === b) return true;
       var lim = Math.min(a.length, b.length) >= 10 ? 2 : 1;
-      if (editDistance(a, b) <= lim) return true;
+      if (Math.abs(a.length - b.length) <= lim && editDistance(a, b) <= lim) return true;
       var lo = a.length < b.length ? a : b, hi = a.length < b.length ? b : a;
       return lo.length >= 6 && hi.indexOf(lo) !== -1 && hi.length - lo.length <= 4;
     });
+  }
+  // Same matching rules as similarPeople, but for everyone at once: each compact key is worked out once,
+  // and names are only compared with others of a similar length.
+  function findDupes(list) {
+    // Index-based, so it stays fast with thousands of people. Matches similarPeople's rules:
+    // same compact key, an edit distance of 1 (2 for names of 10+ letters), or one name inside the other.
+    var items = list.map(function (p) { return { p: p, c: compactKey(p.name) }; }).filter(function (x) { return x.c.length >= 3; });
+    var dels = {}, subs = {}, out = {}, seen = {};
+    function dropOne(set, w) { for (var i = 0; i < w.length; i++) set[w.slice(0, i) + w.slice(i + 1)] = 1; }
+    function variants(w) {
+      var v = {}; v[w] = 1; dropOne(v, w);
+      if (w.length >= 10) Object.keys(v).forEach(function (x) { if (x.length === w.length - 1) dropOne(v, x); });
+      return Object.keys(v);
+    }
+    items.forEach(function (x, i) {
+      variants(x.c).forEach(function (v) { (dels[v] = dels[v] || []).push(i); });
+      for (var L = Math.max(6, x.c.length - 4); L < x.c.length; L++) for (var st = 0; st + L <= x.c.length; st++) {
+        var sub = x.c.substr(st, L); (subs[sub] = subs[sub] || {})[i] = 1;
+      }
+    });
+    function link(i, j) {
+      if (i === j) return; var k = i < j ? i + ',' + j : j + ',' + i; if (seen[k]) return; seen[k] = 1;
+      var A = items[i], B = items[j]; if (A.p.key === B.p.key) return;
+      var a = A.c, b = B.c, hit = a === b;
+      if (!hit) { var lim = Math.min(a.length, b.length) >= 10 ? 2 : 1; hit = Math.abs(a.length - b.length) <= lim && editDistance(a, b) <= lim; }
+      if (!hit) { var lo = a.length < b.length ? a : b, hi = a.length < b.length ? b : a; hit = lo.length >= 6 && hi.indexOf(lo) !== -1 && hi.length - lo.length <= 4; }
+      if (hit) { if (a.length >= 4) (out[A.p.key] = out[A.p.key] || []).push(B.p); if (b.length >= 4) (out[B.p.key] = out[B.p.key] || []).push(A.p); }
+    }
+    Object.keys(dels).forEach(function (v) { var g = dels[v]; if (g.length > 1) for (var x = 0; x < g.length; x++) for (var y = x + 1; y < g.length; y++) link(g[x], g[y]); });
+    items.forEach(function (x, i) { var hs = subs[x.c]; if (hs) Object.keys(hs).forEach(function (j) { link(i, +j); }); });
+    return out;
   }
   function personPageUrl(key) { return location.origin + '/person/' + key; }
   function namesDatalist() {
@@ -628,15 +659,21 @@ window.ReelAdmin = function (env) {
     var main = $('main'); main.innerHTML = '';
     var list = allPeople();
     var q = peopleQ.trim().toLowerCase();
-    var dupMap = {}; list.forEach(function (p) { var sim = similarPeople(p.name, list, p.key); if (sim.length) dupMap[p.key] = sim; });
+    // Duplicate check compares everyone with everyone, so only redo it when the set of names changes.
+    var sig = list.map(function (p) { return p.key + '=' + p.name; }).join('|');
+    if (dupCache.sig !== sig) {
+      var dm = findDupes(list);
+      dupCache = { sig: sig, map: dm };
+    }
+    var dupMap = dupCache.map;
     var shown = list.filter(function (p) {
       return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1) &&
         (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]);
     });
     var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search by name or URL' }); search.value = peopleQ;
-    search.addEventListener('input', function () { peopleQ = search.value; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
+    search.addEventListener('input', function () { peopleQ = search.value; peoplePage = 1; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
     var withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length, dupCount = Object.keys(dupMap).length;
-    function chip(id, label) { return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(peopleFilter === id), text: label, on: { click: function () { peopleFilter = peopleFilter === id ? 'all' : id; renderPeople(); } } }); }
+    function chip(id, label) { return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(peopleFilter === id), text: label, on: { click: function () { peopleFilter = peopleFilter === id ? 'all' : id; peoplePage = 1; renderPeople(); } } }); }
     var card = h('section', { class: 'card' }, [
       h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: list.length + ' people · ' + withPhoto + ' with photos' }), h('h1', { text: 'Cast & crew' })]),
         h('button', { type: 'button', class: 'btn primary', text: '+ New person', disabled: !canWrite, on: { click: function () { openPersonForm({ onSaved: function () { renderPeople(); } }); } } })]),
@@ -646,9 +683,13 @@ window.ReelAdmin = function (env) {
         chip('nophoto', 'Missing photo'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : ''))
       ])
     ]);
+    var pages = Math.max(1, Math.ceil(shown.length / PEOPLE_PAGE));
+    if (peoplePage > pages) peoplePage = pages;
+    var from = (peoplePage - 1) * PEOPLE_PAGE, slice = shown.slice(from, from + PEOPLE_PAGE);
+    if (shown.length) card.appendChild(h('div', { class: 'note', id: 'pplSum', text: 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + shown.length + (shown.length !== list.length ? ' (filtered from ' + list.length + ')' : '') }));
     var rows = h('div', { class: 'rows' });
     if (!shown.length) rows.appendChild(h('div', { class: 'empty', style: 'padding:20px', text: list.length ? 'No one matches.' : 'Add cast to titles first.' }));
-    shown.forEach(function (p) {
+    slice.forEach(function (p) {
       var url = personPhoto(p.name), page = personPageUrl(p.key), bio = people[p.key] && people[p.key].bio;
       var dup = dupMap[p.key];
       rows.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid ' + (dup ? '#5a4520' : 'var(--line)') + ';border-radius:12px;background:var(--bg)' }, [
@@ -669,6 +710,21 @@ window.ReelAdmin = function (env) {
       ]));
     });
     card.appendChild(rows);
+    if (pages > 1) {
+      var pager = h('nav', { class: 'pager', 'aria-label': 'Pages' });
+      var pbtn = function (n, label, dis) {
+        return h('button', { type: 'button', class: 'chip', text: label || String(n), disabled: dis, 'aria-current': n === peoplePage && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n,
+          on: { click: function () { peoplePage = n; renderPeople(); window.scrollTo({ top: 0 }); } } });
+      };
+      pager.appendChild(pbtn(peoplePage - 1, '← Prev', peoplePage === 1));
+      var want = {}; [1, 2, peoplePage - 1, peoplePage, peoplePage + 1, pages - 1, pages].forEach(function (n) { if (n >= 1 && n <= pages) want[n] = 1; });
+      var last = 0; Object.keys(want).map(Number).sort(function (a, b) { return a - b; }).forEach(function (n) {
+        if (n - last > 1) pager.appendChild(h('span', { class: 'gap', text: '…' }));
+        pager.appendChild(pbtn(n)); last = n;
+      });
+      pager.appendChild(pbtn(peoplePage + 1, 'Next →', peoplePage === pages));
+      card.appendChild(pager);
+    }
     main.appendChild(card);
   }
   function mergeInto(from, to) {
