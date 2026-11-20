@@ -792,18 +792,6 @@
     for (var t = 0; t < n; t++) { k = (k + dir + n) % n; if (it[k].yt || it[k].clip) break; }
     if (play) playVid(m.id, k); else { S.vsel = S.vsel || {}; S.vsel[m.id] = k; S.vplay = null; S.vKeep = null; render(true); }
   }
-  function vidEnded(mid) {
-    var m = findMovie(S.param); if (!m || m.id !== mid) return;
-    var it = vidItems(m), cur = (S.vsel && S.vsel[mid]) || 0;
-    if (S.vAuto !== false && cur < it.length - 1) stepVid(m, 1, true);
-  }
-  // YouTube reports state changes over postMessage once told we are listening (enablejsapi=1).
-  window.addEventListener('message', function (e) {
-    if (!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin) || typeof e.data !== 'string') return;
-    var dd; try { dd = JSON.parse(e.data); } catch (x) { return; }
-    var st = dd && (dd.event === 'onStateChange' ? dd.info : dd.event === 'infoDelivery' && dd.info ? dd.info.playerState : null);
-    if (st === 0 && S.vplay) vidEnded(S.vplay.mid);
-  });
   function videosBlock(m) {
     var d = m.data, items = vidItems(m), n = items.length;
     var head = function (extra) { return h('div', { class: 'thx-h' }, [h('h2', { id: 'h-vid', text: 'Trailers & songs' })].concat(extra || [])); };
@@ -822,13 +810,11 @@
     // the stage
     var media = null;
     if (playing && x.yt) {
-      media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin),
+      media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1',
         title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
-      media.addEventListener('load', function () { try { media.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'rs' }), '*'); } catch (e) {} });
     } else if (playing && x.clip) {
       media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true, preload: 'auto' });
       media.setAttribute('aria-label', d.title + ' · ' + x.title);
-      media.addEventListener('ended', function () { vidEnded(m.id); });
       setTimeout(function () { safePlay(media); }, 0);
     }
     var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/hqdefault.jpg")' : art(m, 'banner');
@@ -844,12 +830,11 @@
     var info = h('div', { class: 'thx-i' }, [
       h('div', { style: 'min-width:0' }, [
         h('h3', { text: x.title }),
-        h('div', { class: 'note', text: nextI >= 0 ? (S.vAuto !== false ? 'Up next: ' : 'Next: ') + items[nextI].title + ' · ' + items[nextI].kind : x.kind })
+        h('div', { class: 'note', text: nextI >= 0 ? 'Next: ' + items[nextI].title + ' · ' + items[nextI].kind : x.kind })
       ]),
       h('div', { class: 'thx-c' }, [
         n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Previous video', text: '‹', on: { click: function () { stepVid(m, -1, playing); } } }) : null,
         n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Next video', text: '›', on: { click: function () { stepVid(m, 1, playing); } } }) : null,
-        n > 1 ? h('button', { type: 'button', class: 'btn', 'aria-pressed': String(S.vAuto !== false), on: { click: function () { S.vAuto = S.vAuto === false; render(true); } } }, [h('span', { class: 'dot' + (S.vAuto !== false ? ' on' : ''), 'aria-hidden': 'true' }), 'Autoplay next']) : null,
         x.url ? h('a', { class: 'btn', href: x.url, target: '_blank', rel: 'noopener', text: 'YouTube ↗' }) : null
       ])
     ]);
