@@ -57,6 +57,16 @@ window.ReelAdmin = function (env) {
     return out.filter(function (k) { return !(people[k] && people[k].popular === 'hide'); });
   }
   function popState(k) { return pinnedKeys().indexOf(k) !== -1 ? 'pin' : (people[k] && people[k].popular === 'hide') ? 'hide' : ''; }
+  // Visitors load the catalogue from a file built at deploy time; this list tells them about deletions since then.
+  function tombstone(kind, id) {
+    var ref = db.doc('settings/deleted');
+    return ref.get().then(function (s) {
+      var d = s.exists ? s.data() : {}, now = new Date().toISOString();
+      var body = { movies: d.movies || [], people: d.people || [], updatedAt: now };
+      body[kind] = body[kind].filter(function (x) { return x && x.id !== id; }).concat([{ id: id, at: now }]).slice(-500);
+      return ref.set(body);
+    }).catch(function () {});
+  }
   function writePopOrder(next) {
     popWriting = true; popOrder = next.slice(); renderPopCount(); if (popularMode) renderPopular();
     return db.doc('settings/popular').set({ order: next, updatedAt: new Date().toISOString() }).then(function () {
@@ -299,7 +309,7 @@ window.ReelAdmin = function (env) {
       ['aka'].forEach(function (f) { var v = (to && to[f] && to[f].length ? to[f] : (from && from[f]) || []); if (v.length) merged[f] = v; });
       if (from && from.name && personKey(from.name) !== newKey) { var ak = (merged.aka || []).slice(); if (ak.indexOf(from.name) === -1) ak.push(from.name); merged.aka = ak.slice(0, 10); }
       if (from || to) jobs.push(db.doc('people/' + newKey).set(merged, { merge: true }));
-      if (from) jobs.push(db.doc('people/' + oldKey).delete());
+      if (from) jobs.push(db.doc('people/' + oldKey).delete().then(function () { return tombstone('people', oldKey); }));
       var oi = popOrder.indexOf(oldKey);
       if (oi !== -1) { var no = popOrder.slice(); if (no.indexOf(newKey) === -1) no[oi] = newKey; else no.splice(oi, 1); jobs.push(writePopOrder(no)); }
     } else if (from) jobs.push(db.doc('people/' + newKey).set({ name: newName, updatedAt: new Date().toISOString() }, { merge: true }));
@@ -1289,6 +1299,7 @@ window.ReelAdmin = function (env) {
   function doDelete() {
     var id = currentId;
     db.doc('movies/' + id).delete().then(function () {
+      tombstone('movies', id);
       setStatus('Deleted ' + (draft.title || 'title'));
       currentId = null; draft = null; confirmDelete = false; setDirty(false); go('/admin/titles');
     }).catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });

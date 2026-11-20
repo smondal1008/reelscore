@@ -9,6 +9,12 @@
 //   SITE_URL            canonical origin, e.g. https://reelscore.in (default: the production domain)
 //   SEO_MIN_VERDICTS    verdicts a title needs before its score goes into search markup (default 10)
 //   SEO_MIN_CREDITS     titles a person needs before they get a pre-rendered page (default 2)
+//   FULL_REFRESH=1      read every title and person from Firestore even if the last catalogue is recent
+//
+// It also writes /catalogue.json (every title and person), which the app loads instead of reading the whole
+// collection from Firestore on every visit. To keep deploys cheap too, a deploy within 24 hours of the last full
+// read starts from the live catalogue.json and fetches only records changed since (updatedAt), plus deletions.
+// If Firestore refuses (e.g. the daily free quota is used up), the build reuses the live catalogue unchanged.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -70,34 +76,95 @@ function decode(v) {
 }
 function decodeFields(f) { const o = {}; for (const k of Object.keys(f)) o[k] = decode(f[k]); return o; }
 
-async function firestore() {
+function firestoreClient() {
   const cfgSrc = fs.readFileSync(path.join(ROOT, 'firebase-config.js'), 'utf8');
   const project = (cfgSrc.match(/projectId:\s*"([^"]+)"/) || [])[1];
   const key = (cfgSrc.match(/apiKey:\s*"([^"]+)"/) || [])[1];
   if (!project) throw new Error('No projectId in firebase-config.js');
-  const base = 'https://firestore.googleapis.com/v1/projects/' + project + '/databases/(default)/documents/';
-  let useKey = !!key;
-  async function col(name) {
-    const out = []; let tok = '';
-    do {
-      let r;
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const url = base + name + '?pageSize=300' + (tok ? '&pageToken=' + encodeURIComponent(tok) : '') + (useKey ? '&key=' + key : '');
-        r = await fetch(url);
-        // A browser key restricted to the site's domain is refused from the build server; public reads work without it.
-        if (r.status === 403 && useKey) { useKey = false; attempt--; continue; }
-        if (r.ok || (r.status < 500 && r.status !== 429)) break;
-        await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
-      }
-      if (!r.ok) throw new Error('Firestore ' + name + ': HTTP ' + r.status + ' ' + (await r.text()).slice(0, 300));
-      const j = await r.json();
-      (j.documents || []).forEach(d => out.push({ id: decodeURIComponent(d.name.split('/').pop()), data: decodeFields(d.fields || {}), updated: d.updateTime || '' }));
-      tok = j.nextPageToken || '';
-    } while (tok);
-    return out;
+  const root = 'projects/' + project + '/databases/(default)/documents';
+  const base = 'https://firestore.googleapis.com/v1/' + root;
+  let useKey = !!key, reads = 0;
+  async function call(url, init) {
+    let r;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      r = await fetch(url + (useKey ? (url.includes('?') ? '&' : '?') + 'key=' + key : ''), init);
+      // A browser key restricted to the site's domain is refused from the build server; public reads work without it.
+      if (r.status === 403 && useKey) { useKey = false; attempt--; continue; }
+      if (r.ok || r.status === 404 || (r.status < 500 && r.status !== 429)) break;
+      if (r.status === 429 && attempt === 1) break;
+      await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+    }
+    if (r.status === 404) return null;
+    if (!r.ok) throw new Error('Firestore HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
+    return r.json();
   }
-  const [movies, people, verdicts] = await Promise.all([col('movies'), col('people'), col('verdicts')]);
-  return { movies, people, verdicts };
+  const toDoc = d => ({ id: decodeURIComponent(d.name.split('/').pop()), data: decodeFields(d.fields || {}), updated: d.updateTime || '' });
+  return {
+    get reads() { return reads; },
+    async list(name) {
+      const out = []; let tok = '';
+      do {
+        const j = await call(base + '/' + name + '?pageSize=300' + (tok ? '&pageToken=' + encodeURIComponent(tok) : ''));
+        ((j && j.documents) || []).forEach(d => out.push(toDoc(d)));
+        tok = (j && j.nextPageToken) || '';
+      } while (tok);
+      reads += out.length || 1;
+      return out;
+    },
+    async changedSince(name, iso) {
+      const j = await call(base + ':runQuery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ structuredQuery: {
+        from: [{ collectionId: name }], where: { fieldFilter: { field: { fieldPath: 'updatedAt' }, op: 'GREATER_THAN', value: { stringValue: iso } } } } }) });
+      const out = (j || []).filter(x => x.document).map(x => toDoc(x.document));
+      reads += out.length || 1;
+      return out;
+    },
+    async get(p) { const j = await call(base + '/' + p); reads++; return j ? toDoc(j) : null; }
+  };
+}
+
+async function previousCatalogue() {
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 20000);
+    const r = await fetch(SITE + '/catalogue.json', { signal: ctl.signal }); clearTimeout(t);
+    if (!r.ok) return null;
+    const j = await r.json();
+    return j && Array.isArray(j.movies) && j.builtAt ? j : null;
+  } catch (e) { return null; }
+}
+
+// Returns { movies, people, verdicts, builtAt, fullAt, source }.
+async function loadData() {
+  if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
+  // scripts/catalogue-seed.json (if present) stands in for the live file on the very first deploy.
+  let prev = await previousCatalogue();
+  const seedFile = path.join(ROOT, 'scripts', 'catalogue-seed.json');
+  if (!prev && fs.existsSync(seedFile)) { prev = JSON.parse(fs.readFileSync(seedFile, 'utf8')); console.log('[seo] no live catalogue.json; starting from scripts/catalogue-seed.json (' + prev.builtAt + ')'); }
+  const fromPrev = () => ({ movies: prev.movies.map(m => ({ id: m.id, data: m.data, updated: '' })), people: Object.entries(prev.people || {}).map(([id, data]) => ({ id, data, updated: '' })) });
+  const db = firestoreClient(), started = new Date().toISOString();
+  const fresh = prev && prev.fullAt && (Date.now() - Date.parse(prev.fullAt)) < 24 * 3600 * 1000 && !process.env.FULL_REFRESH;
+  try {
+    if (fresh) {
+      const since = new Date(Date.parse(prev.builtAt) - 3600 * 1000).toISOString();
+      const [dm, dp, del, verdicts] = await Promise.all([db.changedSince('movies', since), db.changedSince('people', since), db.get('settings/deleted'), db.list('verdicts')]);
+      const tomb = { movies: {}, people: {} }; ((del && del.data) || {}).movies?.forEach(x => x && x.id && (tomb.movies[x.id] = x.at || ''));
+      ((del && del.data) || {}).people?.forEach(x => x && x.id && (tomb.people[x.id] = x.at || ''));
+      const merge = (baseList, delta, t) => {
+        const m = new Map(baseList.map(x => [x.id, x])); delta.forEach(x => m.set(x.id, x));
+        return [...m.values()].filter(x => !(t[x.id] && (!x.data.updatedAt || t[x.id] > x.data.updatedAt)));
+      };
+      const p = fromPrev();
+      console.log(`[seo] incremental: ${dm.length} titles and ${dp.length} people changed since ${since}; ${db.reads} reads`);
+      return { movies: merge(p.movies, dm, tomb.movies), people: merge(p.people, dp, tomb.people), verdicts, builtAt: started, fullAt: prev.fullAt, source: 'incremental' };
+    }
+    const [movies, people, verdicts] = await Promise.all([db.list('movies'), db.list('people'), db.list('verdicts')]);
+    console.log(`[seo] full read: ${db.reads} reads`);
+    return { movies, people, verdicts, builtAt: started, fullAt: started, source: 'full' };
+  } catch (e) {
+    if (!prev) throw e;
+    // Keep builtAt from the previous file so the app still asks for every change made since then.
+    console.warn('[seo] Firestore unavailable (' + e.message + '); reusing the live catalogue.json from ' + prev.builtAt);
+    return { ...fromPrev(), verdicts: [], builtAt: prev.builtAt, fullAt: prev.fullAt, source: 'previous' };
+  }
 }
 
 function loadFixture(file) {
@@ -143,8 +210,8 @@ function page(shell, { title, description, canonical, ogType, image, wide, jsonl
 // ---------- main ----------
 async function main() {
   const t0 = Date.now();
-  const data = process.env.FIXTURE ? loadFixture(process.env.FIXTURE) : await firestore();
-  console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${process.env.FIXTURE ? 'fixture' : 'Firestore'})`);
+  const data = await loadData();
+  console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${data.source})`);
 
   fs.rmSync(OUT, { recursive: true, force: true });
   copyDir(ROOT, OUT);
@@ -321,6 +388,13 @@ async function main() {
     sitemap.map(u => '<url><loc>' + esc(SITE + u.loc) + '</loc>' + (/^\d{4}-\d{2}-\d{2}$/.test(u.lastmod || '') ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '<priority>' + u.pri + '</priority></url>').join('\n') + '\n</urlset>\n';
   if (sitemap.length > 50000) throw new Error('Sitemap over 50,000 URLs: split it into a sitemap index');
   write('sitemap.xml', xml);
+  // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
+  const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
+  const cat = { builtAt: data.builtAt, fullAt: data.fullAt,
+    movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: compact(m.data) })),
+    people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
+  write('catalogue.json', JSON.stringify(cat));
+  console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
   write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
 
   console.log(`[seo] wrote ${nTitles} title pages (${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);

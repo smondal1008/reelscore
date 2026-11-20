@@ -1167,6 +1167,66 @@
   // ---------- connect ----------
   parseRoute();
   var timer = setTimeout(function () { if (!S.loaded) { S.loadMsg = 'Can’t reach the catalogue yet. Check your connection.'; render(true); } }, 10000);
+  // ---------- catalogue ----------
+  // Titles and people come from /catalogue.json, written at each deploy and served from the CDN (no database reads).
+  // On top of it we subscribe only to records changed since that file was built, plus a short list of deletions,
+  // so admin edits still show up live. If the file can't be loaded we fall back to reading everything from Firestore.
+  function fixSection(d) { if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return d; }
+  function setMovies(list) {
+    S.movies = list.map(function (m) { return { id: m.id, data: fixSection(m.data) }; })
+      .sort(function (a, b) { return (+a.data.order || 0) - (+b.data.order || 0); });
+    S.byId = {}; S.movies.forEach(function (m) { S.byId[m.id] = m; });
+    S.loaded = true; render();
+  }
+  function loadAllFromFirestore(db) {
+    db.collection('movies').orderBy('order').onSnapshot(function (snap) {
+      if (!snap.metadata.fromCache) clearTimeout(timer);
+      setMovies(snap.docs.map(function (s) { return { id: s.id, data: s.data() }; }));
+    }, function () { clearTimeout(timer); S.loaded = true; S.loadMsg = 'Lost connection to the catalogue. Reload to retry.'; render(true); });
+    db.collection('people').onSnapshot(function (snap) {
+      var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); S.people = o; if (S.route === 'title' || S.route === 'person' || S.route === 'people') render();
+    }, function () {});
+  }
+  function loadCatalogue(db) {
+    var f = window.fetch ? window.fetch('/catalogue.json', { cache: 'no-cache' }) : Promise.reject();
+    f.then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }).then(function (cat) {
+      if (!cat || !Array.isArray(cat.movies) || !cat.builtAt) throw new Error('bad catalogue');
+      clearTimeout(timer);
+      // An hour of overlap covers admins whose clocks run a little behind.
+      var since = new Date(Date.parse(cat.builtAt) - 3600 * 1000).toISOString();
+      var base = {}, baseP = cat.people || {}, dm = {}, dp = {}, goneM = {}, goneP = {}, tomb = { movies: {}, people: {} };
+      cat.movies.forEach(function (m) { base[m.id] = m.data; });
+      function dead(kind, id, d) { var t = tomb[kind][id]; return !!t && (!d || !d.updatedAt || t > d.updatedAt); }
+      function apply() {
+        var out = [];
+        Object.keys(base).forEach(function (id) { if (!(id in dm) && !goneM[id] && !dead('movies', id, base[id])) out.push({ id: id, data: base[id] }); });
+        Object.keys(dm).forEach(function (id) { if (!dead('movies', id, dm[id])) out.push({ id: id, data: dm[id] }); });
+        var ppl = {};
+        Object.keys(baseP).forEach(function (id) { if (!goneP[id] && !dead('people', id, baseP[id])) ppl[id] = baseP[id]; });
+        Object.keys(dp).forEach(function (id) { if (!dead('people', id, dp[id])) ppl[id] = dp[id]; });
+        S.people = ppl; setMovies(out);
+      }
+      function track(store, gone) {
+        return function (snap) {
+          snap.docChanges().forEach(function (c) {
+            // A record leaves this query only when it is deleted (updatedAt never goes backwards).
+            if (c.type === 'removed') { delete store[c.doc.id]; gone[c.doc.id] = 1; }
+            else { store[c.doc.id] = c.doc.data(); delete gone[c.doc.id]; }
+          });
+          apply();
+        };
+      }
+      apply();
+      db.collection('movies').where('updatedAt', '>', since).onSnapshot(track(dm, goneM), function () {});
+      db.collection('people').where('updatedAt', '>', since).onSnapshot(track(dp, goneP), function () {});
+      db.doc('settings/deleted').onSnapshot(function (snap) {
+        var d = snap.exists ? snap.data() : {}; tomb = { movies: {}, people: {} };
+        ['movies', 'people'].forEach(function (k) { (d[k] || []).forEach(function (x) { if (x && x.id) tomb[k][x.id] = x.at || ''; }); });
+        apply();
+      }, function () {});
+    }).catch(function () { loadAllFromFirestore(db); });
+  }
+
   var cl = window.claude;
   if (!cl || typeof cl.use !== 'function') { clearTimeout(timer); S.loadMsg = 'Couldn’t start. Check firebase-config.js.'; render(true); return; }
   cl.use('user').then(function (u) {
@@ -1183,19 +1243,11 @@
     S.db = db;
     if (!db) { clearTimeout(timer); S.loadMsg = 'Couldn’t connect to the catalogue. Check firebase-config.js.'; render(true); return; }
     if (S.route === 'admin') startAdmin();
-    db.collection('movies').orderBy('order').onSnapshot(function (snap) {
-      if (!snap.metadata.fromCache) clearTimeout(timer);
-      S.movies = snap.docs.map(function (s) { var d = s.data(); if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return { id: s.id, data: d }; });
-      S.byId = {}; S.movies.forEach(function (m) { S.byId[m.id] = m; });
-      S.loaded = true; render();
-    }, function () { clearTimeout(timer); S.loaded = true; S.loadMsg = 'Lost connection to the catalogue. Reload to retry.'; render(true); });
+    loadCatalogue(db);
     db.collection('verdicts').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (s) { o[s.id] = s.data(); });
       if (S.uid && writing.v && S.verdicts[S.uid]) o[S.uid] = S.verdicts[S.uid];
       S.verdicts = o; render();
-    }, function () {});
-    db.collection('people').onSnapshot(function (snap) {
-      var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); S.people = o; if (S.route === 'title') render();
     }, function () {});
     db.doc('settings/home').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {};

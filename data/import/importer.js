@@ -5,12 +5,27 @@ window.__importFilms2 = async function (url, dry, source) {
   const loose = t => slug(t).replace(/-(the|a|an|part|chapter)-/g, '-').replace(/^(the|a)-/, '').replace(/[^a-z0-9]/g, '');
   const pk = n => slug(n), L = s => String(s || '').split(/[,;]/)[0].trim().toLowerCase();
   const items = await fetch(url, { cache: 'no-store' }).then(r => r.json());
-  const movies = (await db.collection('movies').get()).docs.map(d => ({ id: d.id, data: d.data() }));
+  // Start from /catalogue.json (no reads) and fetch only records changed since it was built, plus deletions.
+  const cat = await fetch('/catalogue.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : null).catch(() => null);
+  let movies, peopleDocs;
+  if (cat && cat.builtAt) {
+    const since = new Date(Date.parse(cat.builtAt) - 3600 * 1000).toISOString();
+    const [dm, dp, del] = await Promise.all([db.collection('movies').where('updatedAt', '>', since).get(), db.collection('people').where('updatedAt', '>', since).get(), db.doc('settings/deleted').get()]);
+    const t = del.exists ? del.data() : {}, gone = (k, id, d) => (t[k] || []).some(x => x && x.id === id && (!d || !d.updatedAt || x.at > d.updatedAt));
+    const mm = new Map(cat.movies.map(m => [m.id, m.data])); dm.docs.forEach(d => mm.set(d.id, d.data()));
+    const pp = new Map(Object.entries(cat.people || {})); dp.docs.forEach(d => pp.set(d.id, d.data()));
+    movies = [...mm].filter(([id, d]) => !gone('movies', id, d)).map(([id, data]) => ({ id, data }));
+    peopleDocs = [...pp].filter(([id, d]) => !gone('people', id, d)).map(([id, d]) => ({ id, data: () => d }));
+    console.log('[import] catalogue.json + ' + dm.size + ' changed titles, ' + dp.size + ' changed people');
+  } else {
+    movies = (await db.collection('movies').get()).docs.map(d => ({ id: d.id, data: d.data() }));
+    peopleDocs = (await db.collection('people').get()).docs;
+  }
   const ids = new Set(movies.map(m => m.id)), byLoose = {};
   const slugs = new Set(movies.map(m => slug(m.data.slug) || m.id));
   movies.forEach(m => { const y = (m.data.releaseDate || '').slice(0, 4); (byLoose[loose(m.data.title)] = byLoose[loose(m.data.title)] || []).push({ m, y }); });
   const known = {}; movies.forEach(m => (m.data.cast || []).forEach(c => { if (c.name) known[pk(c.name)] = known[pk(c.name)] || c.name; }));
-  (await db.collection('people').get()).docs.forEach(d => { const p = d.data(); if (p.name) known[d.id] = p.name; (p.aka || []).forEach(a => { known[pk(a)] = known[pk(a)] || p.name; }); });
+  peopleDocs.forEach(d => { const p = d.data(); if (p.name) known[d.id] = p.name; (p.aka || []).forEach(a => { known[pk(a)] = known[pk(a)] || p.name; }); });
   const fixName = n => known[pk(n)] || n;
   let maxOrder = Math.max(0, ...movies.map(m => m.data.order || 0));
   const now = new Date().toISOString(), res = { created: 0, merged: 0, rolesSet: 0, unchanged: 0, mergedTitles: [], createdTitles: [] }, writes = [];
