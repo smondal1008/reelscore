@@ -553,18 +553,22 @@
     var v = $('view-title');
     // A pre-rendered page (built for search engines) stays on screen until the catalogue arrives.
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
-    v.innerHTML = '';
+    var keep = S.vKeep && S.vKeep.parentNode === v && S.vplay && S.vKeep._mid === S.vplay.mid ? S.vKeep : null;
+    Array.prototype.slice.call(v.childNodes).forEach(function (c) { if (c !== keep) v.removeChild(c); });
+    if (!keep) S.vKeep = null;
+    var put = function (n) { if (!n) return; if (n === keep) { keep = null; return; } if (keep) v.insertBefore(n, keep); else v.appendChild(n); };
     var m = findMovie(S.param);
+    if (!m || (S.vplay && S.vplay.mid !== m.id)) { S.vplay = null; if (S.vKeep && S.vKeep.parentNode) S.vKeep.parentNode.removeChild(S.vKeep); S.vKeep = null; keep = null; }
     if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
     setNoindex(!m && S.loaded);
-    if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
-    if (!m) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
+    if (!S.loaded) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
+    if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
     var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : null; // ticket booking hidden until a partner is integrated
-    v.appendChild(titleHero(m, tags, actLabel));
+    put(titleHero(m, tags, actLabel));
 
     // scores
     var sc = score(m.id), vs = vset(m), my = myVerdict(m.id);
@@ -592,29 +596,31 @@
       ]),
       fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 36); })) : null
     ]);
-    v.appendChild(h('div', { class: 'scores', style: 'margin-top:8px' }, [overall, friends]));
+    put(h('div', { class: 'scores', style: 'margin-top:8px' }, [overall, friends]));
 
     // columns
     // sections, in the order of the tabs above them
     var act = actionBlock(m, rel, ott);
-    var main = h('div', { class: 'colm' }, [videosBlock(m), act, castBlock(m), reviewsBlock(m, rel)]);
+    var theatre = videosBlock(m);
+    var main = h('div', { class: 'colm' }, [act, castBlock(m), reviewsBlock(m, rel)]);
     var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
     if (r) r.id = 'more';
-    var nVids = (d.videos || []).length + (safeUrl(d.trailerFileUrl) ? 1 : 0), nRev = 0;
+    var nVids = vidItems(m).length, nRev = 0;
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
     var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
-    v.appendChild(pageTabs([
+    put(pageTabs([
       ['videos', 'Trailers & songs', nVids],
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
       ['reviews', 'Reviews', nRev],
       r ? ['more', 'More like this', 0] : null
     ].filter(Boolean)));
-    v.appendChild(h('div', { class: 'cols' }, [main, side]));
-    if (r) v.appendChild(r);
-    v.appendChild(footer());
+    put(theatre);
+    put(h('div', { class: 'cols' }, [main, side]));
+    if (r) put(r);
+    put(footer());
   }
 
   // Sticky section tabs on the title page; the tab for the section in view is marked current.
@@ -657,6 +663,7 @@
     var playBtn = playing
       ? h('button', { type: 'button', class: 'btn lg light', id: 'tPlay', on: { click: toggleTitlePause } }, ['❚❚  Pause'])
       : clip ? h('button', { type: 'button', class: 'btn lg light', on: { click: function () { startTitleTrailer(m.id); } } }, ['▶  Play trailer'])
+      : vidItems(m).some(function (x) { return x.yt; }) ? h('button', { type: 'button', class: 'btn lg light', on: { click: function () { var it = vidItems(m), k = 0; it.some(function (x, i) { if (x.yt) { k = i; return true; } }); playVid(m.id, k, true); } } }, ['▶  Play trailer'])
       : trailerBtn(m);
     var node = h('section', { class: 'tp art' + (playing ? ' playing' : ''), style: art(m, 'banner') }, [
       video,
@@ -756,16 +763,119 @@
     });
     return box;
   }
+  // ---------- trailers & songs: a player with a playlist ----------
+  function ytId(u) {
+    u = String(u || '');
+    var mm = u.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    return mm ? mm[1] : '';
+  }
+  function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : 'more'; }
+  function vidItems(m) {
+    var d = m.data, out = [], clip = safeUrl(d.trailerFileUrl);
+    if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
+    (d.videos || []).forEach(function (x) {
+      var u = safeUrl(x.url), id = ytId(u);
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind) });
+    });
+    return out;
+  }
+  function playVid(mid, i, scroll) {
+    S.vsel = S.vsel || {}; S.vsel[mid] = i;
+    S.vplay = { mid: mid, i: i }; S.vKeep = null;
+    if (S.tplay) { if (S.tpVideo) { try { S.tpVideo.pause(); } catch (e) {} } S.tplay = null; S.tpNode = null; S.tpVideo = null; }
+    render(true);
+    if (scroll) setTimeout(function () { var t = $('videos'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+  }
+  function stepVid(m, dir, play) {
+    var it = vidItems(m), n = it.length; if (!n) return;
+    var cur = (S.vsel && S.vsel[m.id]) || 0, k = cur;
+    for (var t = 0; t < n; t++) { k = (k + dir + n) % n; if (it[k].yt || it[k].clip) break; }
+    if (play) playVid(m.id, k); else { S.vsel = S.vsel || {}; S.vsel[m.id] = k; S.vplay = null; S.vKeep = null; render(true); }
+  }
+  function vidEnded(mid) {
+    var m = findMovie(S.param); if (!m || m.id !== mid) return;
+    var it = vidItems(m), cur = (S.vsel && S.vsel[mid]) || 0;
+    if (S.vAuto !== false && cur < it.length - 1) stepVid(m, 1, true);
+  }
+  // YouTube reports state changes over postMessage once told we are listening (enablejsapi=1).
+  window.addEventListener('message', function (e) {
+    if (!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin) || typeof e.data !== 'string') return;
+    var dd; try { dd = JSON.parse(e.data); } catch (x) { return; }
+    var st = dd && (dd.event === 'onStateChange' ? dd.info : dd.event === 'infoDelivery' && dd.info ? dd.info.playerState : null);
+    if (st === 0 && S.vplay) vidEnded(S.vplay.mid);
+  });
   function videosBlock(m) {
-    var vids = m.data.videos || [];
-    var clip = safeUrl(m.data.trailerFileUrl);
-    var clipCard = clip ? h('button', { type: 'button', class: 'vid', style: 'text-align:left;cursor:pointer;width:100%;font:inherit;border-color:var(--accent)', on: { click: function () { startTitleTrailer(m.id); } } }, [
-      h('span', { class: 'pl', 'aria-hidden': 'true', style: 'background:var(--accent)' }, [h('span', { style: 'color:#0B0A0F;font-size:14px', text: '▶' })]),
-      h('span', {}, [h('div', { style: 'font-weight:600;font-size:14px', text: 'Trailer' }), h('div', { class: 'note', text: 'Plays here' })])
+    var d = m.data, items = vidItems(m), n = items.length;
+    var head = function (extra) { return h('div', { class: 'thx-h' }, [h('h2', { id: 'h-vid', text: 'Trailers & songs' })].concat(extra || [])); };
+    if (!n) return h('section', { class: 'thx', id: 'videos', 'aria-labelledby': 'h-vid' }, [head(), h('div', { class: 'note', text: 'No trailers or songs yet.' })]);
+    S.vsel = S.vsel || {}; S.vf = S.vf || {};
+    var cur = Math.min(S.vsel[m.id] || 0, n - 1), x = items[cur];
+    var playing = !!(S.vplay && S.vplay.mid === m.id && S.vplay.i === cur && (x.yt || x.clip));
+    var cats = [['all', 'All'], ['trailers', 'Trailers'], ['songs', 'Songs'], ['more', 'More']].map(function (c) {
+      return [c[0], c[1], c[0] === 'all' ? n : items.filter(function (y) { return y.cat === c[0]; }).length];
+    }).filter(function (c) { return c[2]; });
+    var vf = S.vf[m.id] || 'all'; if (!cats.some(function (c) { return c[0] === vf; })) vf = 'all';
+    var chips = cats.length > 2 ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter videos' }, cats.map(function (c) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === c[0]), text: c[1] + ' · ' + c[2], on: { click: function () { S.vf[m.id] = c[0]; render(true); } } });
+    })) : null;
+
+    // the stage
+    var media = null;
+    if (playing && x.yt) {
+      media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin),
+        title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+      media.addEventListener('load', function () { try { media.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'rs' }), '*'); } catch (e) {} });
+    } else if (playing && x.clip) {
+      media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true, preload: 'auto' });
+      media.setAttribute('aria-label', d.title + ' · ' + x.title);
+      media.addEventListener('ended', function () { vidEnded(m.id); });
+      setTimeout(function () { safePlay(media); }, 0);
+    }
+    var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/hqdefault.jpg")' : art(m, 'banner');
+    var stage = h('div', { class: 'stage' + (playing ? ' on' : ''), style: playing ? '' : bg }, playing ? [media] : [
+      h('div', { class: 'shade' }),
+      h('div', { class: 'top' }, [h('span', { class: 'kb', text: String(x.kind).toUpperCase() }), h('span', { class: 'pos', text: (cur + 1) + ' / ' + n })]),
+      x.yt || x.clip
+        ? h('button', { type: 'button', class: 'big', 'aria-label': 'Play ' + x.title, on: { click: function () { playVid(m.id, cur); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' })])
+        : h('div', { class: 'big off', text: x.url ? '' : 'Link coming' }),
+      h('div', { class: 'bot' }, [h('div', { class: 'display t', text: x.title }), h('div', { class: 'note', style: 'color:#E4E0D8', text: d.title + ' · ' + x.kind })])
+    ]);
+    var nextI = cur + 1 < n ? cur + 1 : -1;
+    var info = h('div', { class: 'thx-i' }, [
+      h('div', { style: 'min-width:0' }, [
+        h('h3', { text: x.title }),
+        h('div', { class: 'note', text: nextI >= 0 ? (S.vAuto !== false ? 'Up next: ' : 'Next: ') + items[nextI].title + ' · ' + items[nextI].kind : x.kind })
+      ]),
+      h('div', { class: 'thx-c' }, [
+        n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Previous video', text: '‹', on: { click: function () { stepVid(m, -1, playing); } } }) : null,
+        n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Next video', text: '›', on: { click: function () { stepVid(m, 1, playing); } } }) : null,
+        n > 1 ? h('button', { type: 'button', class: 'btn', 'aria-pressed': String(S.vAuto !== false), on: { click: function () { S.vAuto = S.vAuto === false; render(true); } } }, [h('span', { class: 'dot' + (S.vAuto !== false ? ' on' : ''), 'aria-hidden': 'true' }), 'Autoplay next']) : null,
+        x.url ? h('a', { class: 'btn', href: x.url, target: '_blank', rel: 'noopener', text: 'YouTube ↗' }) : null
+      ])
+    ]);
+    var shown = items.map(function (y, i) { return [y, i]; }).filter(function (p) { return vf === 'all' || p[0].cat === vf; });
+    var list = n > 1 ? h('aside', { class: 'thx-l', 'aria-label': 'Playlist' }, [
+      h('div', { class: 'thx-lh' }, [h('b', { text: 'Playlist' }), h('span', { class: 'note', text: shown.length + ' of ' + n + (n === 1 ? ' video' : ' videos') })]),
+      h('div', { class: 'thx-ls' }, shown.map(function (p) {
+        var y = p[0], i = p[1], sel = i === cur, can = !!(y.yt || y.clip);
+        var th = y.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + y.yt + '/mqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+        return h('button', { type: 'button', class: 'pli', 'aria-current': sel ? 'true' : 'false', disabled: !can, on: { click: function () { playVid(m.id, i); } } }, [
+          h('span', { class: 'th' }, [th, h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tx' }, [
+            h('span', { class: 'bd' + (sel ? ' on' : ''), text: sel ? (playing ? 'NOW PLAYING' : 'SELECTED') : String(i + 1).padStart(2, '0') }),
+            h('span', { class: 'tt', text: y.title }),
+            h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
+          ])
+        ]);
+      }))
     ]) : null;
-    if (clipCard) return h('section', { class: 'card', id: 'videos' }, [h('h2', { text: 'Trailers & songs' }), h('div', { class: 'vids' }, [clipCard].concat(vids.map(vidCard)))]);
-    return h('section', { class: 'card', id: 'videos' }, [h('h2', { text: 'Trailers & songs' }),
-      vids.length ? h('div', { class: 'vids' }, vids.map(vidCard)) : h('div', { class: 'note', text: 'No trailers or songs yet.' })]);
+    var sec = h('section', { class: 'thx', id: 'videos', 'aria-labelledby': 'h-vid' }, [
+      head([chips]),
+      h('div', { class: 'thx-g' }, [h('div', { class: 'thx-p' }, [stage, info]), list])
+    ]);
+    sec._mid = m.id;
+    S.vKeep = playing ? sec : null;
+    return sec;
   }
   function vidCard(x) {
     if (true) {
