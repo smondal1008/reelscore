@@ -2,7 +2,7 @@
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
   var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos'];
-  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Song', 'Clip', 'Interview'];
+  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
     ['runtime', 'Runtime'], ['certificate', 'Certificate'], ['posterUrl', 'Poster'], ['bannerUrl', 'Banner']

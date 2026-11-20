@@ -463,6 +463,7 @@
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
       rowSection('TV shows', homeSection('TV shows')),
+      tvPromoSection(),
       yearSection(),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
@@ -598,6 +599,34 @@
           h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: p.x.title }),
           h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') })
+        ]);
+      }))
+    ]);
+  }
+
+  // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
+  function tvPromoSection() {
+    var thisYear = String(new Date().getFullYear()), picks = [];
+    var shows = homeSection('TV shows').slice().sort(function (a, b) {
+      var aa = !a.data.endYear || String(a.data.endYear) >= thisYear ? 1 : 0, bb = !b.data.endYear || String(b.data.endYear) >= thisYear ? 1 : 0;
+      return bb - aa || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
+    });
+    shows.forEach(function (m) { vidItems(m).filter(function (x) { return x.yt || x.clip; }).slice(0, 2).forEach(function (x) { picks.push({ m: m, x: x }); }); });
+    picks = picks.slice(0, 24);
+    if (!picks.length) return null;
+    return h('section', { class: 'sect', 'aria-label': 'New TV promotionals' }, [
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New TV promotionals' })]),
+      h('div', { class: 'rowx' }, picks.map(function (p) {
+        var m = p.m, d = m.data;
+        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault(); e.stopPropagation();
+          openTrailerOverlay(m, p.x, e.currentTarget);
+        } } }, [
+          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: d.title }),
+          h('span', { class: 'note', text: [p.x.title, d.platform].filter(Boolean).join(' · ') })
         ]);
       }))
     ]);
@@ -1008,7 +1037,7 @@
     var mm = u.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
     return mm ? mm[1] : '';
   }
-  function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : 'more'; }
+  function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
   function vidItems(m) {
     var d = m.data, out = [], clip = safeUrl(d.trailerFileUrl);
     if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
@@ -1038,7 +1067,7 @@
     S.vsel = S.vsel || {}; S.vf = S.vf || {};
     var cur = Math.min(S.vsel[m.id] || 0, n - 1), x = items[cur];
     var playing = !!(S.vplay && S.vplay.mid === m.id && S.vplay.i === cur && (x.yt || x.clip));
-    var cats = [['all', 'All'], ['trailers', 'Trailers'], ['songs', 'Songs'], ['more', 'More']].map(function (c) {
+    var cats = [['all', 'All'], ['trailers', 'Trailers'], ['songs', 'Songs'], ['episodes', 'Episodes'], ['more', 'More']].map(function (c) {
       return [c[0], c[1], c[0] === 'all' ? n : items.filter(function (y) { return y.cat === c[0]; }).length];
     }).filter(function (c) { return c[2]; });
     var vf = S.vf[m.id] || 'all'; if (!cats.some(function (c) { return c[0] === vf; })) vf = 'all';
