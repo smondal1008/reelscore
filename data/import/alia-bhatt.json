@@ -1,0 +1,620 @@
+[
+{
+"mergeOnly": false,
+"title": "Sangharsh",
+"slug": "sangharsh-1999",
+"releaseDate": "1999",
+"languages": "Hindi",
+"genre": "Crime thriller",
+"director": "Tanuja Chandra",
+"cast": [
+{
+"name": "Akshay Kumar",
+"role": "Cast"
+},
+{
+"name": "Preity Zinta",
+"role": "Cast"
+},
+{
+"name": "Ashutosh Rana",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Young Reet Oberoi (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Student of the Year",
+"slug": "student-of-the-year-2012",
+"releaseDate": "2012",
+"languages": "Hindi",
+"genre": "Teen romance",
+"director": "Karan Johar",
+"cast": [
+{
+"name": "Sidharth Malhotra",
+"role": "Cast"
+},
+{
+"name": "Varun Dhawan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Shanaya Singhania"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Highway",
+"slug": "highway-2014",
+"releaseDate": "2014",
+"languages": "Hindi",
+"genre": "Road drama",
+"director": "Imtiaz Ali",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Veera Tripathi"
+},
+{
+"name": "Randeep Hooda",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "2 States",
+"slug": "2-states-2014",
+"releaseDate": "2014",
+"languages": "Hindi",
+"genre": "Romantic comedy",
+"director": "Abhishek Varman",
+"cast": [
+{
+"name": "Arjun Kapoor",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Ananya Swaminathan"
+},
+{
+"name": "Amrita Singh",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Humpty Sharma Ki Dulhania",
+"slug": "humpty-sharma-ki-dulhania-2014",
+"releaseDate": "2014",
+"languages": "Hindi",
+"genre": "Romantic comedy",
+"director": "Shashank Khaitan",
+"cast": [
+{
+"name": "Varun Dhawan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Kavya Pratap Singh"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Ugly",
+"slug": "ugly-2014",
+"releaseDate": "2014",
+"languages": "Hindi",
+"genre": "Psychological thriller",
+"director": "Anurag Kashyap",
+"cast": [
+{
+"name": "Rahul Bhat",
+"role": "Cast"
+},
+{
+"name": "Ronit Roy",
+"role": "Cast"
+},
+{
+"name": "Tejaswini Kolhapure",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Young Shalini (cameo)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Shaandaar",
+"slug": "shaandaar-2015",
+"releaseDate": "2015",
+"languages": "Hindi",
+"genre": "Romantic comedy",
+"director": "Vikas Bahl",
+"cast": [
+{
+"name": "Shahid Kapoor",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Alia Arora"
+},
+{
+"name": "Pankaj Kapur",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Kapoor & Sons",
+"slug": "kapoor-and-sons-2016",
+"releaseDate": "2016",
+"languages": "Hindi",
+"genre": "Family drama",
+"director": "Shakun Batra",
+"cast": [
+{
+"name": "Sidharth Malhotra",
+"role": "Cast"
+},
+{
+"name": "Fawad Khan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Tia Malik"
+},
+{
+"name": "Rishi Kapoor",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Udta Punjab",
+"slug": "udta-punjab-2016",
+"releaseDate": "2016",
+"languages": "Hindi",
+"genre": "Crime drama",
+"director": "Abhishek Chaubey",
+"cast": [
+{
+"name": "Shahid Kapoor",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Mary Jane"
+},
+{
+"name": "Kareena Kapoor",
+"role": "Cast"
+},
+{
+"name": "Diljit Dosanjh",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Ae Dil Hai Mushkil",
+"slug": "ae-dil-hai-mushkil-2016",
+"releaseDate": "2016",
+"languages": "Hindi",
+"genre": "Romantic drama",
+"director": "Karan Johar",
+"cast": [
+{
+"name": "Ranbir Kapoor",
+"role": "Cast"
+},
+{
+"name": "Anushka Sharma",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "DJ (cameo)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Dear Zindagi",
+"slug": "dear-zindagi-2016",
+"releaseDate": "2016",
+"languages": "Hindi",
+"genre": "Coming-of-age drama",
+"director": "Gauri Shinde",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Kaira"
+},
+{
+"name": "Shah Rukh Khan",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Badrinath Ki Dulhania",
+"slug": "badrinath-ki-dulhania-2017",
+"releaseDate": "2017",
+"languages": "Hindi",
+"genre": "Romantic comedy",
+"director": "Shashank Khaitan",
+"cast": [
+{
+"name": "Varun Dhawan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Vaidehi Trivedi"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Raazi",
+"slug": "raazi-2018",
+"releaseDate": "2018",
+"languages": "Hindi",
+"genre": "Spy thriller",
+"director": "Meghna Gulzar",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Sehmat Khan"
+},
+{
+"name": "Vicky Kaushal",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Zero",
+"slug": "zero-2018",
+"releaseDate": "2018",
+"languages": "Hindi",
+"genre": "Romantic drama",
+"director": "Aanand L. Rai",
+"cast": [
+{
+"name": "Shah Rukh Khan",
+"role": "Cast"
+},
+{
+"name": "Anushka Sharma",
+"role": "Cast"
+},
+{
+"name": "Katrina Kaif",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Herself (cameo)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Gully Boy",
+"slug": "gully-boy-2019",
+"releaseDate": "2019",
+"languages": "Hindi",
+"genre": "Musical drama",
+"director": "Zoya Akhtar",
+"cast": [
+{
+"name": "Ranveer Singh",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Safeena Firdausi"
+},
+{
+"name": "Siddhant Chaturvedi",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Kalank",
+"slug": "kalank-2019",
+"releaseDate": "2019",
+"languages": "Hindi",
+"genre": "Period drama",
+"director": "Abhishek Varman",
+"cast": [
+{
+"name": "Varun Dhawan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Roop"
+},
+{
+"name": "Aditya Roy Kapur",
+"role": "Cast"
+},
+{
+"name": "Sonakshi Sinha",
+"role": "Cast"
+},
+{
+"name": "Madhuri Dixit",
+"role": "Cast"
+},
+{
+"name": "Sanjay Dutt",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Student of the Year 2",
+"slug": "student-of-the-year-2-2019",
+"releaseDate": "2019",
+"languages": "Hindi",
+"genre": "Teen drama",
+"director": "Punit Malhotra",
+"cast": [
+{
+"name": "Tiger Shroff",
+"role": "Cast"
+},
+{
+"name": "Ananya Panday",
+"role": "Cast"
+},
+{
+"name": "Tara Sutaria",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Herself (special appearance in song)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Sadak 2",
+"slug": "sadak-2-2020",
+"releaseDate": "2020",
+"languages": "Hindi",
+"genre": "Action drama",
+"director": "Mahesh Bhatt",
+"cast": [
+{
+"name": "Sanjay Dutt",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Aarya Desai"
+},
+{
+"name": "Aditya Roy Kapur",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Gangubai Kathiawadi",
+"slug": "gangubai-kathiawadi-2022",
+"releaseDate": "2022",
+"languages": "Hindi",
+"genre": "Biographical crime drama",
+"director": "Sanjay Leela Bhansali",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Gangubai Kathiawadi"
+},
+{
+"name": "Ajay Devgn",
+"role": "Cast"
+},
+{
+"name": "Vijay Raaz",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "RRR",
+"slug": "rrr-2022",
+"releaseDate": "2022",
+"languages": "Telugu",
+"genre": "Epic action",
+"director": "S. S. Rajamouli",
+"cast": [
+{
+"name": "N. T. Rama Rao Jr.",
+"role": "Cast"
+},
+{
+"name": "Ram Charan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Sita (cameo)"
+},
+{
+"name": "Ajay Devgn",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Darlings",
+"slug": "darlings-2022",
+"releaseDate": "2022",
+"languages": "Hindi",
+"genre": "Black comedy thriller",
+"director": "Jasmeet K. Reen",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Badru Qureshi"
+},
+{
+"name": "Shefali Shah",
+"role": "Cast"
+},
+{
+"name": "Vijay Varma",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Brahmāstra: Part One – Shiva",
+"slug": "brahmastra-part-one-shiva-2022",
+"releaseDate": "2022",
+"languages": "Hindi",
+"genre": "Fantasy action",
+"director": "Ayan Mukerji",
+"cast": [
+{
+"name": "Ranbir Kapoor",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Isha Chatterjee"
+},
+{
+"name": "Amitabh Bachchan",
+"role": "Cast"
+},
+{
+"name": "Nagarjuna",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Rocky Aur Rani Kii Prem Kahaani",
+"slug": "rocky-aur-rani-kii-prem-kahaani-2023",
+"releaseDate": "2023",
+"languages": "Hindi",
+"genre": "Romantic comedy drama",
+"director": "Karan Johar",
+"cast": [
+{
+"name": "Ranveer Singh",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Rani Chatterjee"
+},
+{
+"name": "Dharmendra",
+"role": "Cast"
+},
+{
+"name": "Jaya Bachchan",
+"role": "Cast"
+},
+{
+"name": "Shabana Azmi",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Heart of Stone",
+"slug": "heart-of-stone-2023",
+"releaseDate": "2023",
+"languages": "English",
+"genre": "Spy action",
+"director": "Tom Harper",
+"cast": [
+{
+"name": "Gal Gadot",
+"role": "Cast"
+},
+{
+"name": "Jamie Dornan",
+"role": "Cast"
+},
+{
+"name": "Alia Bhatt",
+"role": "Keya Dhawan"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Jigra",
+"slug": "jigra-2024",
+"releaseDate": "2024",
+"languages": "Hindi",
+"genre": "Action thriller",
+"director": "Vasan Bala",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Satyabhama Anand"
+},
+{
+"name": "Vedang Raina",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": true,
+"title": "Alpha",
+"slug": "alpha-2026",
+"releaseDate": "2026",
+"languages": "Hindi",
+"genre": "Action thriller",
+"director": "Shiv Rawail",
+"cast": [
+{
+"name": "Alia Bhatt",
+"role": "Sita"
+}
+]
+}
+]
