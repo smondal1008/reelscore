@@ -425,8 +425,8 @@
 <script>
 
 window.ReelAdmin = function (env) {
-  var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'Missing info', 'Missing photos'];
+  var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Song', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
@@ -876,7 +876,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos' };
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
   function readListState() {
     var q = new URLSearchParams(location.search);
@@ -991,7 +991,7 @@ window.ReelAdmin = function (env) {
         h('td', {}, [
           h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
-          h('div', { class: 'ts', text: [d.section === 'On OTT' && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', '/movie/' + slugOf(m)].filter(Boolean).join(' · ') }),
+          h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m)].filter(Boolean).join(' · ') }),
           filter === 'Missing photos' ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
         h('td', { class: 'c-sec' }, [h('span', { class: 'sec', text: d.section || '—' })]),
@@ -1386,7 +1386,7 @@ window.ReelAdmin = function (env) {
     var live = movies.find(function (m) { return m.id === currentId; });
     main.appendChild(h('div', { class: 'crumbs' }, [
       h('a', { href: '/admin/titles', text: '← All titles' }),
-      live ? h('a', { href: '/movie/' + slugOf(live), target: '_blank', rel: 'noopener', text: 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not published yet' })
+      live ? h('a', { href: pathBase(live.data) + slugOf(live), target: '_blank', rel: 'noopener', text: 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not published yet' })
     ]));
     if (pendingSwitch) {
       var target = movies.find(function (m) { return m.id === pendingSwitch; });
@@ -1440,12 +1440,15 @@ window.ReelAdmin = function (env) {
     ]));
 
     // basics
+    var tvEd = draft.section === 'TV shows';
     var g1 = h('div', { class: 'grid' }, [
       field('Title', 'title', { placeholder: 'e.g. Ramayana' }),
       field('Subtitle', 'subtitle', { placeholder: 'e.g. Rise of a Legend · Part One' }),
       field('Home page section', 'section', { type: 'select', options: SECTIONS }),
-      draft.section === 'On OTT' ? field('Streaming platform', 'platform', { placeholder: 'Netflix, Prime Video, Sony LIV…' }) : draft.section === 'Older releases' ? field('Now streaming on', 'platform', { placeholder: 'Leave blank if not known' }) : null,
-      field(draft.section === 'On OTT' ? 'Streaming date' : 'Release date', 'releaseDate', { type: 'date' }),
+      draft.section === 'On OTT' ? field('Streaming platform', 'platform', { placeholder: 'Netflix, Prime Video, Sony LIV…' }) : draft.section === 'Older releases' ? field('Now streaming on', 'platform', { placeholder: 'Leave blank if not known' }) : tvEd ? field('Channel or platform', 'platform', { placeholder: 'Sony TV, SonyLIV, YouTube…' }) : null,
+      field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
+      tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
+      tvEd ? field('Last aired (year)', 'endYear', { placeholder: 'e.g. 2019', note: 'Leave blank if the show is still running.' }) : null,
       field('Date note', 'releaseNote', { placeholder: 'e.g. Reported, not confirmed' }),
       slugField()
     ]);
@@ -1454,15 +1457,15 @@ window.ReelAdmin = function (env) {
     var g2 = h('div', { class: 'grid' }, [
       field('Languages', 'languages', { placeholder: 'Hindi, English' }),
       field('Genre', 'genre', { placeholder: 'Crime thriller' }),
-      field('Runtime', 'runtime', { placeholder: '2h 18m' }),
+      field(tvEd ? 'Episode length' : 'Runtime', 'runtime', { placeholder: tvEd ? 'About 45 min' : '2h 18m' }),
       field('Certificate', 'certificate', { placeholder: 'U, UA 13+, A' }),
-      field('Director', 'director', { placeholder: 'Name' }),
-      draft.section === 'On OTT' ? null : field('Formats', 'formats', { placeholder: 'IMAX 3D · Hindi, 3D · Hindi', note: 'Comma-separated; shown as format choices in Book tickets.' }),
+      field(tvEd ? 'Creator or director' : 'Director', 'director', { placeholder: 'Name' }),
+      draft.section === 'On OTT' || tvEd ? null : field('Formats', 'formats', { placeholder: 'IMAX 3D · Hindi, 3D · Hindi', note: 'Comma-separated; shown as format choices in Book tickets.' }),
       field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers.' })
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
 
-    main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }], 'No cast or crew yet.'));
+    main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
     main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
 
     // danger zone
@@ -1487,6 +1490,7 @@ window.ReelAdmin = function (env) {
   function urlSlug(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function suggestedSlug(d) { var b = urlSlug(d.title), y = (d.releaseDate || '').slice(0, 4); return b ? (/^\d{4}$/.test(y) ? b + '-' + y : b) : ''; }
   function slugOf(m) { return urlSlug(m.data.slug) || suggestedSlug(m.data) || m.id; }
+  function pathBase(d) { return d && d.section === 'TV shows' ? '/tv/' : '/movie/'; }
   function slugTakenBy(slug, exceptId) {
     return movies.find(function (m) { return m.id !== exceptId && (slugOf(m) === slug || m.id === slug); }) || null;
   }
@@ -1496,7 +1500,7 @@ window.ReelAdmin = function (env) {
     var full = h('div', { class: 'note' }), err = h('div', { class: 'err', hidden: true });
     function show() {
       var v = urlSlug(input.value) || suggestedSlug(draft);
-      full.textContent = location.origin + '/movie/' + (v || '…') + (input.value.trim() ? '' : '  (from the title and year)');
+      full.textContent = location.origin + pathBase(draft) + (v || '…') + (input.value.trim() ? '' : '  (from the title and year)');
       var clash = v && slugTakenBy(v, currentId);
       err.hidden = !clash; err.textContent = clash ? 'Already used by ' + (clash.data.title || clash.id) + '. Pick another.' : '';
       if (input.value && input.value !== urlSlug(input.value) && !/-$/.test(input.value)) { err.hidden = false; err.textContent = 'Use lowercase letters, numbers and hyphens. It will be saved as: ' + urlSlug(input.value); }
@@ -1507,11 +1511,11 @@ window.ReelAdmin = function (env) {
     return h('div', { class: 'field wide' }, [
       h('label', { class: 'l', for: 'f_slug', text: 'Page URL' }),
       h('div', { style: 'display:flex;gap:8px;align-items:center;flex-wrap:wrap' }, [
-        h('span', { class: 'sub', style: 'white-space:nowrap', text: '/movie/' }),
+        h('span', { class: 'sub', style: 'white-space:nowrap', text: pathBase(draft) }),
         h('span', { style: 'flex:1;min-width:200px' }, [input]), reset
       ]),
       full, err,
-      (draft.slugHistory && draft.slugHistory.length) ? h('div', { class: 'note', text: 'Old addresses that still redirect here: ' + draft.slugHistory.map(function (x) { return '/movie/' + x; }).join(', ') }) : null
+      (draft.slugHistory && draft.slugHistory.length) ? h('div', { class: 'note', text: 'Old addresses that still redirect here: ' + draft.slugHistory.map(function (x) { return pathBase(draft) + x; }).join(', ') }) : null
     ]);
   }
   function save() {
@@ -1521,7 +1525,7 @@ window.ReelAdmin = function (env) {
     var isNew = !movies.some(function (m) { return m.id === currentId; });
     var slug = urlSlug(draft.slug) || suggestedSlug(draft);
     var clash = slug && slugTakenBy(slug, isNew ? null : currentId);
-    if (clash) { saving = false; setDirty(true); setStatus('The page URL /movie/' + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
+    if (clash) { saving = false; setDirty(true); setStatus('The page URL ' + pathBase(draft) + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
     if (isNew) currentId = slugify(draft.title) + '-' + Math.random().toString(36).slice(2, 6);
     var body = clone(draft); body.updatedAt = new Date().toISOString();
     body.slug = slug;
@@ -1607,7 +1611,7 @@ window.ReelAdmin = function (env) {
 <script>
 (function () {
   // ---------- constants ----------
-  var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases'];
+  var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var PAL = [['#241C3A','#E8A33A'],['#14213D','#5BA3C7'],['#3A1414','#D94A3A'],['#14283A','#F2A7A0'],['#2E1612','#E8703A'],['#16231A','#8DBF6A'],['#2A1A33','#C77FD6'],['#2E2814','#E8C547'],['#24242A','#B9B4C2'],['#183A37','#9FD8CB'],['#33141E','#F2A7A0'],['#1E2A1A','#C7843F']];
   var VERD = {
@@ -1672,15 +1676,19 @@ window.ReelAdmin = function (env) {
   // Not out yet: a future date, or listed as Coming soon. Undated titles in other sections count as released.
   function isUpcoming(m) { var d = m.data.releaseDate; return d ? d > today() : m.data.section === 'Coming soon'; }
   function isOtt(m) { return m.data.section === 'On OTT'; }
+  function isTv(m) { return m.data.section === 'TV shows'; }
+  // "2000–present", "2016–2019", or "2024"
+  function tvYears(d) { var a = (d.releaseDate || '').slice(0, 4), b = String(d.endYear || '').trim(); if (!a) return b; return b ? (b === a ? a : a + '–' + b) : a + '–present'; }
   function fmtDate(iso, withYear) { if (!iso) return 'Date TBA'; var p = iso.split('-'); return (+p[2]) + ' ' + MONTHS[+p[1] - 1] + (withYear ? ' ' + p[0] : ''); }
   function isOld(m) { return m.data.section === 'Older releases'; }
   function statusLabel(m) {
     var d = m.data, rel = released(m);
+    if (isTv(m)) return 'TV show' + (tvYears(d) ? ' · ' + tvYears(d) : '') + (d.platform ? ' · on ' + d.platform : '');
     if (isOtt(m)) return (rel ? 'Now on ' : 'On ') + (d.platform || 'OTT') + (rel ? '' : ' ' + fmtDate(d.releaseDate));
     if (isOld(m)) return 'Released ' + fmtDate(d.releaseDate, true) + (d.platform ? ' · on ' + d.platform : '');
     return rel ? 'In theatres' : 'Releases ' + fmtDate(d.releaseDate);
   }
-  function vset(m) { return isOtt(m) ? VERD.ott : VERD.theatre; }
+  function vset(m) { return isOtt(m) || isTv(m) ? VERD.ott : VERD.theatre; }
   function inList(id) { return S.mine.watchlist.indexOf(id) !== -1; }
   function following(uid) { return S.mine.following.indexOf(uid) !== -1; }
 
@@ -1775,7 +1783,7 @@ window.ReelAdmin = function (env) {
     var base = slugify(m.data.title) || m.id, y = (m.data.releaseDate || '').slice(0, 4);
     return /^\d{4}$/.test(y) ? base + '-' + y : base;
   }
-  function movieUrl(m) { return typeof m === 'string' ? '/movie/' + m : '/movie/' + movieSlug(m); }
+  function movieUrl(m) { return typeof m === 'string' ? '/movie/' + m : (isTv(m) ? '/tv/' : '/movie/') + movieSlug(m); }
   function findMovie(key) {
     if (!key) return null;
     if (S.byId[key]) return S.byId[key];
@@ -1784,7 +1792,7 @@ window.ReelAdmin = function (env) {
     for (var j = 0; j < S.movies.length; j++) if (slugify(S.movies[j].data.title) === key) return S.movies[j];
     return null;
   }
-  var BROWSE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases' };
+  var BROWSE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases', 'tv-shows': 'TV shows' };
   function legacyHashToPath(hsh) {
     if (/^t-[A-Za-z0-9-]+$/.test(hsh)) return '/movie/' + hsh.slice(2);
     if (hsh === 'list') return '/my-list';
@@ -1801,7 +1809,7 @@ window.ReelAdmin = function (env) {
     if (legacy) history.replaceState(null, '', legacy);
     var path = decodeURIComponent(location.pathname).replace(/\/+$/, '') || '/';
     var mm;
-    if ((mm = path.match(/^\/movie\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
+    if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) { S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All'; }
@@ -1905,7 +1913,7 @@ window.ReelAdmin = function (env) {
     } else {
       top = h('span', { class: 'badge' }, [h('i'), sc.pct === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
     }
-    var meta = isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
+    var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
     var on = inList(m.id);
     var kids = [
       h('div', { class: 'pw' }, [
@@ -1978,6 +1986,7 @@ window.ReelAdmin = function (env) {
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       rowSection('New on OTT', homeSection('On OTT')),
+      rowSection('TV shows', homeSection('TV shows')),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').slice().sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
@@ -2006,13 +2015,13 @@ window.ReelAdmin = function (env) {
       if (!S.play.paused && S.heroVideo) safePlay(S.heroVideo);
       return;
     }
-    var metaBits = [isOtt(m) ? 'Film · ' + (d.platform || 'OTT') : 'Film', (d.genre || '').split(/,| /)[0] ? d.genre.split(',')[0] : null, d.releaseDate ? d.releaseDate.slice(0, 4) : null, d.runtime || null];
+    var metaBits = [isTv(m) ? 'TV show' + (d.platform ? ' · ' + d.platform : '') : isOtt(m) ? 'Film · ' + (d.platform || 'OTT') : 'Film', (d.genre || '').split(/,| /)[0] ? d.genre.split(',')[0] : null, d.releaseDate ? d.releaseDate.slice(0, 4) : null, d.runtime || null];
     var meta = h('div', { class: 'meta' });
     metaBits.filter(Boolean).forEach(function (t, i) { if (i) meta.appendChild(h('i', { 'aria-hidden': 'true' })); meta.appendChild(h('span', { text: t })); });
     if (d.certificate) { meta.appendChild(h('i', { 'aria-hidden': 'true' })); meta.appendChild(h('span', { class: 'cert', text: d.certificate })); }
     var v = firstVideo(m), on = inList(m.id);
     var langs = langShort(d), rk = rankIn(m);
-    var secName = { 'In theatres': 'in Theatres', 'On OTT': 'on OTT', 'Coming soon': 'Coming soon', 'Older releases': 'of 2025–26' }[d.section] || '';
+    var secName = { 'In theatres': 'in Theatres', 'On OTT': 'on OTT', 'Coming soon': 'Coming soon', 'Older releases': 'of 2025–26', 'TV shows': 'in TV shows' }[d.section] || '';
     var chips = [];
     if (langs.length) chips.push(h('span', { class: 'hc' }, [h('span', { 'aria-hidden': 'true', text: '🗣' }), 'In ' + langs.join(', ')]));
     if (rk && rk <= 10) chips.push(h('span', { class: 'hc' }, [h('b', { text: 'TOP' }), '#' + rk + ' ' + secName]));
@@ -2090,7 +2099,7 @@ window.ReelAdmin = function (env) {
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
-    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) ? 'Where to watch' : null; // ticket booking hidden until a partner is integrated
+    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : null; // ticket booking hidden until a partner is integrated
     v.appendChild(titleHero(m, tags, actLabel));
 
     // scores
@@ -2126,7 +2135,7 @@ window.ReelAdmin = function (env) {
     var side = h('div', { class: 'cols2' }, [actionBlock(m, rel, ott), planBlock(m), factsBlock(m)]);
     v.appendChild(h('div', { class: 'cols' }, [main, side]));
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; });
-    var r = rowSection('More ' + d.section.toLowerCase().replace('on ott', 'on OTT'), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
+    var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
     if (r) v.appendChild(r);
     v.appendChild(footer());
   }
@@ -2267,6 +2276,7 @@ window.ReelAdmin = function (env) {
         return u ? h('a', { class: 'vid', href: u, target: '_blank', rel: 'noopener' }, inner) : h('div', { class: 'vid off' }, inner);
     }
   }
+  function epText(n) { n = String(n || '').trim(); return n ? n + (n === '1' ? ' episode' : ' episodes') : ''; }
   function castBlock(m) {
     var cast = m.data.cast || [];
     return h('section', { class: 'card' }, [h('h2', { text: 'Cast & crew' }),
@@ -2274,7 +2284,7 @@ window.ReelAdmin = function (env) {
         var pk = personSlug(c.name), ph = personPhotoUrl(c.name);
         var face = ph ? h('img', { src: ph, alt: '', class: 'c', style: 'object-fit:cover;background:#2E2A38' })
           : h('span', { class: 'c', style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
-        var kids = [face, h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), h('span', { class: 'note', text: c.role || '' })];
+        var kids = [face, h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), h('span', { class: 'note', text: [c.role || '', isTv(m) ? epText(c.episodes) : '', isTv(m) ? c.year || '' : ''].filter(Boolean).join(' · ') })];
         return pk ? h('a', { class: 'cp', href: personUrl(c.name), 'aria-label': c.name + (c.role ? ', ' + c.role : '') + ' — see all titles' }, kids) : h('div', {}, kids);
       })) : h('div', { class: 'note', text: 'Cast and crew not added yet.' })]);
   }
@@ -2285,9 +2295,9 @@ window.ReelAdmin = function (env) {
         h('span', { class: 'nmx' }, [h('div', { text: d.platform || 'Streaming service' }), h('div', { class: 'note', text: rel ? 'Streaming now · included with subscription' : 'Streams from ' + fmtDate(d.releaseDate, true) })])]),
       h('button', { type: 'button', class: 'btn primary', disabled: true, text: rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet' }),
       h('div', { class: 'note', text: 'Deep links go live once the platform partnership is in place.' })]);
-    if (isOld(m)) return h('section', { class: 'card', id: 'act' }, [h('h2', { text: 'Where to watch' }),
+    if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'act' }, [h('h2', { text: 'Where to watch' }),
       d.platform ? h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: d.platform.slice(0, 2).toUpperCase() }),
-        h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: 'Streaming now' })])]) : h('div', { class: 'note', text: 'No longer in theatres. Streaming details will show here once added.' }),
+        h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
       d.platform ? h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'Watch on ' + d.platform }) : null]);
     return null; // ticket booking hidden until a ticketing partner is integrated
     var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
@@ -2327,7 +2337,7 @@ window.ReelAdmin = function (env) {
     else toast(t);
   }
   function factsBlock(m) {
-    var d = m.data, rows = [[isOtt(m) ? 'Streaming from' : 'Release date', fmtDate(d.releaseDate, true) + (d.releaseNote ? ' (' + d.releaseNote.toLowerCase() + ')' : '')], ['Platform', isOtt(m) ? d.platform : ''], ['Languages', d.languages], ['Genre', d.genre], ['Runtime', d.runtime], ['Certificate', d.certificate], ['Director', d.director]];
+    var d = m.data, rows = isTv(m) ? [['First aired', d.releaseDate ? fmtDate(d.releaseDate, true) : ''], ['Years', tvYears(d)], ['Channel or platform', d.platform], ['Seasons', d.seasons], ['Languages', d.languages], ['Genre', d.genre], ['Episode length', d.runtime], ['Certificate', d.certificate], ['Created by', d.director]] : [[isOtt(m) ? 'Streaming from' : 'Release date', fmtDate(d.releaseDate, true) + (d.releaseNote ? ' (' + d.releaseNote.toLowerCase() + ')' : '')], ['Platform', isOtt(m) ? d.platform : ''], ['Languages', d.languages], ['Genre', d.genre], ['Runtime', d.runtime], ['Certificate', d.certificate], ['Director', d.director]];
     return h('section', { class: 'card facts' }, [h('h2', { text: 'Details' })].concat(rows.filter(function (r) { return r[1]; }).map(function (r) { return h('div', {}, [h('span', { text: r[0] }), h('span', { style: 'text-align:right', text: r[1] })]); })));
   }
 
@@ -2349,7 +2359,7 @@ window.ReelAdmin = function (env) {
   function creditsOf(slug) {
     var out = [];
     S.movies.forEach(function (m) {
-      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: c.role || '', crew: CREW_RE.test(c.role || '') }); });
+      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: c.role || '', crew: CREW_RE.test(c.role || ''), episodes: c.episodes || '', year: c.year || '' }); });
       if (!(m.data.cast || []).some(function (c) { return personSlug(c.name) === slug; })) {
         String(m.data.director || '').split(/,| and /).forEach(function (d) { if (d.trim() && personSlug(d) === slug) out.push({ m: m, name: d.trim(), role: 'Director', crew: true }); });
       }
@@ -2389,12 +2399,19 @@ window.ReelAdmin = function (env) {
     var photo = personPhotoUrl(name);
     // group: one entry per title, roles joined
     var byTitle = {}, order = [];
-    credits.forEach(function (c) { if (!byTitle[c.m.id]) { byTitle[c.m.id] = { m: c.m, roles: [], acting: false, crew: false }; order.push(c.m.id); } var t = byTitle[c.m.id]; if (c.role && c.role !== 'Cast' && t.roles.indexOf(c.role) === -1) t.roles.push(c.role); if (c.crew) t.crew = true; else t.acting = true; });
-    var titles = order.map(function (id) { return byTitle[id]; }).sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    credits.forEach(function (c) {
+      if (!byTitle[c.m.id]) { byTitle[c.m.id] = { m: c.m, roles: [], acting: false, crew: false, tv: isTv(c.m), eps: 0, yrs: [] }; order.push(c.m.id); }
+      var t = byTitle[c.m.id]; if (c.role && c.role !== 'Cast' && t.roles.indexOf(c.role) === -1) t.roles.push(c.role); if (c.crew) t.crew = true; else t.acting = true;
+      var n = parseInt(c.episodes, 10); if (n > 0) t.eps += n;
+      String(c.year || '').split(/[^0-9]+/).forEach(function (y) { if (/^\d{4}$/.test(y) && t.yrs.indexOf(y) === -1) t.yrs.push(y); });
+    });
+    // A TV credit dates from the person's own episode year(s), not the show's first air date.
+    function when(t) { return t.tv && t.yrs.length ? t.yrs.slice().sort().pop() : (t.m.data.releaseDate || ''); }
+    var titles = order.map(function (id) { return byTitle[id]; }).sort(function (a, b) { return when(b).localeCompare(when(a)); });
     var acting = titles.filter(function (t) { return t.acting; }), crew = titles.filter(function (t) { return t.crew; });
     var known = acting.length >= crew.length ? 'Acting' : (crew[0] && /direct/i.test(crew[0].roles.join(' ')) ? 'Directing' : 'Crew');
-    var upcoming = titles.filter(function (t) { return isUpcoming(t.m); }).length;
-    var years = titles.map(function (t) { return (t.m.data.releaseDate || '').slice(0, 4); }).filter(Boolean).sort();
+    var upcoming = titles.filter(function (t) { return !t.tv && isUpcoming(t.m); }).length;
+    var years = []; titles.forEach(function (t) { (t.tv && t.yrs.length ? t.yrs : [(t.m.data.releaseDate || '').slice(0, 4)]).forEach(function (y) { if (y) years.push(y); }); }); years.sort();
     v.appendChild(h('a', { href: 'javascript:history.back()', style: 'display:inline-block;margin:24px 40px 0;color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', on: { click: function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } else { e.preventDefault(); go('/'); } } }, text: '← Back' }));
     v.appendChild(h('section', { class: 'ph' }, [
       photo ? h('img', { class: 'pimg', src: photo, alt: name }) : h('span', { class: 'pini', style: 'background:' + PAL[hash(slug) % PAL.length][1], 'aria-hidden': 'true', text: initials(name) }),
@@ -2416,20 +2433,22 @@ window.ReelAdmin = function (env) {
         h('h2', { style: 'margin:0 0 14px;font-size:22px', text: title + ' (' + list.length + ')' }),
         h('div', { class: 'grid-posters' }, list.map(function (t) {
           var card = posterCard(t.m, t.m.data.section === 'Coming soon' ? { dateBadge: true } : null);
-          var r = title === 'Upcoming' ? t.roles : t.roles.filter(function (x) { return title === 'Acting' ? !CREW_RE.test(x) : CREW_RE.test(x); });
+          var r = title === 'Upcoming' || title === 'TV shows' ? t.roles : t.roles.filter(function (x) { return title === 'Acting' ? !CREW_RE.test(x) : CREW_RE.test(x); });
           var ch = r.filter(function (x) { return !CREW_RE.test(x); }), cr = r.filter(function (x) { return CREW_RE.test(x); });
-          var label = title === 'Acting' ? 'as ' + r.join(' · ') : title === 'Upcoming' ? (ch.length ? 'as ' + ch.join(' · ') : '') + (ch.length && cr.length ? ' · ' : '') + cr.join(' · ') : r.join(' · ');
+          var label = title === 'TV shows' ? [ch.length ? 'as ' + ch.join(' · ') : '', cr.join(' · '), t.eps ? epText(t.eps) : '', t.yrs.slice().sort().join(', ')].filter(Boolean).join(' · ') : title === 'Acting' ? 'as ' + r.join(' · ') : title === 'Upcoming' ? (ch.length ? 'as ' + ch.join(' · ') : '') + (ch.length && cr.length ? ' · ' : '') + cr.join(' · ') : r.join(' · ');
           if (label) card.appendChild(h('span', { class: 'pcrole', text: label }));
           return card;
         }))
       ]);
     }
     // Unreleased titles first, in their own section (soonest first; undated last), then released work.
-    var soon = titles.filter(function (t) { return isUpcoming(t.m); }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
-    var out = titles.filter(function (t) { return !isUpcoming(t.m); });
+    var films = titles.filter(function (t) { return !t.tv; }), tv = titles.filter(function (t) { return t.tv; });
+    var soon = films.filter(function (t) { return isUpcoming(t.m); }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
+    var out = films.filter(function (t) { return !isUpcoming(t.m); });
     v.appendChild(section('Upcoming', soon) || h('span'));
     acting = out.filter(function (t) { return t.acting; }); crew = out.filter(function (t) { return t.crew; });
     v.appendChild(section('Acting', acting) || h('span'));
+    v.appendChild(section('TV shows', tv) || h('span'));
     v.appendChild(section(acting.length ? 'Behind the camera' : 'Credits', crew) || h('span'));
     v.appendChild(h('div', { style: 'height:40px' }));
   }
@@ -2440,7 +2459,7 @@ window.ReelAdmin = function (env) {
     var B = S.browse;
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'Browse' }));
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Every film and series on Reelscore, from 2025–26 releases to what’s coming next.' }));
-    var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases'];
+    var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Status', style: 'margin-bottom:14px' }, statuses.map(function (st) {
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(B.status === st), text: st, on: { click: function () { B.status = st; render(true); } } });
     })));
