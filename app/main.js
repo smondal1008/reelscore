@@ -398,7 +398,7 @@
           on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } })
       ]),
       h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
-      h('span', { class: 'mt', text: meta })
+      h('span', { class: 'mt', text: meta, title: meta })
     ];
     if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
       style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
