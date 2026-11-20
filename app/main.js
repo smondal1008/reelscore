@@ -459,6 +459,7 @@
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
+      songSection(),
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
       rowSection('TV shows', homeSection('TV shows')),
@@ -522,8 +523,8 @@
     if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: d.title + ' · ' + x.title,
       allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
-    var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close trailer', text: '×', on: { click: closeTrailerOverlay } });
-    var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' ' + x.kind.toLowerCase() }, [
+    var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: closeTrailerOverlay } });
+    var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [h('div', { class: 'tov-t' }, [h('b', { text: d.title }), h('span', { class: 'note', text: ' · ' + x.title })]), close]),
       h('div', { class: 'tov-v' }, [media])
     ]);
@@ -569,6 +570,34 @@
           h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: d.title }),
           h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
+        ]);
+      }))
+    ]);
+  }
+
+  // ---------- New songs row: songs from recent and upcoming titles, played in the full-screen overlay ----------
+  function songSection() {
+    var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10), picks = [];
+    S.movies.forEach(function (m) {
+      if (!inNavLang(m) || isTv(m) || (m.data.releaseDate || '') < cut) return;
+      vidItems(m).filter(function (x) { return x.cat === 'songs' && (x.yt || x.clip); }).slice(0, 3).forEach(function (x) { picks.push({ m: m, x: x }); });
+    });
+    picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    picks = picks.slice(0, 24);
+    if (!picks.length) return null;
+    return h('section', { class: 'sect', 'aria-label': 'New songs' }, [
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New songs' })]),
+      h('div', { class: 'rowx' }, picks.map(function (p) {
+        var m = p.m, d = m.data;
+        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault(); e.stopPropagation();
+          openTrailerOverlay(m, p.x, e.currentTarget);
+        } } }, [
+          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: p.x.title }),
+          h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') })
         ]);
       }))
     ]);
