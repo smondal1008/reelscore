@@ -515,6 +515,34 @@
     v.appendChild(footer());
   }
 
+  // Full-screen trailer player over the current page; Esc, the close button or a click outside the video closes it.
+  function openTrailerOverlay(m, x, opener) {
+    closeTrailerOverlay();
+    var d = m.data, media;
+    if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: d.title + ' · ' + x.title,
+      allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+    else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
+    var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close trailer', text: '×', on: { click: closeTrailerOverlay } });
+    var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' ' + x.kind.toLowerCase() }, [
+      h('div', { class: 'tov-bar' }, [h('div', { class: 'tov-t' }, [h('b', { text: d.title }), h('span', { class: 'note', text: ' · ' + x.title })]), close]),
+      h('div', { class: 'tov-v' }, [media])
+    ]);
+    box.addEventListener('click', function (e) { if (e.target === box) closeTrailerOverlay(); });
+    S.tov = { node: box, opener: opener, key: function (e) { if (e.key === 'Escape') closeTrailerOverlay(); } };
+    document.addEventListener('keydown', S.tov.key);
+    document.body.appendChild(box); document.body.classList.add('tov-open');
+    close.focus();
+  }
+  function closeTrailerOverlay() {
+    if (!S.tov) return;
+    var t = S.tov; S.tov = null;
+    document.removeEventListener('keydown', t.key);
+    if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+    if (t.node.parentNode) t.node.parentNode.removeChild(t.node);
+    document.body.classList.remove('tov-open');
+    if (t.opener && t.opener.isConnected) t.opener.focus({ preventScroll: true });
+  }
+
   // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
   function trailerSection() {
     var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
@@ -533,12 +561,10 @@
       h('div', { class: 'rowx' }, picks.map(function (p) {
         var m = p.m, d = m.data, rel = released(m);
         var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
-        return h('a', { class: 'tcard', href: movieUrl(m) + '#videos', 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
+        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
           if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
           e.preventDefault(); e.stopPropagation();
-          S.vsel = S.vsel || {}; S.vsel[m.id] = p.i; S.vplay = { mid: m.id, i: p.i }; S.vKeep = null;
-          go(movieUrl(m));
-          setTimeout(function () { var t = $('videos'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 250);
+          openTrailerOverlay(m, p.x, e.currentTarget);
         } } }, [
           h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: d.title }),
