@@ -51,6 +51,7 @@ window.__importFilms2 = async function (url, dry, source) {
     while (ids.has(id)) id = it.slug.slice(0, 27).replace(/-+$/, '') + '-' + (n++);
     ids.add(id);
     const doc = { title: it.title, subtitle: '', slug: it.slug, slugHistory: [], section: 'Older releases', platform: '', releaseDate: it.releaseDate, releaseNote: '', languages: it.languages, genre: it.genre || '', runtime: '', certificate: '', director: it.director || '', formats: '', synopsis: '', cast, videos: [], posterUrl: '', posterId: '', bannerUrl: '', bannerId: '', trailerFileUrl: '', trailerFileId: '', order: ++maxOrder, source: source || 'Filmography import, Nov 2026', updatedAt: now };
+    if (it.extra && typeof it.extra === 'object') Object.assign(doc, it.extra);
     res.created++; res.createdTitles.push(it.title + ' ' + it.releaseDate);
     (byLoose[loose(it.title)] = byLoose[loose(it.title)] || []).push({ m: { id, data: doc }, y: String(y) });
     if (!dry) writes.push(db.doc('movies/' + id).set(doc));
