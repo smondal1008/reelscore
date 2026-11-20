@@ -23,6 +23,10 @@
       "destination": "/"
     },
     {
+      "source": "/people",
+      "destination": "/"
+    },
+    {
       "source": "/tv/:slug",
       "destination": "/"
     },
