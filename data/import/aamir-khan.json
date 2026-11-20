@@ -1312,33 +1312,5 @@
 "role": "Jimmy Mario (special appearance)"
 }
 ]
-},
-{
-"title": "Ek Din",
-"slug": "ek-din-2026",
-"releaseDate": "2026",
-"languages": "Hindi",
-"genre": "Romantic drama",
-"director": "",
-"cast": [
-{
-"name": "Aamir Khan",
-"role": "Producer"
-}
-]
-},
-{
-"title": "Lahore 1947",
-"slug": "lahore-1947-2026",
-"releaseDate": "2026",
-"languages": "Hindi",
-"genre": "Period drama",
-"director": "Rajkumar Santoshi",
-"cast": [
-{
-"name": "Aamir Khan",
-"role": "Producer"
-}
-]
 }
 ]
