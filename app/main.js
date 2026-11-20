@@ -595,13 +595,47 @@
     v.appendChild(h('div', { class: 'scores', style: 'margin-top:8px' }, [overall, friends]));
 
     // columns
-    var main = h('div', { class: 'colm' }, [reviewsBlock(m, rel), videosBlock(m), castBlock(m)]);
-    var side = h('div', { class: 'cols2' }, [actionBlock(m, rel, ott), planBlock(m), factsBlock(m)]);
-    v.appendChild(h('div', { class: 'cols' }, [main, side]));
+    // sections, in the order of the tabs above them
+    var act = actionBlock(m, rel, ott);
+    var main = h('div', { class: 'colm' }, [videosBlock(m), act, castBlock(m), reviewsBlock(m, rel)]);
+    var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
+    if (r) r.id = 'more';
+    var nVids = (d.videos || []).length + (safeUrl(d.trailerFileUrl) ? 1 : 0), nRev = 0;
+    Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
+    var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
+    v.appendChild(pageTabs([
+      ['videos', 'Trailers & songs', nVids],
+      act ? ['watch', 'Where to watch', nWatch] : null,
+      ['cast', 'Cast & crew', 0],
+      ['reviews', 'Reviews', nRev],
+      r ? ['more', 'More like this', 0] : null
+    ].filter(Boolean)));
+    v.appendChild(h('div', { class: 'cols' }, [main, side]));
     if (r) v.appendChild(r);
     v.appendChild(footer());
+  }
+
+  // Sticky section tabs on the title page; the tab for the section in view is marked current.
+  function pageTabs(tabs) {
+    var links = tabs.map(function (t) {
+      return h('a', { class: 'ptab', href: '#' + t[0], on: { click: function (e) {
+        var el = $(t[0]); if (!el) return; e.preventDefault(); el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        if (history.replaceState) history.replaceState(history.state, '', location.pathname + location.search + '#' + t[0]);
+      } } }, [t[1], t[2] ? h('span', { class: 'n', text: ' ' + t[2] }) : null]);
+    });
+    var nav = h('nav', { class: 'ptabs', 'aria-label': 'On this page' }, links);
+    if (S.tabSpy) window.removeEventListener('scroll', S.tabSpy);
+    S.tabSpy = function () {
+      if (!nav.isConnected) { window.removeEventListener('scroll', S.tabSpy); S.tabSpy = null; return; }
+      var cur = 0, off = nav.getBoundingClientRect().height + 24;
+      tabs.forEach(function (t, i) { var el = $(t[0]); if (el && el.getBoundingClientRect().top - off <= 0) cur = i; });
+      links.forEach(function (a, i) { if (i === cur) a.setAttribute('aria-current', 'true'); else a.removeAttribute('aria-current'); });
+    };
+    window.addEventListener('scroll', S.tabSpy, { passive: true });
+    setTimeout(S.tabSpy, 0);
+    return nav;
   }
 
   function titleHero(m, tags, actLabel) {
@@ -640,7 +674,7 @@
           h('div', { class: 'acts2' }, [
             playBtn,
             playing ? h('button', { type: 'button', class: 'roundadd', id: 'tMute', 'aria-label': S.tplay.muted ? 'Unmute' : 'Mute', text: S.tplay.muted ? '🔇' : '🔊', on: { click: toggleTitleMute } }) : null,
-            actLabel === null ? null : h('a', { class: 'btn lg primary', href: '#act-' + m.id, on: { click: function (e) { e.preventDefault(); var t = $('act'); if (t) t.scrollIntoView({ behavior: 'smooth' }); } } }, [actLabel]),
+            actLabel === null ? null : h('a', { class: 'btn lg primary', href: '#watch', on: { click: function (e) { e.preventDefault(); var t = $('watch'); if (t) t.scrollIntoView({ behavior: 'smooth' }); } } }, [actLabel]),
             listBtn(m),
             playing ? null : h('button', { type: 'button', class: 'btn lg glass', on: { click: function () { copyText(shareText(m), 'Copied a link-ready message'); } } }, ['Share'])
           ])
@@ -669,7 +703,7 @@
     if (b) { b.textContent = vd.muted ? '🔇' : '🔊'; b.setAttribute('aria-label', vd.muted ? 'Unmute' : 'Mute'); }
   }
   function reviewsBlock(m, rel) {
-    var box = h('section', { class: 'card', 'aria-labelledby': 'h-rv' }, [h('h2', { id: 'h-rv', text: 'Reviews' })]);
+    var box = h('section', { class: 'card', id: 'reviews', 'aria-labelledby': 'h-rv' }, [h('h2', { id: 'h-rv', text: 'Reviews' })]);
     var myR = S.uid && S.reviews[S.uid] && (S.reviews[S.uid].items || {})[m.id];
     if (rel) {
       var ta = h('textarea', { class: 'in', id: 'rvText', rows: 3, placeholder: myVerdict(m.id) ? 'What worked, what didn’t? Tag spoilers below.' : 'Pick a verdict above first, then tell people why.' });
@@ -729,8 +763,8 @@
       h('span', { class: 'pl', 'aria-hidden': 'true', style: 'background:var(--accent)' }, [h('span', { style: 'color:#0B0A0F;font-size:14px', text: '▶' })]),
       h('span', {}, [h('div', { style: 'font-weight:600;font-size:14px', text: 'Trailer' }), h('div', { class: 'note', text: 'Plays here' })])
     ]) : null;
-    if (clipCard) return h('section', { class: 'card' }, [h('h2', { text: 'Trailers & songs' }), h('div', { class: 'vids' }, [clipCard].concat(vids.map(vidCard)))]);
-    return h('section', { class: 'card' }, [h('h2', { text: 'Trailers & songs' }),
+    if (clipCard) return h('section', { class: 'card', id: 'videos' }, [h('h2', { text: 'Trailers & songs' }), h('div', { class: 'vids' }, [clipCard].concat(vids.map(vidCard)))]);
+    return h('section', { class: 'card', id: 'videos' }, [h('h2', { text: 'Trailers & songs' }),
       vids.length ? h('div', { class: 'vids' }, vids.map(vidCard)) : h('div', { class: 'note', text: 'No trailers or songs yet.' })]);
   }
   function vidCard(x) {
@@ -743,7 +777,7 @@
   function epText(n) { n = String(n || '').trim(); return n ? n + (n === '1' ? ' episode' : ' episodes') : ''; }
   function castBlock(m) {
     var cast = m.data.cast || [];
-    return h('section', { class: 'card' }, [h('h2', { text: 'Cast & crew' }),
+    return h('section', { class: 'card', id: 'cast' }, [h('h2', { text: 'Cast & crew' }),
       cast.length ? h('div', { class: 'castg' }, cast.map(function (c, i) {
         var pk = personSlug(c.name), ph = personPhotoUrl(c.name);
         var face = ph ? h('img', { src: ph, alt: '', class: 'c', style: 'object-fit:cover;background:#2E2A38' })
@@ -754,18 +788,18 @@
   }
   function actionBlock(m, rel, ott) {
     var d = m.data;
-    if (ott) return h('section', { class: 'card', id: 'act' }, [h('h2', { text: 'Where to watch' }),
+    if (ott) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
       h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: (d.platform || 'OTT').slice(0, 2).toUpperCase() }),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform || 'Streaming service' }), h('div', { class: 'note', text: rel ? 'Streaming now · included with subscription' : 'Streams from ' + fmtDate(d.releaseDate, true) })])]),
       h('button', { type: 'button', class: 'btn primary', disabled: true, text: rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet' }),
       h('div', { class: 'note', text: 'Deep links go live once the platform partnership is in place.' })]);
-    if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'act' }, [h('h2', { text: 'Where to watch' }),
+    if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
       d.platform ? h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: d.platform.slice(0, 2).toUpperCase() }),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
       d.platform ? h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'Watch on ' + d.platform }) : null]);
     return null; // ticket booking hidden until a ticketing partner is integrated
     var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    return h('section', { class: 'card', id: 'act' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
+    return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'city', text: 'City' }), h('select', { class: 'in', id: 'city' }, ['Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune'].map(function (c) { return h('option', { text: c }); }))]),
       fm.length ? h('div', { class: 'chips' }, fm.map(function (f, i) { return h('span', { class: 'chip', style: 'display:inline-flex;align-items:center;cursor:default', text: f }); })) : null,
       h('div', { class: 'note', text: 'Showtimes and seats come from the ticketing partner once it’s connected.' }),
