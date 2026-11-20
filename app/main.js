@@ -459,9 +459,9 @@
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       genreSection(),
-      yearSection(),
       rowSection('New on OTT', homeSection('On OTT')),
       rowSection('TV shows', homeSection('TV shows')),
+      yearSection(),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
