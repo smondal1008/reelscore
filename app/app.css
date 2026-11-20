@@ -245,7 +245,6 @@
   .sect-h h2 { margin: 0; font-size: 24px; }
   .sect-h .sub a { color: var(--muted); }
   .rowx { display: flex; gap: 18px; overflow-x: auto; padding: 0 40px 10px; scroll-padding-inline: 40px; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
-  .rowx::after { content: ''; flex: 0 0 22px; }
   .rowx > * { scroll-snap-align: start; }
   .gnav, .ptabs { scroll-padding-inline: 40px; }
   .pc { flex: 0 0 auto; width: 200px; display: flex; flex-direction: column; gap: 8px; scroll-snap-align: start; }
@@ -417,7 +416,6 @@
   @media (max-width: 760px) {
     .nav, .sect-h, .rowx, .scores, .cols, .ptabs, .wrapx, footer.ft { padding-left: 16px; padding-right: 16px; }
     .rowx, .gnav, .ptabs { scroll-padding-inline: 16px; }
-    .rowx::after { flex-basis: 0; }
     .hero { margin: 12px 16px 0; min-height: 460px; }
     .hero .body { padding: 28px 22px 30px; }
     .arrow { display: none; }
