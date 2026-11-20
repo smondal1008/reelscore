@@ -28,6 +28,7 @@ window.__importFilms2 = async function (url, dry, source) {
       if (!dry) writes.push(db.doc('movies/' + m.id).set(body, { merge: true }));
       m.data.cast = body.cast; continue;
     }
+    if (it.mergeOnly) { (res.skipped = res.skipped || []).push(it.title + ' ' + it.releaseDate); continue; }
     let id = it.slug.slice(0, 30).replace(/-+$/, ''), n = 2;
     while (ids.has(id)) id = it.slug.slice(0, 27).replace(/-+$/, '') + '-' + (n++);
     ids.add(id);
