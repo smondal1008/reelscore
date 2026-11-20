@@ -1634,7 +1634,7 @@ window.ReelAdmin = function (env) {
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
     featured: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
-    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new' }, ppl: { q: '', role: 'All', lang: '', sort: 'titles', n: 60 }, loaded: false, pending: false, adminStarted: false, planPick: {}
+    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new' }, ppl: { q: '', role: 'All', lang: '', sort: 'titles', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
   try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
   function inNavLang(m) { return !S.navLang || langsOf(m.data).indexOf(S.navLang) !== -1; }
@@ -1821,7 +1821,7 @@ window.ReelAdmin = function (env) {
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
-    else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.n = 60; }
+    else if (path === '/people') { S.route = 'people'; S.param = null; }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) { S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All'; }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
@@ -2493,12 +2493,12 @@ window.ReelAdmin = function (env) {
     var langs = {}; all.forEach(function (p) { Object.keys(p.langs).forEach(function (l) { langs[l] = 1; }); });
     if (P.lang && !langs[P.lang]) P.lang = '';
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Role', style: 'margin-bottom:14px' }, ['All', 'Acting', 'Behind the camera'].map(function (r) {
-      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(P.role === r), text: r, on: { click: function () { P.role = r; P.n = 60; render(true); } } });
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(P.role === r), text: r, on: { click: function () { P.role = r; P.page = 1; render(true); } } });
     })));
     var q = h('input', { id: 'pplQ', class: 'in', type: 'search', placeholder: 'Search by name', autocomplete: 'off' }); q.value = P.q;
     function sel(id, label, val, opts, onc) {
       var e = h('select', { class: 'in', id: id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === val }); }));
-      e.addEventListener('change', function () { onc(e.value); P.n = 60; e.blur(); render(true); });
+      e.addEventListener('change', function () { onc(e.value); P.page = 1; e.blur(); render(true); });
       return h('div', { class: 'field', style: 'min-width:160px;flex:1 1 160px' }, [h('label', { class: 'l', for: id, text: label }), e]);
     }
     w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px' }, [
@@ -2506,8 +2506,8 @@ window.ReelAdmin = function (env) {
       sel('pplLang', 'Works in', P.lang, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })), function (x) { P.lang = x; }),
       sel('pplSort', 'Sort by', P.sort, [['titles', 'Most titles'], ['recent', 'Most recent work'], ['az', 'A–Z']], function (x) { P.sort = x; })
     ]));
-    var count = h('span', { class: 'sub' }), grid = h('div', { class: 'pgrid' }), more = h('div', { style: 'margin-top:26px;text-align:center' });
-    w.appendChild(h('div', { style: 'margin-bottom:16px' }, [count])); w.appendChild(grid); w.appendChild(more);
+    var count = h('span', { class: 'sub' }), top = h('div', { style: 'margin-bottom:16px' }, [count]), grid = h('div', { class: 'pgrid' }), more = h('div', { style: 'margin-top:26px' });
+    w.appendChild(top); w.appendChild(grid); w.appendChild(more);
     // Redraw just the results, so typing in the search box keeps focus.
     function fill() {
       var needle = P.q.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
@@ -2523,10 +2523,13 @@ window.ReelAdmin = function (env) {
         if (P.sort === 'recent') return b.last.localeCompare(a.last) || b.n - a.n || a.name.localeCompare(b.name);
         return b.n - a.n || a.name.localeCompare(b.name);
       });
-      count.textContent = list.length + (list.length === 1 ? ' person' : ' people');
+      var PER = 60, pages = Math.max(1, Math.ceil(list.length / PER));
+      if (P.page > pages) P.page = pages; if (P.page < 1) P.page = 1;
+      var from = (P.page - 1) * PER;
+      count.textContent = list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' people' : list.length + (list.length === 1 ? ' person' : ' people');
       grid.innerHTML = ''; more.innerHTML = '';
       if (!list.length) { grid.appendChild(h('div', { class: 'empty', style: 'grid-column:1/-1', text: 'No one matches. Try another name or clear the filters.' })); return; }
-      list.slice(0, P.n).forEach(function (p) {
+      list.slice(from, from + PER).forEach(function (p) {
         var ph = personPhotoUrl(p.name);
         var role = p.acting && p.crew ? 'Acting · Crew' : p.acting ? 'Acting' : 'Behind the camera';
         grid.appendChild(h('a', { class: 'pcard', href: personUrl(p.name), 'aria-label': p.name + ', ' + p.n + (p.n === 1 ? ' title' : ' titles') }, [
@@ -2535,9 +2538,23 @@ window.ReelAdmin = function (env) {
           h('span', { class: 'pm', text: p.n + (p.n === 1 ? ' title' : ' titles') + ' · ' + role })
         ]));
       });
-      if (list.length > P.n) more.appendChild(h('button', { type: 'button', class: 'btn', text: 'Show more (' + (list.length - P.n) + ' left)', on: { click: function () { P.n += 60; fill(); } } }));
+      if (pages > 1) {
+        var pager = h('nav', { class: 'pager', 'aria-label': 'People pages' });
+        var pbtn = function (n, label, dis) {
+          return h('button', { type: 'button', class: 'chip', text: label || String(n), disabled: dis, 'aria-current': n === P.page && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n,
+            on: { click: function () { P.page = n; fill(); top.scrollIntoView({ block: 'start' }); window.scrollBy(0, -90); } } });
+        };
+        pager.appendChild(pbtn(P.page - 1, '← Prev', P.page === 1));
+        var want = {}; [1, 2, P.page - 1, P.page, P.page + 1, pages - 1, pages].forEach(function (n) { if (n >= 1 && n <= pages) want[n] = 1; });
+        var last = 0; Object.keys(want).map(Number).sort(function (a, b) { return a - b; }).forEach(function (n) {
+          if (n - last > 1) pager.appendChild(h('span', { class: 'gap', text: '…' }));
+          pager.appendChild(pbtn(n)); last = n;
+        });
+        pager.appendChild(pbtn(P.page + 1, 'Next →', P.page === pages));
+        more.appendChild(pager);
+      }
     }
-    q.addEventListener('input', function () { P.q = q.value; P.n = 60; fill(); });
+    q.addEventListener('input', function () { P.q = q.value; P.page = 1; fill(); });
     fill();
   }
 
