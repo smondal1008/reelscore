@@ -25,7 +25,7 @@ const SITE = (process.env.SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'https://reelscore-xi.vercel.app')).replace(/\/+$/, '');
 const MIN_VERDICTS = Math.max(1, parseInt(process.env.SEO_MIN_VERDICTS, 10) || 10);
 const MIN_CREDITS = Math.max(1, parseInt(process.env.SEO_MIN_CREDITS, 10) || 2);
-const SKIP = new Set(['dist', 'scripts', 'node_modules', 'README.md', 'package.json', 'package-lock.json', 'vercel.json', 'firestore.rules']);
+const SKIP = new Set(['dist', 'scripts', 'node_modules', 'README.md', 'package.json', 'package-lock.json', 'vercel.json', 'firestore.rules', 'content']);
 
 // ---------- helpers shared with the app (keep in step with app/main.js) ----------
 const slugify = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
@@ -216,6 +216,19 @@ async function main() {
   const t0 = Date.now();
   const data = await loadData();
   console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${data.source})`);
+
+  // Editorial synopses from content/synopses.json fill titles whose database synopsis is empty.
+  // _synFile marks file-sourced text, so a later file edit still applies but an admin edit always wins.
+  try {
+    const syn = JSON.parse(fs.readFileSync(path.join(ROOT, 'content', 'synopses.json'), 'utf8'));
+    let n = 0;
+    for (const m of data.movies) {
+      const s = syn[m.id];
+      if (!s || m.id.startsWith('_') || typeof s !== 'string') continue;
+      if (!m.data.synopsis || m.data._synFile) { m.data = { ...m.data, synopsis: s, _synFile: true }; n++; }
+    }
+    console.log(`[seo] synopses applied from content/synopses.json: ${n}`);
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
 
   fs.rmSync(OUT, { recursive: true, force: true });
   copyDir(ROOT, OUT);
