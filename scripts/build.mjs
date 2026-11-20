@@ -455,6 +455,15 @@ async function main() {
   const block = (h2, list, more) => list.length ? '<h2>' + h2 + '</h2><ul>' + list.join('') + '</ul>' + (more ? '<p><a href="' + more[0] + '">' + more[1] + '</a></p>' : '') : '';
   const writeHub = (rel, opts) => { write(rel, page(shell, { ogType: 'website', image: null, ...opts })); };
 
+  // Genres (pages written below)
+  const GENRE_RULES = [['Action', /action|spy|superhero|heist/], ['Comedy', /comed|rom-com/], ['Drama', /drama/], ['Thriller', /thriller|mystery|crime/], ['Horror', /horror/],
+    ['Romance', /roman|rom-com/], ['Family', /family/], ['Animated', /animat/], ['Biopic', /biograph|biopic/], ['Mythological', /myth|epic/], ['War', /war/], ['Sci-fi', /science|sci-fi/]];
+  const genreSlug = g => g.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  const byGenre = {}; GENRE_RULES.forEach(([g]) => { byGenre[g] = []; });
+  movies.forEach(m => { const t = String(m.data.genre || '').toLowerCase(); GENRE_RULES.forEach(([g, re]) => { if (re.test(t)) byGenre[g].push(m); }); });
+  const genreList = GENRE_RULES.map(x => x[0]).filter(g => byGenre[g].length);
+  const genreLinks = () => genreList.map(g => '<li><a href="/genre/' + genreSlug(g) + '">' + esc(g) + '</a> <span class="note">' + byGenre[g].length + '</span></li>').join('');
+
   // Home
   const released = m => isTv(m.data) || !(m.data.releaseDate > today);
   let homeBody = '<h1>Verdicts on Indian movies and series</h1><p>Reelscore tracks ' + movies.length + ' Bollywood and regional Indian films and shows. ' +
@@ -466,6 +475,7 @@ async function main() {
   homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);
   homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
     langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
+  homeBody += '<h2>Genres</h2><ul>' + genreLinks() + '</ul>';
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
     canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
   write('index.html', homeHtml);
@@ -473,6 +483,7 @@ async function main() {
   // Browse: all sections, then one page per section listing every title in it
   let browseBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Browse</nav><h1>Browse Indian movies and series</h1><p>' + movies.length + ' titles in ' + langList.length + '+ languages.</p>';
   HUBS.forEach(h => { browseBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
+  browseBody += '<h2>By genre</h2><ul>' + genreLinks() + '</ul>';
   browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
   writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', ogPath: '/browse', route: 'browse', body: browseBody });
   for (const [slug, name, title, desc] of HUBS) {
@@ -482,6 +493,18 @@ async function main() {
       '<h2>Other sections</h2><ul>' + HUBS.filter(x => x[0] !== slug).map(x => '<li><a href="/browse/' + x[0] + '">' + x[1] + '</a></li>').join('') + '</ul>';
     writeHub('browse/' + slug + '.html', { title, description: desc, ogPath: '/browse/' + slug, route: 'browse', body });
     sitemap.push({ loc: '/browse/' + slug, pri: '0.7' });
+  }
+
+  // Genre landing pages: /genre/<slug>. Genres and matching rules are the same as app/main.js GENRES / genreTags.
+  for (const g of genreList) {
+    const list = byGenre[g].slice().sort(newest), lc = g.toLowerCase(), slug = genreSlug(g);
+    const desc = 'Indian ' + lc + ' movies and series: ' + list.length + ' Bollywood and regional titles in theatres, coming soon and on OTT, with verdicts on whether each is worth watching.';
+    let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(g) + '</nav><h1>Indian ' + esc(lc) + ' movies and series</h1><p>' + esc(desc) + '</p>';
+    HUBS.forEach(hb => { const inSec = list.filter(m => sectionOf(m) === hb[1]); if (hb[1] === 'Coming soon') inSec.sort(soonest); body += block(esc(g) + ' · ' + hb[1].toLowerCase().replace('on ott', 'on OTT').replace('tv shows', 'TV shows') + ' <span class="note">' + inSec.length + '</span>', inSec.map(titleLi)); });
+    body += '<h2>Other genres</h2><ul>' + genreList.filter(x => x !== g).map(x => '<li><a href="/genre/' + genreSlug(x) + '">' + esc(x) + '</a> <span class="note">' + byGenre[x].length + '</span></li>').join('') + '</ul>';
+    writeHub('genre/' + slug + '.html', { title: 'Indian ' + g + ' Movies & Series | Reelscore', description: clip(desc, 158), canonical: '/genre/' + slug, ogPath: '/genre/' + slug, route: 'genre', body,
+      jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'Browse', item: SITE + '/browse' }, { '@type': 'ListItem', position: 3, name: g, item: SITE + '/genre/' + slug }] }] });
+    sitemap.push({ loc: '/genre/' + slug, pri: '0.7' });
   }
 
   // People

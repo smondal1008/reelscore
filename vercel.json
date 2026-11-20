@@ -25,6 +25,10 @@
       "destination": "/"
     },
     {
+      "source": "/genre/:slug",
+      "destination": "/"
+    },
+    {
       "source": "/people",
       "destination": "/"
     },

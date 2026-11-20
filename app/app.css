@@ -167,7 +167,7 @@
   .results a:hover, .results a:focus { background: var(--panel2); outline: none; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: var(--panel2); }
   .view { display: none; }
-  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-person #view-person, body.r-people #view-people, body.r-admin #view-admin { display: block; }
+  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-admin #view-admin { display: block; }
   body:not(.r-admin) #savebar { display: none !important; }
   .nav { background: linear-gradient(to bottom, #1a0f10, var(--bg)); border-bottom: 0; padding-top: 18px; padding-bottom: 18px; }
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
@@ -312,6 +312,16 @@
   .gtile .gn { position: relative; z-index: 1; font-size: 24px; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
   .gtile .gc { position: relative; z-index: 1; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); }
   @media (max-width: 760px) { .gtile { width: 200px; } .gtile .gn { font-size: 20px; } }
+  .ghero { position: relative; overflow: hidden; margin: 8px 40px 0; padding: 28px 32px 34px; border-radius: 22px; color: #fff; background: radial-gradient(120% 90% at 0% 0%, rgba(0,0,0,.25), transparent 55%), radial-gradient(90% 120% at 100% 100%, rgba(255,255,255,.14), transparent 60%), linear-gradient(135deg, var(--g1), var(--g2)); }
+  .ghero::before { content: ''; position: absolute; width: 140%; height: 140%; left: -20%; top: 55%; border-radius: 50%; background: rgba(255,255,255,.07); pointer-events: none; }
+  .ghero > * { position: relative; }
+  .gcrumbs { font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); }
+  .gcrumbs a { color: #fff; text-decoration: none; }
+  .ghero h1 { margin: 14px 0 8px; font-size: clamp(48px, 7vw, 96px); line-height: .95; }
+  .ghero p { margin: 0; max-width: 680px; font-size: 16px; line-height: 1.55; color: rgba(255,255,255,.92); }
+  .gnav { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 16px 40px 4px; }
+  .gnav .chip { flex: 0 0 auto; display: inline-flex; align-items: center; text-decoration: none; color: var(--text); }
+  @media (max-width: 760px) { .ghero { margin: 8px 16px 0; padding: 22px 20px 26px; } .gnav { padding-left: 16px; padding-right: 16px; } }
   .thx { margin: 28px 40px 0; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: #07060A; display: flex; flex-direction: column; gap: 18px; }
   .thx-h { display: flex; align-items: center; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
   .thx-h h2 { margin: 0; font-size: 24px; }

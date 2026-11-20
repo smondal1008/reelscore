@@ -14,7 +14,7 @@
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
     featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
-    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
+    browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', sort: 'new', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
   try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
   function inNavLang(m) { return !S.navLang || langsOf(m.data).indexOf(S.navLang) !== -1; }
@@ -259,6 +259,12 @@
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
+    else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
+      S.route = 'genre'; S.param = mm[1].toLowerCase();
+      var gq = new URLSearchParams(location.search);
+      if (S.gen.genre !== S.param) S.gen.sort = 'new';
+      S.gen.genre = S.param; S.gen.lang = gq.get('lang') || ''; S.gen.page = qPage();
+    }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) {
       S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All';
       var qs = new URLSearchParams(location.search);
@@ -271,12 +277,13 @@
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
     if (S.route === 'browse') document.title = BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All;
     else if (S.route === 'people') document.title = PEOPLE_TITLE;
+    else if (S.route === 'genre') document.title = genreTitle(genreBySlug(S.param));
     else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.lastPath = location.pathname;
     if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
-    else if (S.route === 'browse' || S.route === 'people') setCanonical(listCanonical());
+    else if (S.route === 'browse' || S.route === 'people' || S.route === 'genre') setCanonical(listCanonical());
     else if (S.route !== 'title' && S.route !== 'person') setCanonical(location.pathname);
     S.rtab = 'all';
     render(true);
@@ -345,6 +352,7 @@
     else if (S.route === 'browse') drawBrowse();
     else if (S.route === 'person') drawPerson();
     else if (S.route === 'people') drawPeople();
+    else if (S.route === 'genre') drawGenre();
     if (Object.keys(keep).length) {
       document.querySelectorAll('.view .rowx').forEach(function (r) {
         var s = r.closest('section'), k = s && s.getAttribute('aria-label');
@@ -452,6 +460,75 @@
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
   }
+  // ---------- genre landing pages: /genre/<slug> ----------
+  function genreSlug(g) { return String(g || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''); }
+  function genreBySlug(sl) { sl = String(sl || '').toLowerCase(); for (var i = 0; i < GENRES.length; i++) if (genreSlug(GENRES[i]) === sl) return GENRES[i]; return ''; }
+  function genreUrl(g) { return '/genre/' + genreSlug(g); }
+  // Same as the pre-rendered genre pages (scripts/build.mjs GENRE_PAGES).
+  function genreTitle(g) { return 'Indian ' + g + ' Movies & Series | Reelscore'; }
+  function genreHref(G, page) {
+    var q = []; if (G.lang) q.push('lang=' + encodeURIComponent(G.lang)); if (page > 1) q.push('page=' + page);
+    return '/genre/' + G.genre + (q.length ? '?' + q.join('&') : '');
+  }
+  function drawGenre() {
+    var v = $('view-genre');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    v.innerHTML = '';
+    var G = S.gen, g = genreBySlug(G.genre), c = GENRE_COL[g] || ['#2B2F3D', '#4A5068'];
+    var all = S.movies.filter(function (m) { return inNavLang(m) && genreTags(m.data).indexOf(g) !== -1; });
+    v.appendChild(h('section', { class: 'ghero', style: '--g1:' + c[0] + ';--g2:' + c[1] }, [
+      h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › ', h('a', { href: '/browse', text: 'Browse' }), ' › ', g]),
+      h('h1', { class: 'display', text: g }),
+      h('p', { text: S.loaded ? all.length.toLocaleString('en-IN') + ' ' + (S.navLang ? S.navLang + ' ' : '') + g.toLowerCase() + ' movies and series on Reelscore, with verdicts on whether each is worth the theatre, OTT or a skip.' : 'Loading…' })
+    ]));
+    v.appendChild(h('nav', { class: 'gnav', 'aria-label': 'Other genres' }, GENRES.map(function (x) {
+      return h('a', { class: 'chip', href: genreUrl(x), 'aria-current': x === g ? 'page' : null, 'aria-pressed': String(x === g), text: x });
+    })));
+    if (!S.loaded) return;
+    var by = function (sec) { return all.filter(function (m) { return m.data.section === sec; }); };
+    var newest = function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); };
+    var sc = {}; all.forEach(function (m) { sc[m.id] = score(m.id); });
+    var top = all.filter(function (m) { return sc[m.id].tot >= 3 && sc[m.id].pct !== null; }).sort(function (a, b) { return sc[b.id].pct - sc[a.id].pct || sc[b.id].tot - sc[a.id].tot; }).slice(0, 24);
+    var lc = g.toLowerCase();
+    [
+      rowSection('In theatres', by('In theatres').sort(newest)),
+      rowSection('Coming soon', by('Coming soon').sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); }), { dateBadge: true, remind: true }),
+      top.length >= 4 ? rowSection('Top rated ' + lc, top) : null,
+      rowSection('New on OTT', by('On OTT').sort(newest)),
+      rowSection(g + ' TV shows', by('TV shows').sort(newest))
+    ].forEach(function (r) { if (r) v.appendChild(r); });
+
+    var w = h('section', { class: 'wrapx', style: 'padding-top:12px', 'aria-labelledby': 'h-gall' }); v.appendChild(w);
+    w.appendChild(h('h2', { id: 'h-gall', style: 'margin:0 0 14px;font-size:24px', text: 'All ' + lc + ' titles' }));
+    var langs = {}; all.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; });
+    function sel(id, label, val, opts, onc) {
+      var e = h('select', { class: 'in', id: id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === val }); }));
+      e.addEventListener('change', function () { onc(e.value); G.page = 1; e.blur(); render(true); });
+      return h('div', { class: 'field', style: 'min-width:160px;flex:0 1 220px' }, [h('label', { class: 'l', for: id, text: label }), e]);
+    }
+    w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:18px' }, [
+      sel('gLang', 'Language', G.lang, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })), function (x) { G.lang = x; }),
+      sel('gSort', 'Sort by', G.sort, [['new', 'Newest first'], ['old', 'Oldest first'], ['score', 'Highest score'], ['votes', 'Most verdicts'], ['az', 'A–Z']], function (x) { G.sort = x; })
+    ]));
+    var list = all.filter(function (m) { return !G.lang || langOf(m.data) === G.lang; });
+    list.sort(function (a, b) {
+      var A = a.data, B = b.data;
+      if (G.sort === 'old') return (A.releaseDate || '9').localeCompare(B.releaseDate || '9');
+      if (G.sort === 'score') return (sc[b.id].pct === null ? -1 : sc[b.id].pct) - (sc[a.id].pct === null ? -1 : sc[a.id].pct) || sc[b.id].tot - sc[a.id].tot;
+      if (G.sort === 'votes') return sc[b.id].tot - sc[a.id].tot;
+      if (G.sort === 'az') return (A.title || '').localeCompare(B.title || '');
+      return (B.releaseDate || '').localeCompare(A.releaseDate || '');
+    });
+    if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'No ' + lc + ' titles here yet.' })); v.appendChild(footer()); return; }
+    var PER = 60, pages = Math.ceil(list.length / PER); G.page = Math.min(Math.max(1, G.page || 1), pages);
+    syncListUrl(genreHref(G, G.page));
+    var from = (G.page - 1) * PER;
+    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
+    if (pages > 1) w.appendChild(pagerNav(G.page, pages, function (n) { return genreHref(G, n); }));
+    v.appendChild(footer());
+  }
+
   // Genre tiles on the home page; each opens Browse filtered to that genre (and the nav language, if set).
   var GENRE_COL = { Action: ['#1F5F86', '#2E86AB'], Comedy: ['#5B2A86', '#7B3FB0'], Drama: ['#6A4A2E', '#8C6A48'], Thriller: ['#2B2F3D', '#4A5068'], Horror: ['#5A1A1F', '#8A2A30'], Romance: ['#8A2650', '#B3406E'], Family: ['#2F6B3A', '#4C8F45'], Animated: ['#1F6E6A', '#2E918B'], Biopic: ['#7A4A12', '#A8661E'], Mythological: ['#6B3A10', '#9A5A18'], War: ['#3D4A2A', '#5B6B3C'], 'Sci-fi': ['#22306E', '#3A4BA0'] };
   function genreSection() {
@@ -464,7 +541,7 @@
       h('div', { class: 'sect-h' }, [h('h2', { text: 'Genres' }), h('span', { class: 'sub' }, [h('a', { href: '/browse', text: 'Browse all' })])]),
       h('div', { class: 'rowx gtiles' }, tiles.map(function (x) {
         var c = GENRE_COL[x[0]] || ['#2B2F3D', '#4A5068'];
-        return h('a', { class: 'gtile', href: browseHref({ status: 'All', lang: S.navLang, genre: x[0] }, 1), style: '--g1:' + c[0] + ';--g2:' + c[1], 'aria-label': x[0] + ', ' + x[1] + ' titles' }, [
+        return h('a', { class: 'gtile', href: genreUrl(x[0]), style: '--g1:' + c[0] + ';--g2:' + c[1], 'aria-label': x[0] + ', ' + x[1] + ' titles' }, [
           h('span', { class: 'gn', text: x[0] }), h('span', { class: 'gc', 'aria-hidden': 'true', text: x[1] + ' titles' })
         ]);
       }))
