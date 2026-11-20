@@ -460,6 +460,7 @@
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
+      trailerSection(),
       rowSection('TV shows', homeSection('TV shows')),
       yearSection(),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
@@ -512,6 +513,39 @@
     w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
     if (pages > 1) w.appendChild(pagerNav(G.page, pages, function (n) { return genreHref(G, n); }));
     v.appendChild(footer());
+  }
+
+  // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
+  function trailerSection() {
+    var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
+    var picks = [];
+    S.movies.forEach(function (m) {
+      if (!inNavLang(m) || isTv(m) || (m.data.releaseDate || '') < cut) return;
+      var it = vidItems(m), k = -1;
+      it.some(function (x, i) { if (x.cat === 'trailers' && (x.yt || x.clip)) { k = i; return true; } });
+      if (k >= 0) picks.push({ m: m, i: k, x: it[k] });
+    });
+    picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    picks = picks.slice(0, 20);
+    if (!picks.length) return null;
+    return h('section', { class: 'sect', 'aria-label': 'New trailers' }, [
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New trailers' })]),
+      h('div', { class: 'rowx' }, picks.map(function (p) {
+        var m = p.m, d = m.data, rel = released(m);
+        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+        return h('a', { class: 'tcard', href: movieUrl(m) + '#videos', 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
+          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+          e.preventDefault(); e.stopPropagation();
+          S.vsel = S.vsel || {}; S.vsel[m.id] = p.i; S.vplay = { mid: m.id, i: p.i }; S.vKeep = null;
+          go(movieUrl(m));
+          setTimeout(function () { var t = $('videos'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 250);
+        } } }, [
+          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: d.title }),
+          h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
+        ]);
+      }))
+    ]);
   }
 
   // ---------- year landing pages: /year/<yyyy> ----------
