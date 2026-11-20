@@ -87,12 +87,12 @@ function firestoreClient() {
   let useKey = false, reads = 0;
   async function call(url, init) {
     let r;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    // Retry busy/quota responses with backoff (Firestore sometimes answers 429 in bursts); about a minute in total.
+    for (let attempt = 0; attempt < 8; attempt++) {
       r = await fetch(url + (useKey ? (url.includes('?') ? '&' : '?') + 'key=' + key : ''), init);
-      if ((r.status === 403 || r.status === 429) && !useKey && key && attempt === 0) { useKey = true; attempt--; continue; }
+      if (r.status === 403 && !useKey && key) { useKey = true; attempt--; continue; }
       if (r.ok || r.status === 404 || (r.status < 500 && r.status !== 429)) break;
-      if (r.status === 429 && attempt === 1) break;
-      await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
+      await new Promise(res => setTimeout(res, Math.min(15000, 1500 * (attempt + 1))));
     }
     if (r.status === 404) return null;
     if (!r.ok) throw new Error('Firestore HTTP ' + r.status + ' ' + (await r.text()).slice(0, 200));
