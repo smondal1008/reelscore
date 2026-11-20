@@ -61,9 +61,6 @@
   .sec { display: inline-block; font-size: 12px; font-weight: 600; padding: 3px 8px; border-radius: 10px; background: var(--panel2); border: 1px solid var(--line2); white-space: nowrap; }
   .pfacts { margin-top: 12px; display: flex; flex-direction: column; gap: 4px; font-size: 15px; color: var(--text); }
   .pfacts .note { font-size: inherit; color: var(--muted); }
-  .kf { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 8px 24px; }
-  .kf li { display: flex; gap: 14px; align-items: baseline; padding: 10px 0; border-bottom: 1px solid var(--line); }
-  .kf .kfy { color: var(--dim); font-variant-numeric: tabular-nums; min-width: 40px; }
   .pager { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; justify-content: center; margin-top: 14px; }
   .pager .chip[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
   .pager .gap { color: var(--dim); padding: 0 4px; }
@@ -579,7 +576,7 @@ window.ReelAdmin = function (env) {
     if (oldKey !== newKey) {
       var merged = { name: (to && to.name) || newName, updatedAt: new Date().toISOString() };
       ['photoUrl', 'photoId', 'bio', 'birthday', 'birthplace'].forEach(function (f) { var v = (to && to[f]) || (from && from[f]) || ''; if (v) merged[f] = v; });
-      ['aka', 'knownFor'].forEach(function (f) { var v = (to && to[f] && to[f].length ? to[f] : (from && from[f]) || []); if (v.length) merged[f] = v; });
+      ['aka'].forEach(function (f) { var v = (to && to[f] && to[f].length ? to[f] : (from && from[f]) || []); if (v.length) merged[f] = v; });
       if (from && from.name && personKey(from.name) !== newKey) { var ak = (merged.aka || []).slice(); if (ak.indexOf(from.name) === -1) ak.push(from.name); merged.aka = ak.slice(0, 10); }
       if (from || to) jobs.push(db.doc('people/' + newKey).set(merged, { merge: true }));
       if (from) jobs.push(db.doc('people/' + oldKey).delete());
@@ -597,20 +594,6 @@ window.ReelAdmin = function (env) {
     var bdayIn = h('input', { class: 'in', id: 'pf_bday', type: 'date', min: '1880-01-01', max: new Date().toISOString().slice(0, 10) }); bdayIn.value = existing.birthday || '';
     var bplaceIn = h('input', { class: 'in', id: 'pf_bplace', maxlength: 120, placeholder: 'e.g. Kotagiri, Tamil Nadu, India' }); bplaceIn.value = existing.birthplace || '';
     var akaIn = h('input', { class: 'in', id: 'pf_aka', placeholder: 'Other spellings or names, separated by commas' }); akaIn.value = (existing.aka || []).join(', ');
-    var kf = (existing.knownFor || []).map(function (x) { return { title: x.title || '', year: x.year || '', role: x.role || '' }; });
-    var kfBox = h('div', { style: 'display:flex;flex-direction:column;gap:6px' });
-    function drawKf() {
-      kfBox.innerHTML = '';
-      kf.forEach(function (it, i) {
-        function inp(k, ph, st, extra) { var e = h('input', Object.assign({ class: 'in', placeholder: ph, 'aria-label': ph + ' ' + (i + 1), style: st }, extra || {})); e.value = it[k]; e.addEventListener('input', function () { it[k] = e.value; }); return e; }
-        kfBox.appendChild(h('div', { style: 'display:flex;gap:6px;align-items:center' }, [
-          inp('title', 'Title', 'flex:2;min-width:0'), inp('year', 'Year', 'width:76px', { inputmode: 'numeric', maxlength: 4 }), inp('role', 'Role (optional)', 'flex:1;min-width:0'),
-          h('button', { type: 'button', class: 'btn small ghost', 'aria-label': 'Remove ' + (it.title || 'row'), text: '×', on: { click: function () { kf.splice(i, 1); drawKf(); } } })
-        ]));
-      });
-      if (kf.length < 20) kfBox.appendChild(h('button', { type: 'button', class: 'btn small', style: 'align-self:flex-start', text: '+ Add film', on: { click: function () { kf.push({ title: '', year: '', role: '' }); drawKf(); var ins = kfBox.querySelectorAll('input'); if (ins.length) ins[ins.length - 3].focus(); } } }));
-    }
-    drawKf();
     var photo = { url: safeUrl(existing.photoUrl) || '', id: existing.photoId || '' };
     var pv = h('div', { style: 'width:96px;height:96px;border-radius:50%;background:#2E2A38 center top/cover no-repeat;flex:0 0 auto;' + bgUrl(photo.url) });
     var msg = h('div', { class: 'err', hidden: true }), warn = h('div', { class: 'warn', hidden: true });
@@ -655,8 +638,7 @@ window.ReelAdmin = function (env) {
         var body = { name: name, bio: bioIn.value.trim().slice(0, 600), updatedAt: new Date().toISOString(),
           birthday: /^\d{4}-\d{2}-\d{2}$/.test(bdayIn.value) ? bdayIn.value : '',
           birthplace: bplaceIn.value.trim().slice(0, 120),
-          aka: akaIn.value.split(',').map(function (x) { return x.trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10),
-          knownFor: kf.map(function (x) { return { title: x.title.trim().slice(0, 120), year: (String(x.year).match(/\d{4}/) || [''])[0], role: x.role.trim().slice(0, 80) }; }).filter(function (x) { return x.title; }).slice(0, 20) };
+          aka: akaIn.value.split(',').map(function (x) { return x.trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10) };
         if (photo.url) { body.photoUrl = photo.url; body.photoId = photo.id; }
         return db.doc('people/' + k).set(body, { merge: true });
       }).then(function () {
@@ -674,7 +656,6 @@ window.ReelAdmin = function (env) {
         h('div', { class: 'field', style: 'flex:0 0 170px' }, [h('label', { class: 'l', for: 'pf_bday', text: 'Birthday' }), bdayIn]),
         h('div', { class: 'field', style: 'flex:1 1 200px' }, [h('label', { class: 'l', for: 'pf_bplace', text: 'Birthplace' }), bplaceIn])]),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_aka', text: 'Also known as' }), akaIn, h('div', { class: 'note', text: 'Search finds them by these names too.' })]),
-      h('div', { class: 'field' }, [h('div', { class: 'l', text: 'Known for (films not on Reelscore)' }), kfBox, h('div', { class: 'note', text: 'Shown on their page under “Also known for”. Films already on Reelscore appear automatically.' })]),
       msg,
       h('div', { style: 'display:flex;gap:10px;justify-content:flex-end' }, [h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: close } }), saveB])
     ]);
@@ -2441,15 +2422,6 @@ window.ReelAdmin = function (env) {
     }
     v.appendChild(section('Acting', acting) || h('span'));
     v.appendChild(section(acting.length ? 'Behind the camera' : 'Credits', crew) || h('span'));
-    var onSite = {}; titles.forEach(function (t) { onSite[slugify(t.m.data.title)] = 1; });
-    var kf = ((stored && stored.knownFor) || []).filter(function (x) { return x && x.title && !onSite[slugify(x.title)]; })
-      .sort(function (a, b) { return String(b.year || '').localeCompare(String(a.year || '')); });
-    if (kf.length) v.appendChild(h('section', { class: 'wrapx', style: 'padding-top:20px;padding-bottom:0' }, [
-      h('h2', { style: 'margin:0 0 14px;font-size:22px', text: (titles.length ? 'Also known for' : 'Known for') + ' (' + kf.length + ')' }),
-      h('ul', { class: 'kf' }, kf.map(function (x) {
-        return h('li', {}, [h('span', { class: 'kfy', text: x.year || '—' }), h('span', {}, [h('b', { text: x.title }), x.role ? h('span', { class: 'note', text: ' · ' + x.role }) : null])]);
-      }))
-    ]));
     v.appendChild(h('div', { style: 'height:40px' }));
   }
 
