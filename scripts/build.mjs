@@ -83,13 +83,13 @@ function firestoreClient() {
   if (!project) throw new Error('No projectId in firebase-config.js');
   const root = 'projects/' + project + '/databases/(default)/documents';
   const base = 'https://firestore.googleapis.com/v1/' + root;
-  let useKey = !!key, reads = 0;
+  // Public reads need no key, so try without it first; the browser key can carry its own (smaller) quota.
+  let useKey = false, reads = 0;
   async function call(url, init) {
     let r;
     for (let attempt = 0; attempt < 3; attempt++) {
       r = await fetch(url + (useKey ? (url.includes('?') ? '&' : '?') + 'key=' + key : ''), init);
-      // A browser key restricted to the site's domain is refused from the build server; public reads work without it.
-      if (r.status === 403 && useKey) { useKey = false; attempt--; continue; }
+      if ((r.status === 403 || r.status === 429) && !useKey && key && attempt === 0) { useKey = true; attempt--; continue; }
       if (r.ok || r.status === 404 || (r.status < 500 && r.status !== 429)) break;
       if (r.status === 429 && attempt === 1) break;
       await new Promise(res => setTimeout(res, 1500 * (attempt + 1)));
