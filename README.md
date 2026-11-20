@@ -105,3 +105,15 @@ firestore.rules       paste into Firestore → Rules (step 1)
 js/                   connects the site to Firebase and Cloudinary
 data/                 starter titles loaded by setup.html
 ```
+
+## Search engine pages (build step)
+
+Vercel runs `node scripts/build.mjs` on every deploy. It reads the catalogue from Firestore and writes `dist/`:
+a pre-rendered page for every title (`/movie/…`, `/tv/…`) and for every person with at least 2 titles (`/person/…`),
+each with its own title, description, canonical link, Open Graph tags and schema.org data, plus `sitemap.xml` and `robots.txt`.
+The app loads on top of these pages exactly as before. Anything not pre-rendered still falls back to `index.html`.
+
+Optional Vercel environment variables: `SITE_URL` (canonical origin), `SEO_MIN_VERDICTS` (default 10: a title's score only
+goes into search markup once it has this many verdicts), `SEO_MIN_CREDITS` (default 2).
+Pages reflect the catalogue at deploy time, so redeploy after big catalogue changes. Test locally with
+`FIXTURE=file.json node scripts/build.mjs` where the file holds `{movies, people, verdicts}`.
