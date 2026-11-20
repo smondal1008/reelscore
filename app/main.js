@@ -172,6 +172,28 @@
     var base = slugify(m.data.title) || m.id, y = (m.data.releaseDate || '').slice(0, 4);
     return /^\d{4}$/.test(y) ? base + '-' + y : base;
   }
+  // ?page=N on Browse and People, so every page of results has its own crawlable URL.
+  function qPage() { var n = parseInt(new URLSearchParams(location.search).get('page'), 10); return n > 1 ? n : 1; }
+  function sectionSlug(status) { for (var k in BROWSE_SECTIONS) if (BROWSE_SECTIONS[k] === status) return k; return ''; }
+  function browseHref(o, page) {
+    var q = [];
+    if (o.lang) q.push('lang=' + encodeURIComponent(o.lang));
+    if (o.genre) q.push('genre=' + encodeURIComponent(o.genre));
+    if (o.year) q.push('year=' + o.year);
+    if (page > 1) q.push('page=' + page);
+    var sec = sectionSlug(o.status);
+    return '/browse' + (sec ? '/' + sec : '') + (q.length ? '?' + q.join('&') : '');
+  }
+  // Filtered lists point search engines at the plain list; plain pages 2+ keep their own URL.
+  function listCanonical() {
+    var page = qPage(), qs = new URLSearchParams(location.search);
+    var filtered = qs.get('lang') || qs.get('genre') || qs.get('year');
+    return location.pathname + (page > 1 && !filtered ? '?page=' + page : '');
+  }
+  function syncListUrl(href) {
+    if (href !== location.pathname + location.search) history.replaceState(null, '', href);
+    setCanonical(listCanonical());
+  }
   // Keep <link rel="canonical"> in step with the page shown; null removes it (private pages).
   function setCanonical(path) {
     var el = document.querySelector('link[rel="canonical"]');
@@ -208,8 +230,12 @@
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
-    else if (path === '/people') { S.route = 'people'; S.param = null; }
-    else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) { S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All'; }
+    else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
+    else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) {
+      S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All';
+      var qs = new URLSearchParams(location.search);
+      S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.page = qPage();
+    }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
@@ -219,6 +245,7 @@
     if (S.route === 'admin') startAdmin();
     S.lastPath = location.pathname;
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
+    else if (S.route === 'browse' || S.route === 'people') setCanonical(listCanonical());
     else if (S.route !== 'title' && S.route !== 'person') setCanonical(location.pathname);
     S.rtab = 'all';
     render(true);
@@ -741,7 +768,21 @@
   }
   function factsBlock(m) {
     var d = m.data, rows = isTv(m) ? [['First aired', d.releaseDate ? fmtDate(d.releaseDate, true) : ''], ['Years', tvYears(d)], ['Channel or platform', d.platform], ['Seasons', d.seasons], ['Languages', d.languages], ['Genre', d.genre], ['Episode length', d.runtime], ['Certificate', d.certificate], ['Created by', d.director]] : [[isOtt(m) ? 'Streaming from' : 'Release date', fmtDate(d.releaseDate, true) + (d.releaseNote ? ' (' + d.releaseNote.toLowerCase() + ')' : '')], ['Platform', isOtt(m) ? d.platform : ''], ['Languages', d.languages], ['Genre', d.genre], ['Runtime', d.runtime], ['Certificate', d.certificate], ['Director', d.director]];
-    return h('section', { class: 'card facts' }, [h('h2', { text: 'Details' })].concat(rows.filter(function (r) { return r[1]; }).map(function (r) { return h('div', {}, [h('span', { text: r[0] }), h('span', { style: 'text-align:right', text: r[1] })]); })));
+    var linkers = {
+      'Directed by': function (v) { return names(v, function (n) { return personUrl(n); }); }, 'Created by': function (v) { return names(v, function (n) { return personUrl(n); }); },
+      'Director': function (v) { return names(v, function (n) { return personUrl(n); }); },
+      'Languages': function (v) { return names(v, function (n) { return browseHref({ status: 'All', lang: n }, 1); }, /\s*[,;]\s*/); },
+      'Language': function (v) { return names(v, function (n) { return browseHref({ status: 'All', lang: n }, 1); }, /\s*[,;]\s*/); }
+    };
+    function names(v, href, sep) {
+      var parts = String(v).split(sep || /\s*,\s*|\s+and\s+/).map(function (x) { return x.trim(); }).filter(Boolean), out = [];
+      parts.forEach(function (n, i) { if (i) out.push(', '); out.push(h('a', { href: href(n), style: 'color:inherit', text: n })); });
+      return out;
+    }
+    return h('section', { class: 'card facts' }, [h('h2', { text: 'Details' })].concat(rows.filter(function (r) { return r[1]; }).map(function (r) {
+      var val = linkers[r[0]] ? h('span', { style: 'text-align:right' }, linkers[r[0]](r[1])) : h('span', { style: 'text-align:right', text: r[1] });
+      return h('div', {}, [h('span', { text: r[0] }), val]);
+    })));
   }
 
   // ---------- browse ----------
@@ -818,7 +859,7 @@
     var known = acting.length >= crew.length ? 'Acting' : (crew[0] && /direct/i.test(crew[0].roles.join(' ')) ? 'Directing' : 'Crew');
     var upcoming = titles.filter(function (t) { return !t.tv && isUpcoming(t.m); }).length;
     var years = []; titles.forEach(function (t) { (t.tv && t.yrs.length ? t.yrs : [(t.m.data.releaseDate || '').slice(0, 4)]).forEach(function (y) { if (y) years.push(y); }); }); years.sort();
-    v.appendChild(h('a', { href: 'javascript:history.back()', style: 'display:inline-block;margin:24px 40px 0;color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', on: { click: function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } else { e.preventDefault(); go('/'); } } }, text: '← Back' }));
+    v.appendChild(h('a', { href: '/people', style: 'display:inline-block;margin:24px 40px 0;color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', on: { click: function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } else { e.preventDefault(); go('/'); } } }, text: '← Back' }));
     v.appendChild(h('section', { class: 'ph' }, [
       photo ? h('img', { class: 'pimg', src: photo, alt: name }) : h('span', { class: 'pini', style: 'background:' + PAL[hash(slug) % PAL.length][1], 'aria-hidden': 'true', text: initials(name) }),
       h('div', { style: 'min-width:0;flex:1' }, [
@@ -941,6 +982,7 @@
       var PER = 60, pages = Math.max(1, Math.ceil(list.length / PER));
       if (P.page > pages) P.page = pages; if (P.page < 1) P.page = 1;
       var from = (P.page - 1) * PER;
+      if (S.route === 'people') syncListUrl('/people' + (P.page > 1 ? '?page=' + P.page : ''));
       count.textContent = list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' people' : list.length + (list.length === 1 ? ' person' : ' people');
       grid.innerHTML = ''; more.innerHTML = '';
       if (!list.length) { grid.appendChild(h('div', { class: 'empty', style: 'grid-column:1/-1', text: 'No one matches. Try another name or clear the filters.' })); return; }
@@ -954,18 +996,10 @@
         ]));
       });
       if (pages > 1) {
-        var pager = h('nav', { class: 'pager', 'aria-label': 'People pages' });
-        var pbtn = function (n, label, dis) {
-          return h('button', { type: 'button', class: 'chip', text: label || String(n), disabled: dis, 'aria-current': n === P.page && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n,
-            on: { click: function () { P.page = n; fill(); top.scrollIntoView({ block: 'start' }); window.scrollBy(0, -90); } } });
-        };
-        pager.appendChild(pbtn(P.page - 1, '← Prev', P.page === 1));
-        var want = {}; [1, 2, P.page - 1, P.page, P.page + 1, pages - 1, pages].forEach(function (n) { if (n >= 1 && n <= pages) want[n] = 1; });
-        var last = 0; Object.keys(want).map(Number).sort(function (a, b) { return a - b; }).forEach(function (n) {
-          if (n - last > 1) pager.appendChild(h('span', { class: 'gap', text: '…' }));
-          pager.appendChild(pbtn(n)); last = n;
+        var pager = pagerNav(P.page, pages, function (n) { return '/people' + (n > 1 ? '?page=' + n : ''); }, function (n) {
+          P.page = n; history.pushState(null, '', '/people' + (n > 1 ? '?page=' + n : '')); fill(); top.scrollIntoView({ block: 'start' }); window.scrollBy(0, -90);
         });
-        pager.appendChild(pbtn(P.page + 1, 'Next →', P.page === pages));
+        pager.setAttribute('aria-label', 'People pages'); pager.style.marginTop = '';
         more.appendChild(pager);
       }
     }
@@ -981,7 +1015,7 @@
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Every film and series on Reelscore, from 2025–26 releases to what’s coming next.' }));
     var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Status', style: 'margin-bottom:14px' }, statuses.map(function (st) {
-      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(B.status === st), text: st, on: { click: function () { B.status = st; B.page = 1; render(true); } } });
+      return h('a', { class: 'chip', href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year }, 1), 'aria-current': B.status === st ? 'page' : null, 'aria-pressed': String(B.status === st), text: st });
     })));
     var langs = {}, years = {};
     S.movies.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; if (m.data.releaseDate) years[m.data.releaseDate.slice(0, 4)] = 1; });
@@ -1022,13 +1056,19 @@
     if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
     if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'Nothing matches these filters.' })); return; }
     var PER = 60, pages = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages);
+    syncListUrl(browseHref(B, B.page));
     var from = (B.page - 1) * PER;
     w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
-    if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { B.page = n; render(true); window.scrollTo(0, 0); }));
+    if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { return browseHref(B, n); }));
   }
-  function pagerNav(cur, pages, go) {
+  // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
+  function pagerNav(cur, pages, hrefFor, onPick) {
     var nav = h('nav', { class: 'pager', 'aria-label': 'Pages', style: 'margin-top:26px' });
-    function b(n, label, dis) { return h('button', { type: 'button', class: 'chip', text: label || String(n), disabled: dis, 'aria-current': n === cur && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n, on: { click: function () { go(n); } } }); }
+    function b(n, label, dis) {
+      if (dis) return h('span', { class: 'chip off', 'aria-disabled': 'true', text: label });
+      return h('a', { class: 'chip', href: hrefFor(n), rel: label ? (n < cur ? 'prev' : 'next') : null, text: label || String(n), 'aria-current': n === cur && !label ? 'page' : null, 'aria-label': label ? null : 'Page ' + n,
+        on: onPick ? { click: function (e) { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); onPick(n); } } : null });
+    }
     nav.appendChild(b(cur - 1, '← Prev', cur === 1));
     var want = {}; [1, 2, cur - 1, cur, cur + 1, pages - 1, pages].forEach(function (n) { if (n >= 1 && n <= pages) want[n] = 1; });
     var last = 0; Object.keys(want).map(Number).sort(function (a, c) { return a - c; }).forEach(function (n) { if (n - last > 1) nav.appendChild(h('span', { class: 'gap', text: '…' })); nav.appendChild(b(n)); last = n; });

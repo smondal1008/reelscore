@@ -184,6 +184,27 @@ async function main() {
     return k && indexedPerson(k) ? '<a href="/person/' + k + '">' + esc(name) + '</a>' : esc(name);
   };
 
+  // "More like this": same main language, then shared genre words, people and nearby years.
+  const langKey = d => String(d.languages || '').split(/[,;]/)[0].trim().toLowerCase();
+  const words = d => new Set(String(d.genre || '').toLowerCase().split(/[^a-z]+/).filter(w => w.length > 3 && !['film', 'drama'].includes(w)));
+  const facts = new Map(movies.map(m => [m.id, { lang: langKey(m.data), g: words(m.data), y: +year(m.data) || 0, tv: isTv(m.data),
+    ppl: new Set([...(m.data.cast || []).slice(0, 8).map(c => personSlug(c.name)), ...String(m.data.director || '').split(/,| and /).map(personSlug)].filter(Boolean)) }]));
+  const byLang = {}; movies.forEach(m => { const k = facts.get(m.id).lang; (byLang[k] = byLang[k] || []).push(m); });
+  function similar(m) {
+    const f = facts.get(m.id), out = [];
+    for (const o of byLang[f.lang] || []) {
+      if (o.id === m.id) continue;
+      const g = facts.get(o.id); let sc = 0;
+      g.g.forEach(w => { if (f.g.has(w)) sc += 3; });
+      g.ppl.forEach(p => { if (f.ppl.has(p)) sc += 4; });
+      if (g.tv === f.tv) sc += 2;
+      if (f.y && g.y) sc -= Math.min(6, Math.abs(f.y - g.y) / 3);
+      out.push([sc, o]);
+    }
+    return out.sort((a, b) => b[0] - a[0] || String(a[1].data.title).localeCompare(String(b[1].data.title))).slice(0, 12).map(x => x[1]);
+  }
+  const langLinks = v => String(v || '').split(/\s*[,;]\s*/).filter(Boolean).map(l => '<a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a>').join(', ');
+
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
   const seen = new Set(); let nTitles = 0, nRated = 0, nPeople = 0;
 
@@ -208,18 +229,21 @@ async function main() {
       (actors.length ? ', starring ' + list(actors.slice(0, 3).map(c => c.name)) : '') + '.';
     const description = clip((d.synopsis ? d.synopsis + ' ' : auto + ' ') + (sc.tot ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
 
-    const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages, d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean).join(' · ');
+    const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages ? '\u0000' : '', d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean)
+      .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
     const section = tv ? ['TV shows', '/browse/tv-shows'] : ['Movies', '/browse'];
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="' + section[1] + '">' + section[0] + '</a> › ' + esc(d.title) + '</nav>';
     body += '<div class="pr-top">' + (poster ? '<img class="pr-poster" src="' + esc(poster) + '" alt="' + esc(d.title) + ' poster" width="200" height="300">' : '') + '<div>';
     body += '<h1>' + esc(d.title) + '</h1>' + (d.subtitle ? '<div class="pr-sub">' + esc(d.subtitle) + '</div>' : '');
-    body += metaLine ? '<div class="pr-meta">' + esc(metaLine) + '</div>' : '';
+    body += metaLine ? '<div class="pr-meta">' + metaLine + '</div>' : '';
     if (sc.tot) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
     if (directors.length) body += '<div class="pr-meta">Directed by ' + directors.map(personLink).join(', ') + '</div>';
     body += '</div></div>';
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
+    const more = similar(m);
+    if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li><a href="' + movieUrl(o) + '">' + esc(o.data.title) + '</a> <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
 
     const node = {
       '@context': 'https://schema.org', '@type': tv ? 'TVSeries' : 'Movie',

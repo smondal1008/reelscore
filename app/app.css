@@ -356,3 +356,8 @@
 .pr a{color:var(--text);font-weight:600;text-decoration:none}
 .pr a:hover{text-decoration:underline}
 @media (max-width:640px){.pr{padding:20px 18px 48px}.pr h1{font-size:34px}.pr .pr-poster{width:140px}}
+/* Chips and pager entries that are links (crawlable) look the same as the button chips. */
+a.chip { display: inline-flex; align-items: center; color: var(--text); text-decoration: none; }
+a.chip[aria-pressed="true"] { color: #0B0A0F; }
+.chip.off { display: inline-flex; align-items: center; opacity: .4; cursor: default; }
+.pr .pr-more ul { columns: 3 220px; }
