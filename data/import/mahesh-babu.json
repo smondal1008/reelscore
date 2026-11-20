@@ -1,0 +1,820 @@
+[
+{
+"mergeOnly": false,
+"title": "Needa",
+"slug": "needa-1979",
+"releaseDate": "1979",
+"languages": "Telugu",
+"genre": "Drama",
+"director": "Dasari Narayana Rao",
+"cast": [
+{
+"name": "Ramesh Babu",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Child artist"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Poratam",
+"slug": "poratam-1983",
+"releaseDate": "1983",
+"languages": "Telugu",
+"genre": "Action",
+"director": "Kodi Ramakrishna",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Jaya Prada",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Bujji (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Sankharavam",
+"slug": "sankharavam-1987",
+"releaseDate": "1987",
+"languages": "Telugu",
+"genre": "Action",
+"director": "Krishna",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Ramesh Babu",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Raja (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Bazaar Rowdy",
+"slug": "bazaar-rowdy-1988",
+"releaseDate": "1988",
+"languages": "Telugu",
+"genre": "Action",
+"director": "",
+"cast": [
+{
+"name": "Ramesh Babu",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Mahesh Babu (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Mugguru Kodukulu",
+"slug": "mugguru-kodukulu-1988",
+"releaseDate": "1988",
+"languages": "Telugu",
+"genre": "Family drama",
+"director": "Krishna",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Ramesh Babu",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Surendra (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Gudachari 117",
+"slug": "gudachari-117-1989",
+"releaseDate": "1989",
+"languages": "Telugu",
+"genre": "Spy action",
+"director": "Kodi Ramakrishna",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Bhanupriya",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Chinna (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Koduku Diddina Kapuram",
+"slug": "koduku-diddina-kapuram-1989",
+"releaseDate": "1989",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Krishna",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Vijayashanti",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Vinod / Pramod (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Anna Thammudu",
+"slug": "anna-thammudu-1990",
+"releaseDate": "1990",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "",
+"cast": [
+{
+"name": "Krishna",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Murali (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Balachandrudu",
+"slug": "balachandrudu-1990",
+"releaseDate": "1990",
+"languages": "Telugu",
+"genre": "Drama",
+"director": "",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Balachandra (child artist)"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Rajakumarudu",
+"slug": "rajakumarudu-1999",
+"releaseDate": "1999",
+"languages": "Telugu",
+"genre": "Romantic action",
+"director": "K. Raghavendra Rao",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Raja"
+},
+{
+"name": "Preity Zinta",
+"role": "Cast"
+},
+{
+"name": "Krishna",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Yuvaraju",
+"slug": "yuvaraju-2000",
+"releaseDate": "2000",
+"languages": "Telugu",
+"genre": "Romantic drama",
+"director": "Y. V. S. Chowdary",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Srinivas"
+},
+{
+"name": "Sakshi Shivanand",
+"role": "Cast"
+},
+{
+"name": "Simran",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Vamsi",
+"slug": "vamsi-2000",
+"releaseDate": "2000",
+"languages": "Telugu",
+"genre": "Action romance",
+"director": "B. Gopal",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Vamsi"
+},
+{
+"name": "Namrata Shirodkar",
+"role": "Cast"
+},
+{
+"name": "Krishna",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Murari",
+"slug": "murari-2001",
+"releaseDate": "2001",
+"languages": "Telugu",
+"genre": "Family drama",
+"director": "Krishna Vamsi",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Murari"
+},
+{
+"name": "Sonali Bendre",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Takkari Donga",
+"slug": "takkari-donga-2002",
+"releaseDate": "2002",
+"languages": "Telugu",
+"genre": "Western action",
+"director": "Jayanth C. Paranjee",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Raja"
+},
+{
+"name": "Lisa Ray",
+"role": "Cast"
+},
+{
+"name": "Bipasha Basu",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Bobby",
+"slug": "bobby-2002",
+"releaseDate": "2002",
+"languages": "Telugu",
+"genre": "Romantic action",
+"director": "Sobhan",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Bobby"
+},
+{
+"name": "Aarthi Agarwal",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Okkadu",
+"slug": "okkadu-2003",
+"releaseDate": "2003",
+"languages": "Telugu",
+"genre": "Action",
+"director": "Gunasekhar",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Ajay Varma"
+},
+{
+"name": "Bhumika Chawla",
+"role": "Cast"
+},
+{
+"name": "Prakash Raj",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Nijam",
+"slug": "nijam-2003",
+"releaseDate": "2003",
+"languages": "Telugu",
+"genre": "Crime drama",
+"director": "Teja",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "G. Seetaram"
+},
+{
+"name": "Rakshita",
+"role": "Cast"
+},
+{
+"name": "Gopichand",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Naani",
+"slug": "naani-2004",
+"releaseDate": "2004",
+"languages": "Telugu",
+"genre": "Science fiction drama",
+"director": "S. J. Suryah",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Viju / Naani"
+},
+{
+"name": "Ameesha Patel",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Arjun",
+"slug": "arjun-2004",
+"releaseDate": "2004",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Gunasekhar",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Arjun"
+},
+{
+"name": "Shriya Saran",
+"role": "Cast"
+},
+{
+"name": "Keerthi Reddy",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Athadu",
+"slug": "athadu-2005",
+"releaseDate": "2005",
+"languages": "Telugu",
+"genre": "Action thriller",
+"director": "Trivikram Srinivas",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Nandu / Pardhu"
+},
+{
+"name": "Trisha",
+"role": "Cast"
+},
+{
+"name": "Prakash Raj",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Pokiri",
+"slug": "pokiri-2006",
+"releaseDate": "2006",
+"languages": "Telugu",
+"genre": "Action thriller",
+"director": "Puri Jagannadh",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Pandu / Krishna Manohar IPS"
+},
+{
+"name": "Ileana D'Cruz",
+"role": "Cast"
+},
+{
+"name": "Prakash Raj",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Sainikudu",
+"slug": "sainikudu-2006",
+"releaseDate": "2006",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Gunasekhar",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Siddharth"
+},
+{
+"name": "Trisha",
+"role": "Cast"
+},
+{
+"name": "Prakash Raj",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Athidhi",
+"slug": "athidhi-2007",
+"releaseDate": "2007",
+"languages": "Telugu",
+"genre": "Action thriller",
+"director": "Surender Reddy",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Athidhi"
+},
+{
+"name": "Amrita Rao",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Khaleja",
+"slug": "khaleja-2010",
+"releaseDate": "2010",
+"languages": "Telugu",
+"genre": "Action adventure",
+"director": "Trivikram Srinivas",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Alluri Seetharama Raju"
+},
+{
+"name": "Anushka Shetty",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Dookudu",
+"slug": "dookudu-2011",
+"releaseDate": "2011",
+"languages": "Telugu",
+"genre": "Action comedy",
+"director": "Srinu Vaitla",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Ajay Kumar IPS"
+},
+{
+"name": "Samantha Ruth Prabhu",
+"role": "Cast"
+},
+{
+"name": "Prakash Raj",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Businessman",
+"slug": "businessman-2012",
+"releaseDate": "2012",
+"languages": "Telugu",
+"genre": "Crime thriller",
+"director": "Puri Jagannadh",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Surya Bhai"
+},
+{
+"name": "Kajal Aggarwal",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Seethamma Vakitlo Sirimalle Chettu",
+"slug": "seethamma-vakitlo-sirimalle-chettu-2013",
+"releaseDate": "2013",
+"languages": "Telugu",
+"genre": "Family drama",
+"director": "Srikanth Addala",
+"cast": [
+{
+"name": "Venkatesh",
+"role": "Cast"
+},
+{
+"name": "Mahesh Babu",
+"role": "Chinnodu"
+},
+{
+"name": "Samantha Ruth Prabhu",
+"role": "Cast"
+},
+{
+"name": "Anjali",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "1: Nenokkadine",
+"slug": "1-nenokkadine-2014",
+"releaseDate": "2014",
+"languages": "Telugu",
+"genre": "Psychological thriller",
+"director": "Sukumar",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Gautham"
+},
+{
+"name": "Kriti Sanon",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Aagadu",
+"slug": "aagadu-2014",
+"releaseDate": "2014",
+"languages": "Telugu",
+"genre": "Action comedy",
+"director": "Srinu Vaitla",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "CI Shankar"
+},
+{
+"name": "Tamannaah",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Srimanthudu",
+"slug": "srimanthudu-2015",
+"releaseDate": "2015",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Koratala Siva",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Harsha Vardhan"
+},
+{
+"name": "Shruti Haasan",
+"role": "Cast"
+},
+{
+"name": "Jagapathi Babu",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Brahmotsavam",
+"slug": "brahmotsavam-2016",
+"releaseDate": "2016",
+"languages": "Telugu",
+"genre": "Family drama",
+"director": "Srikanth Addala",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Ajay Chantibabu"
+},
+{
+"name": "Kajal Aggarwal",
+"role": "Cast"
+},
+{
+"name": "Samantha Ruth Prabhu",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Spyder",
+"slug": "spyder-2017",
+"releaseDate": "2017",
+"languages": "Telugu",
+"genre": "Action thriller",
+"director": "AR Murugadoss",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Shiva"
+},
+{
+"name": "Rakul Preet Singh",
+"role": "Cast"
+},
+{
+"name": "S. J. Suryah",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Bharat Ane Nenu",
+"slug": "bharat-ane-nenu-2018",
+"releaseDate": "2018",
+"languages": "Telugu",
+"genre": "Political drama",
+"director": "Koratala Siva",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Bharath Ram"
+},
+{
+"name": "Kiara Advani",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Maharshi",
+"slug": "maharshi-2019",
+"releaseDate": "2019",
+"languages": "Telugu",
+"genre": "Drama",
+"director": "Vamshi Paidipally",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Rishi Kumar"
+},
+{
+"name": "Pooja Hegde",
+"role": "Cast"
+},
+{
+"name": "Allari Naresh",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Sarileru Neekevvaru",
+"slug": "sarileru-neekevvaru-2020",
+"releaseDate": "2020",
+"languages": "Telugu",
+"genre": "Action comedy",
+"director": "Anil Ravipudi",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Major Ajay Krishna"
+},
+{
+"name": "Rashmika Mandanna",
+"role": "Cast"
+},
+{
+"name": "Vijayashanti",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Sarkaru Vaari Paata",
+"slug": "sarkaru-vaari-paata-2022",
+"releaseDate": "2022",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Parasuram",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Mahesh \"Mahi\""
+},
+{
+"name": "Keerthy Suresh",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": false,
+"title": "Guntur Kaaram",
+"slug": "guntur-kaaram-2024",
+"releaseDate": "2024",
+"languages": "Telugu",
+"genre": "Action drama",
+"director": "Trivikram Srinivas",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Ramana"
+},
+{
+"name": "Sreeleela",
+"role": "Cast"
+},
+{
+"name": "Meenakshi Chaudhary",
+"role": "Cast"
+}
+]
+},
+{
+"mergeOnly": true,
+"title": "Varanasi",
+"slug": "varanasi-2027",
+"releaseDate": "2027",
+"languages": "Telugu",
+"genre": "Action adventure",
+"director": "S. S. Rajamouli",
+"cast": [
+{
+"name": "Mahesh Babu",
+"role": "Rudhra"
+},
+{
+"name": "Priyanka Chopra",
+"role": "Cast"
+},
+{
+"name": "Prithviraj Sukumaran",
+"role": "Cast"
+}
+]
+}
+]
