@@ -475,6 +475,12 @@ window.ReelAdmin = function (env) {
     });
     fi.click();
   }
+  var POP_OPTS = [['', 'Popular: automatic'], ['pin', 'Popular: always'], ['hide', 'Popular: never']];
+  function setPopular(key, name, v) {
+    var body = { popular: v, updatedAt: new Date().toISOString() }; if (!people[key]) body.name = name;
+    return db.doc('people/' + key).set(body, { merge: true }).then(function () { setStatus(name + (v === 'pin' ? ' will always show in Popular.' : v === 'hide' ? ' won’t show in Popular.' : ' is back to automatic for Popular.')); })
+      .catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
   function removePhoto(name) {
     db.doc('people/' + personKey(name)).set({ photoUrl: '', photoId: '', updatedAt: new Date().toISOString() }, { merge: true }).then(function () { setStatus('Photo removed for ' + name + '.'); }).catch(function () { setStatus('Couldn’t remove the photo.'); });
   }
@@ -584,7 +590,7 @@ window.ReelAdmin = function (env) {
     var from = people[oldKey], to = people[newKey];
     if (oldKey !== newKey) {
       var merged = { name: (to && to.name) || newName, updatedAt: new Date().toISOString() };
-      ['photoUrl', 'photoId', 'bio', 'birthday', 'birthplace', 'gender'].forEach(function (f) { var v = (to && to[f]) || (from && from[f]) || ''; if (v) merged[f] = v; });
+      ['photoUrl', 'photoId', 'bio', 'birthday', 'birthplace', 'gender', 'popular'].forEach(function (f) { var v = (to && to[f]) || (from && from[f]) || ''; if (v) merged[f] = v; });
       ['aka'].forEach(function (f) { var v = (to && to[f] && to[f].length ? to[f] : (from && from[f]) || []); if (v.length) merged[f] = v; });
       if (from && from.name && personKey(from.name) !== newKey) { var ak = (merged.aka || []).slice(); if (ak.indexOf(from.name) === -1) ak.push(from.name); merged.aka = ak.slice(0, 10); }
       if (from || to) jobs.push(db.doc('people/' + newKey).set(merged, { merge: true }));
@@ -603,6 +609,7 @@ window.ReelAdmin = function (env) {
     var bdayIn = h('input', { class: 'in', id: 'pf_bday', type: 'date', min: '1880-01-01', max: new Date().toISOString().slice(0, 10) }); bdayIn.value = existing.birthday || '';
     var bplaceIn = h('input', { class: 'in', id: 'pf_bplace', maxlength: 120, placeholder: 'e.g. Kotagiri, Tamil Nadu, India' }); bplaceIn.value = existing.birthplace || '';
     var genderIn = h('select', { class: 'in', id: 'pf_gender' }, [['', 'Not set'], ['Female', 'Female'], ['Male', 'Male'], ['Non-binary', 'Non-binary']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: (existing.gender || '') === o[0] }); }));
+    var popIn = h('select', { class: 'in', id: 'pf_pop' }, POP_OPTS.map(function (o) { return h('option', { value: o[0], text: o[1].replace('Popular: ', '').replace(/^./, function (c) { return c.toUpperCase(); }), selected: (existing.popular || '') === o[0] }); }));
     var akaIn = h('input', { class: 'in', id: 'pf_aka', placeholder: 'Other spellings or names, separated by commas' }); akaIn.value = (existing.aka || []).join(', ');
     var photo = { url: safeUrl(existing.photoUrl) || '', id: existing.photoId || '' };
     var pv = h('div', { style: 'width:96px;height:96px;border-radius:50%;background:#2E2A38 center top/cover no-repeat;flex:0 0 auto;' + bgUrl(photo.url) });
@@ -647,7 +654,7 @@ window.ReelAdmin = function (env) {
       p.then(function () {
         var body = { name: name, bio: bioIn.value.trim().slice(0, 600), updatedAt: new Date().toISOString(),
           birthday: /^\d{4}-\d{2}-\d{2}$/.test(bdayIn.value) ? bdayIn.value : '',
-          birthplace: bplaceIn.value.trim().slice(0, 120), gender: genderIn.value,
+          birthplace: bplaceIn.value.trim().slice(0, 120), gender: genderIn.value, popular: popIn.value,
           aka: akaIn.value.split(',').map(function (x) { return x.trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10) };
         if (photo.url) { body.photoUrl = photo.url; body.photoId = photo.id; }
         return db.doc('people/' + k).set(body, { merge: true });
@@ -665,7 +672,9 @@ window.ReelAdmin = function (env) {
       h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [
         h('div', { class: 'field', style: 'flex:0 0 170px' }, [h('label', { class: 'l', for: 'pf_bday', text: 'Birthday' }), bdayIn]),
         h('div', { class: 'field', style: 'flex:1 1 200px' }, [h('label', { class: 'l', for: 'pf_bplace', text: 'Birthplace' }), bplaceIn])]),
-      h('div', { class: 'field', style: 'max-width:220px' }, [h('label', { class: 'l', for: 'pf_gender', text: 'Gender' }), genderIn, h('div', { class: 'note', text: 'Used for the Male and Female actor filters on People.' })]),
+      h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [
+        h('div', { class: 'field', style: 'flex:1 1 180px' }, [h('label', { class: 'l', for: 'pf_gender', text: 'Gender' }), genderIn, h('div', { class: 'note', text: 'Used for the Male and Female actor filters on People.' })]),
+        h('div', { class: 'field', style: 'flex:1 1 180px' }, [h('label', { class: 'l', for: 'pf_pop', text: 'Popular list' }), popIn, h('div', { class: 'note', text: 'Automatic ranks by billing, recent work and verdicts.' })])]),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_aka', text: 'Also known as' }), akaIn, h('div', { class: 'note', text: 'Search finds them by these names too.' })]),
       msg,
       h('div', { style: 'display:flex;gap:10px;justify-content:flex-end' }, [h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: close } }), saveB])
@@ -710,9 +719,12 @@ window.ReelAdmin = function (env) {
       dupCache = { sig: sig, map: dm };
     }
     var dupMap = dupCache.map;
+    function popOf(k) { return (people[k] && people[k].popular) || ''; }
+    var pinN = list.filter(function (p) { return popOf(p.key) === 'pin'; }).length, hideN = list.filter(function (p) { return popOf(p.key) === 'hide'; }).length;
     var shown = list.filter(function (p) {
       return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1 || ((people[p.key] && people[p.key].aka) || []).join(' ').toLowerCase().indexOf(q) !== -1) &&
-        (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]);
+        (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]) &&
+        (peopleFilter !== 'pin' || popOf(p.key) === 'pin') && (peopleFilter !== 'hide' || popOf(p.key) === 'hide');
     });
     var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search by name or URL' }); search.value = peopleQ;
     search.addEventListener('input', function () { peopleQ = search.value; peoplePage = 1; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
@@ -724,7 +736,7 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'note', text: 'Everyone credited on any title, with their public page. Each person has one page and one photo, matched by name, so fix spelling mistakes with Rename or Merge rather than adding a second person.' }),
       h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
         h('label', { class: 'sr', for: 'pplQ', text: 'Search people' }), h('span', { style: 'flex:1;min-width:200px' }, [search]),
-        chip('nophoto', 'Missing photo'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : ''))
+        chip('nophoto', 'Missing photo'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : '')), chip('pin', 'Always popular' + (pinN ? ' (' + pinN + ')' : '')), chip('hide', 'Never popular' + (hideN ? ' (' + hideN + ')' : ''))
       ])
     ]);
     var pages = Math.max(1, Math.ceil(shown.length / PEOPLE_PAGE));
@@ -739,7 +751,7 @@ window.ReelAdmin = function (env) {
       rows.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid ' + (dup ? '#5a4520' : 'var(--line)') + ';border-radius:12px;background:var(--bg)' }, [
         avatarBtn(p.name, 52),
         h('span', { style: 'flex:1;min-width:220px' }, [
-          h('div', { style: 'font-weight:600;font-size:14px', text: p.name }),
+          h('div', { style: 'font-weight:600;font-size:14px' }, [p.name, popOf(p.key) === 'pin' ? h('span', { class: 'star', title: 'Always shown in Popular', text: ' ★ Popular' }) : popOf(p.key) === 'hide' ? h('span', { class: 'note', text: ' · hidden from Popular' }) : null]),
           h('div', { style: 'font-size:13px;margin-top:2px;word-break:break-all' }, [h('a', { href: page, target: '_blank', rel: 'noopener', text: '/person/' + p.key })]),
           h('div', { class: 'note', style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title: p.titles.join(', '), text: (p.titles.length ? p.titles.length + (p.titles.length === 1 ? ' title · ' : ' titles · ') + p.titles.join(', ') : 'Not on any title yet') + (bio ? ' · has bio' : '') }),
           dup ? h('div', { class: 'warn', style: 'margin-top:4px' }, ['Possible duplicate of '].concat(dup.slice(0, 2).map(function (d2, i) {
@@ -747,6 +759,11 @@ window.ReelAdmin = function (env) {
           }))) : null
         ]),
         h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
+          (function () {
+            var sel = h('select', { class: 'in', style: 'height:36px;width:auto;font-size:13px', 'aria-label': 'Popular list setting for ' + p.name, disabled: !canWrite }, POP_OPTS.map(function (o) { return h('option', { value: o[0], text: o[1], selected: popOf(p.key) === o[0] }); }));
+            sel.addEventListener('change', function () { setPopular(p.key, p.name, sel.value).then(function () { if (!people[p.key]) people[p.key] = { name: p.name }; people[p.key].popular = sel.value; renderPeople(); }); });
+            return sel;
+          })(),
           h('button', { type: 'button', class: 'btn small', text: 'Copy URL', on: { click: function () { copyToClipboard(page, 'Copied ' + page); } } }),
           h('button', { type: 'button', class: 'btn small', text: 'Edit', disabled: !canWrite, on: { click: function () { openPersonForm({ key: p.key, name: p.name, onSaved: function () { renderPeople(); } }); } } }),
           url ? h('button', { type: 'button', class: 'btn small', text: 'Remove photo', disabled: !canWrite, on: { click: function () { removePhoto(p.name); } } }) : null
@@ -2493,7 +2510,7 @@ window.ReelAdmin = function (env) {
       weight = 2 * fresh * buzz;
       String(m.data.director || '').split(/,| and /).forEach(function (d) { d = d.trim(); if (d && !cast.some(function (c) { return personSlug(c.name) === personSlug(d); })) add(d, m, true); });
     });
-    Object.keys(idx).forEach(function (k) { var st = S.people[k], p = idx[k]; if (st && st.name) p.name = st.name; p.aka = (st && st.aka) || []; p.gender = (st && st.gender) || ''; if (personPhotoUrl(p.name)) p.pop *= 1.2; });
+    Object.keys(idx).forEach(function (k) { var st = S.people[k], p = idx[k]; if (st && st.name) p.name = st.name; p.aka = (st && st.aka) || []; p.gender = (st && st.gender) || ''; p.pin = (st && st.popular) || ''; if (personPhotoUrl(p.name)) p.pop *= 1.2; });
     return Object.keys(idx).map(function (k) { return idx[k]; });
   }
   function drawPeople() {
@@ -2506,7 +2523,10 @@ window.ReelAdmin = function (env) {
     var all = peopleDirectory().filter(function (p) { return p.titles.some(inNavLang); });
     var langs = {}; all.forEach(function (p) { Object.keys(p.langs).forEach(function (l) { langs[l] = 1; }); });
     if (P.lang && !langs[P.lang]) P.lang = '';
-    var POP = all.slice().sort(function (a, b) { return b.pop - a.pop; }).slice(0, 120), popSet = {}; POP.forEach(function (p) { popSet[p.slug] = 1; });
+    // Popular = people pinned in admin, then the top automatic picks up to 120; people hidden in admin never show.
+    var pinned = all.filter(function (p) { return p.pin === 'pin'; });
+    var auto = all.filter(function (p) { return !p.pin; }).sort(function (a, b) { return b.pop - a.pop; }).slice(0, Math.max(0, 120 - pinned.length));
+    var popSet = {}; pinned.concat(auto).forEach(function (p) { popSet[p.slug] = 1; });
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Show', style: 'margin-bottom:14px' }, ['Popular', 'All', 'Male actors', 'Female actors', 'Acting', 'Behind the camera'].map(function (r) {
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(P.role === r), text: r, on: { click: function () { P.role = r; P.page = 1; render(true); } } });
     })));
@@ -2538,7 +2558,7 @@ window.ReelAdmin = function (env) {
       });
       list.sort(function (a, b) {
         if (P.sort === 'az') return a.name.localeCompare(b.name);
-        if (P.sort === 'popular') return b.pop - a.pop || a.name.localeCompare(b.name);
+        if (P.sort === 'popular') return ((b.pin === 'pin') - (a.pin === 'pin')) || ((a.pin === 'hide') - (b.pin === 'hide')) || b.pop - a.pop || a.name.localeCompare(b.name);
         if (P.sort === 'recent') return b.last.localeCompare(a.last) || b.n - a.n || a.name.localeCompare(b.name);
         return b.n - a.n || a.name.localeCompare(b.name);
       });
