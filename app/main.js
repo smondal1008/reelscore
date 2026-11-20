@@ -451,6 +451,7 @@
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
     [langNote, none,
       mine.length ? rowSection('My List', mine, null, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
+      trailerSection(),
       rowSection('In theatres', homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
@@ -460,7 +461,6 @@
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
-      trailerSection(),
       rowSection('TV shows', homeSection('TV shows')),
       yearSection(),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
