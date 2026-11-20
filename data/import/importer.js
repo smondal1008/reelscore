@@ -7,6 +7,7 @@ window.__importFilms2 = async function (url, dry, source) {
   const items = await fetch(url, { cache: 'no-store' }).then(r => r.json());
   const movies = (await db.collection('movies').get()).docs.map(d => ({ id: d.id, data: d.data() }));
   const ids = new Set(movies.map(m => m.id)), byLoose = {};
+  const slugs = new Set(movies.map(m => slug(m.data.slug) || m.id));
   movies.forEach(m => { const y = (m.data.releaseDate || '').slice(0, 4); (byLoose[loose(m.data.title)] = byLoose[loose(m.data.title)] || []).push({ m, y }); });
   const known = {}; movies.forEach(m => (m.data.cast || []).forEach(c => { if (c.name) known[pk(c.name)] = known[pk(c.name)] || c.name; }));
   (await db.collection('people').get()).docs.forEach(d => { const p = d.data(); if (p.name) known[d.id] = p.name; (p.aka || []).forEach(a => { known[pk(a)] = known[pk(a)] || p.name; }); });
@@ -29,6 +30,8 @@ window.__importFilms2 = async function (url, dry, source) {
       m.data.cast = body.cast; continue;
     }
     if (it.mergeOnly) { (res.skipped = res.skipped || []).push(it.title + ' ' + it.releaseDate); continue; }
+    if (slugs.has(it.slug)) it.slug = it.slug + '-' + slug(L(it.languages));
+    slugs.add(it.slug);
     let id = it.slug.slice(0, 30).replace(/-+$/, ''), n = 2;
     while (ids.has(id)) id = it.slug.slice(0, 27).replace(/-+$/, '') + '-' + (n++);
     ids.add(id);
