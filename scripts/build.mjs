@@ -314,7 +314,7 @@ async function main() {
     const lang = String(d.languages || '').split(/[,;]/)[0].trim();
     if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
     const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : ''), full = base + ' – Verdicts & Reviews | Reelscore';
-    return full.length <= 60 ? full : base + ' | Reelscore';
+    return full.length <= 60 ? full : (base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base.length <= 60 ? base : clip(base, 60);
   }
   function personTitleTag(name) {
     const a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
