@@ -1937,14 +1937,12 @@
     ]));
     return box;
   }
-  function followUpSection() {
-    if (!S.uid) return null;
+  function followUpList() {
+    if (!S.uid) return [];
     var jr = S.justRated || {};
-    var list = (S.mine.wtw || []).map(function (id) { return S.byId[id]; }).filter(function (m) {
+    return (S.mine.wtw || []).map(function (id) { return S.byId[id]; }).filter(function (m) {
       return m && inNavLang(m) && m.data.section !== 'In theatres' && m.data.section !== 'Coming soon' && (!myVerdict(m.id) || jr[m.id]);
     });
-    return rowSection('What to watch this weekend or next week', list, { followUp: true },
-      h('span', { class: 'sub', text: 'Out of theatres now. Seen it? Rate it, or keep it on your watchlist.' }));
   }
 
   // ---------- What to watch this weekend or next week (top of My List) ----------
@@ -1979,13 +1977,18 @@
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:18px', text: 'My List' }));
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
-    var wk = weekendPicks(mine);
+    var fu = followUpList(), fuIds = fu.map(function (m) { return m.id; });
+    var wk = weekendPicks(mine).filter(function (x) { return fuIds.indexOf(x.m.id) === -1; });
     // Remember titles shown here while in theatres, so the home page can ask about them once they leave theatres.
     var newIds = wk.filter(function (x) { return x.m.data.section === 'In theatres' && (S.mine.wtw || []).indexOf(x.m.id) === -1 && !myVerdict(x.m.id); }).map(function (x) { return x.m.id; });
     if (newIds.length && S.mineLoaded) { S.mine.wtw = (S.mine.wtw || []).concat(newIds).slice(-60); saveMine(null); }
     if (wk.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'What to watch this weekend or next week' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'Your watchlist titles releasing this week or next, then up to 5 picks: unwatched titles from your watchlist first, then popular releases you haven’t rated.' }),
       h('div', { class: 'grid-posters' }, wk.map(function (x) { return posterCard(x.m, x.opts); }))]));
+    // Titles that were in What to watch while in theatres and have since left: Rate or Not seen.
+    if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Out of theatres: seen these?' }),
+      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Rate it. Not yet? Keep it on your watchlist.' }),
+      h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { followUp: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
