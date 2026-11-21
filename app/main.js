@@ -452,11 +452,12 @@
   }
 
   // ---------- components ----------
-  // Streaming service tile, bottom right of a poster: the service's own logo where we have one (public-domain logo files
-  // from Wikimedia Commons, rehosted on Cloudinary; the names stay their owners' trademarks), else its short name on its colour.
-  var PLAT = [[/netflix/i, 'Netflix', '#B20710', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277570/xs2kvdzix07z2shy35fw.svg'], [/prime|amazon prime/i, 'Prime', '#0F79AF', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277572/dniimngxdzosvhfdngjh.svg'], [/mini ?tv/i, 'miniTV', '#2B2F3D', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277618/favq4myki6jl5iygkxdk.png'],
-    [/mx player/i, 'MX', '#1E5BD7'], [/hotstar/i, 'Hotstar', '#0C1E5B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/c_crop,g_west,w_0.27,h_1.0/f_png,h_96/v1795277574/hbmihxxsrph5db0v8bzi.png'], [/jiocinema/i, 'JioCinema', '#C2185B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277578/t0ck0ntwqk7z4m8ipqt5.png'], [/zee5/i, 'ZEE5', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277575/qk0iqwvgcw0rgyhh7npo.svg'],
-    [/sony ?liv/i, 'SonyLIV', '#1F1F1F', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277577/c1yivvxnq1xchvaqpv0r.png'], [/hoichoi/i, 'hoichoi', '#C0392B'], [/altt/i, 'ALTT', '#7A1F3D'], [/sun ?nxt/i, 'Sun NXT', '#D35400'],
+  // Streaming service tile, bottom right of a poster: the service's own logo where we have one (rehosted on Cloudinary: Netflix,
+  // JioHotstar and SonyLIV icons from provider-static.plex.tv, supplied by the owner; the rest public-domain files from Wikimedia
+  // Commons; the logos stay their owners' trademarks), else its short name on its colour.
+  var PLAT = [[/netflix/i, 'Netflix', '#B20710', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278115/spekvxajic0oi9ol4afr.svg'], [/prime|amazon prime/i, 'Prime', '#0F79AF', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277572/dniimngxdzosvhfdngjh.svg'], [/mini ?tv/i, 'miniTV', '#2B2F3D', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277618/favq4myki6jl5iygkxdk.png'],
+    [/mx player/i, 'MX', '#1E5BD7'], [/hotstar/i, 'Hotstar', '#0C1E5B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg'], [/jiocinema/i, 'JioCinema', '#C2185B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277578/t0ck0ntwqk7z4m8ipqt5.png'], [/zee5/i, 'ZEE5', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277575/qk0iqwvgcw0rgyhh7npo.svg'],
+    [/sony ?liv/i, 'SonyLIV', '#1F1F1F', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278117/vybazqeucxvmpipazla0.svg'], [/hoichoi/i, 'hoichoi', '#C0392B'], [/altt/i, 'ALTT', '#7A1F3D'], [/sun ?nxt/i, 'Sun NXT', '#D35400'],
     [/\baha\b/i, 'aha', '#E65100'], [/youtube/i, 'YouTube', '#C4302B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277562/hbr6zyrvtrw6u2lphsjz.png'], [/eros/i, 'Eros', '#2B2F3D'], [/viu/i, 'Viu', '#B8860B'], [/voot/i, 'Voot', '#5B2A86']];
   function platBadge(p) {
     var first = String(p).split('/')[0].trim(), hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
