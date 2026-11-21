@@ -120,6 +120,9 @@
     var tot = n.a + n.b + n.c;
     return { tot: tot, n: n, pct: tot ? Math.round(100 * (n.a + n.b) / tot) : null, raters: raters };
   }
+  // A score is shown only once a title has this many verdicts; until then posters say "New".
+  var MIN_SHOW = 3;
+  function shownPct(sc) { return sc.tot >= MIN_SHOW ? sc.pct : null; }
   function myVerdict(mid) { return S.uid && S.verdicts[S.uid] ? (S.verdicts[S.uid].v || {})[mid] : null; }
 
   // ---------- writes ----------
@@ -151,7 +154,7 @@
       pc.querySelectorAll('.qb[data-v]').forEach(function (q) { q.setAttribute('aria-pressed', String(my === q.getAttribute('data-v'))); });
       if (b && b.lastChild && b.lastChild.nodeType === 3) {
         var m = S.byId[id], sc = score(id);
-        if (m) b.lastChild.nodeValue = sc.pct === null ? (released(m) ? 'New' : fmtDate(m.data.releaseDate)) : sc.pct + '%';
+        if (m) b.lastChild.nodeValue = shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(m.data.releaseDate)) : sc.pct + '%';
       }
     });
     var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub');
@@ -504,7 +507,7 @@
       var p = d.releaseDate.split('-');
       top = h('span', { class: 'datebadge' }, [h('b', { text: String(+p[2]) }), h('small', { text: MONTHS[+p[1] - 1].toUpperCase() })]);
     } else {
-      top = h('span', { class: 'badge' }, [h('i'), sc.pct === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
+      top = h('span', { class: 'badge' }, [h('i'), shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
     }
     var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
     var on = inList(m.id), pa = artLazy(m, 'poster');
@@ -1048,7 +1051,7 @@
     var chips = [];
     if (langs.length) chips.push(h('span', { class: 'hc' }, [h('span', { 'aria-hidden': 'true', text: '🗣' }), 'In ' + langs.join(', ')]));
     if (rk && rk <= 10) chips.push(h('span', { class: 'hc' }, [h('b', { text: 'TOP' }), '#' + rk + ' ' + secName]));
-    else if (sc.pct !== null) chips.push(h('span', { class: 'hc' }, [h('b', { text: sc.pct + '%' }), sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts')]));
+    else if (shownPct(sc) !== null) chips.push(h('span', { class: 'hc' }, [h('b', { text: sc.pct + '%' }), sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts')]));
     else chips.push(h('span', { class: 'hc' }, [statusLabel(m)]));
     var video = null;
     if (playing && yt) {
@@ -1156,9 +1159,9 @@
     var overall = h('div', { class: 'scard' }, [
       h('div', {}, [
         h('div', { class: 'kicker', text: 'Overall score' }),
-        h('div', { class: 'big', style: 'color:var(--accent);font-size:' + (sc.pct === null ? '34px' : '52px'), text: sc.pct === null ? (rel ? 'Verdicts open' : 'Opens on release') : sc.pct + '%' }),
-        sc.tot ? h('div', { class: 'split', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + (100 * sc.n.a / sc.tot) + '%;background:var(--accent)' }), h('span', { style: 'width:' + (100 * sc.n.b / sc.tot) + '%;background:var(--text)' })]) : null,
-        h('div', { class: 'sub', style: 'margin-top:6px' }, [sc.tot ? vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(' · ') + ' · ' + sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') : (rel ? 'Seen it? Your verdict starts the score.' : 'Verdicts open on ' + fmtDate(d.releaseDate, true) + '.'), ' ', h('a', { href: '/about', style: 'color:var(--muted)', text: 'How scores work' })])
+        h('div', { class: 'big', style: 'color:var(--accent);font-size:' + (shownPct(sc) === null ? '34px' : '52px'), text: shownPct(sc) === null ? (rel ? 'Verdicts open' : 'Opens on release') : sc.pct + '%' }),
+        shownPct(sc) !== null ? h('div', { class: 'split', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + (100 * sc.n.a / sc.tot) + '%;background:var(--accent)' }), h('span', { style: 'width:' + (100 * sc.n.b / sc.tot) + '%;background:var(--text)' })]) : null,
+        h('div', { class: 'sub', style: 'margin-top:6px' }, [sc.tot && shownPct(sc) === null ? sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') + ' so far. The score appears after ' + MIN_SHOW + '.' : sc.tot ? vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(' · ') + ' · ' + sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') : (rel ? 'Seen it? Your verdict starts the score.' : 'Verdicts open on ' + fmtDate(d.releaseDate, true) + '.'), ' ', h('a', { href: '/about', style: 'color:var(--muted)', text: 'How scores work' })])
       ]),
       rel ? h('div', { role: 'group', 'aria-label': 'Your verdict' }, [
         h('div', { class: 'kicker', style: 'margin-bottom:8px', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
