@@ -163,6 +163,7 @@
   .nav a.brand { color: var(--text); text-decoration: none; }
   .navr { display: flex; align-items: center; gap: 12px; position: relative; }
   .results { position: absolute; top: 52px; right: 0; width: min(380px, 90vw); background: var(--panel); border: 1px solid var(--line2); border-radius: 14px; padding: 6px; display: flex; flex-direction: column; gap: 2px; box-shadow: 0 16px 40px rgba(0,0,0,.5); }
+  .results[hidden] { display: none; }
   .results a { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; color: var(--text); text-decoration: none; }
   .results a:hover, .results a:focus { background: var(--panel2); outline: none; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: var(--panel2); }
