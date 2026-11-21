@@ -257,6 +257,14 @@
   .sect-h .sub a { color: var(--muted); }
   .rowx { display: flex; gap: 18px; overflow-x: auto; padding: 0 40px 10px; scroll-padding-inline: 40px; scroll-snap-type: x mandatory; overscroll-behavior-x: contain; }
   .rowx > * { scroll-snap-align: start; }
+  /* Row scrollbars: a thin dark thumb on no track, shown only while the pointer is over the row. */
+  .rowx { scrollbar-width: thin; scrollbar-color: transparent transparent; }
+  .rowx:hover, .rowx:focus-within { scrollbar-color: rgba(244,241,234,.28) transparent; }
+  .rowx::-webkit-scrollbar { height: 6px; background: transparent; }
+  .rowx::-webkit-scrollbar-track { background: transparent; }
+  .rowx::-webkit-scrollbar-thumb { background: transparent; border-radius: 3px; }
+  .rowx:hover::-webkit-scrollbar-thumb, .rowx:focus-within::-webkit-scrollbar-thumb { background: rgba(244,241,234,.28); }
+  .rowx::-webkit-scrollbar-thumb:hover { background: rgba(244,241,234,.45); }
   .gnav, .ptabs { scroll-padding-inline: 40px; }
   .pc { flex: 0 0 auto; width: 200px; display: flex; flex-direction: column; gap: 8px; scroll-snap-align: start; }
   .pc a.pa { position: relative; display: block; aspect-ratio: 2/3; border-radius: 14px; overflow: hidden; color: var(--text); text-decoration: none; }
