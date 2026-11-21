@@ -1184,7 +1184,10 @@ window.ReelAdmin = function (env) {
       h('h2', { text: 'Images & trailer clip' }),
       h('div', { class: 'images' }, [imageSlot('poster'), imageSlot('banner')]),
       videoSlot(),
-      h('div', { class: 'note', text: 'Only upload images you have the rights to use, such as studio press-kit art or licensed TMDB images.' })
+      h('div', { class: 'grid', style: 'margin-top:12px' }, [
+        field('Poster source & permission', 'posterSource', { placeholder: 'e.g. Press kit from Yash Raj Films, OK by email 21 Nov 2026', note: 'Who supplied the image and how you have permission. Kept private, never shown on the site.' })
+      ]),
+      h('div', { class: 'note', text: 'Only upload images you have the rights to use: press-kit art sent or approved by the producer or distributor, or an image under a licence that allows it (TVmaze CC BY-SA images are credited automatically). Do not copy posters from Wikipedia, IMDb or TMDB.' })
     ]));
 
     // basics

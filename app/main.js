@@ -922,8 +922,15 @@
     if (S.route !== 'home' || S.heroPause || S.play || document.hidden || !S.feat || S.feat.length < 2) return;
     S.slide = (S.slide + 1) % S.feat.length; drawHero();
   }, 8000);
+  // Credit for data from open sources (TVmaze is CC BY-SA and asks for a link; Wikidata is CC0 but credited anyway).
+  function srcCredit(d) {
+    var tvm = safeUrl(d.srcTvmaze);
+    if (tvm) return h('p', { class: 'note', style: 'margin:6px 0 0;font-size:12px;color:var(--muted)' }, ['Show details and image from ', h('a', { href: tvm, rel: 'noopener', target: '_blank', text: 'TVmaze' }), ' (', h('a', { href: 'https://creativecommons.org/licenses/by-sa/4.0/', rel: 'noopener license', target: '_blank', text: 'CC BY-SA 4.0' }), ')']);
+    if (/^Q\d+$/.test(d.wikidata || '')) return h('p', { class: 'note', style: 'margin:6px 0 0;font-size:12px;color:var(--muted)' }, ['Film facts from ', h('a', { href: 'https://www.wikidata.org/wiki/' + d.wikidata, rel: 'noopener', target: '_blank', text: 'Wikidata' })]);
+    return null;
+  }
   function footer() {
-    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' })]);
+    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
   }
 
   // ---------- title ----------
@@ -1085,6 +1092,7 @@
           h('h1', { class: 'display ttl', style: 'font-size:clamp(44px,6vw,84px)', text: d.title }),
           d.subtitle ? h('div', { class: 'display sbt', style: 'font-size:clamp(24px,3vw,36px);color:#D9D5DF', text: d.subtitle }) : null,
           d.synopsis ? h('p', { class: 'lede', style: 'max-width:680px', text: d.synopsis }) : null,
+          srcCredit(d),
           h('div', { class: 'acts2' }, [
             playBtn,
             playing ? h('button', { type: 'button', class: 'roundadd', id: 'tMute', 'aria-label': S.tplay.muted ? 'Unmute' : 'Mute', text: S.tplay.muted ? '🔇' : '🔊', on: { click: toggleTitleMute } }) : null,

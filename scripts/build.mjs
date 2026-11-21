@@ -322,7 +322,7 @@ async function main() {
   }
 
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
-  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0;
+  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0;
 
   // ----- title pages -----
   for (const m of movies) {
@@ -360,6 +360,8 @@ async function main() {
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d);
     if (vids.length) body += '<h2>Trailers &amp; songs</h2><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
+    if (d.srcTvmaze) body += '<p class="note">Show details and image from <a href="' + esc(safeUrl(d.srcTvmaze) || 'https://www.tvmaze.com/') + '" rel="noopener">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>).</p>';
+    else if (d.wikidata) body += '<p class="note">Film facts from <a href="https://www.wikidata.org/wiki/' + esc(d.wikidata) + '" rel="noopener">Wikidata</a> (CC0).</p>';
     const more = similar(m);
     if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li><a href="' + movieUrl(o) + '">' + esc(o.data.title) + '</a> <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
 
@@ -370,6 +372,7 @@ async function main() {
       genre: d.genre || undefined,
       inLanguage: lang || undefined,
       contentRating: d.certificate || undefined,
+      sameAs: /^tt\d+$/.test(d.imdb || '') ? 'https://www.imdb.com/title/' + d.imdb + '/' : undefined,
       duration: tv ? undefined : isoDuration(d.runtime),
       director: directors.length ? directors.map(n => ({ '@type': 'Person', name: n, url: indexedPerson(personSlug(n)) ? SITE + '/person/' + personSlug(n) : undefined })) : undefined,
       actor: actors.length ? actors.slice(0, 15).map(c => ({ '@type': 'Person', name: c.name, url: indexedPerson(personSlug(c.name)) ? SITE + '/person/' + personSlug(c.name) : undefined })) : undefined
@@ -390,14 +393,17 @@ async function main() {
       name: clip(d.title + ' – ' + x.title, 100), description: clip(x.kind + ' of ' + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + lang : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 300),
       thumbnailUrl: ytThumb(x.yt), uploadDate: vDate(x), embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
       inLanguage: lang || undefined }));
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs, ...videoLd], route: 'title', body }));
+    // A title with no story, no videos and no poster is only a list of facts: it stays out of the index until it has more.
+    const thinTitle = !d.synopsis && !vids.length && !poster && !sc.tot;
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs, ...videoLd], route: 'title', body, robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
       const au = (tv ? '/tv/' : '/movie/') + alias;
       if (!alias || au === url || !/^[a-z0-9-]+$/.test(alias) || seen.has(au) || aliasSeen.has(au)) continue;
       aliasSeen.add(au); aliases.push([au, url]);
     }
-    sitemap.push({ loc: url, lastmod: (d.updatedAt || m.updated || '').slice(0, 10), pri: '0.8' });
+    if (!thinTitle) sitemap.push({ loc: url, lastmod: (d.updatedAt || m.updated || '').slice(0, 10), pri: '0.8' });
+    else nThinTitles++;
     nTitles++;
   }
 
@@ -453,7 +459,7 @@ async function main() {
   const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
   // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
   // empty lists and the default "Cast" role.
-  const slim = d => { const o = compact(d); delete o.source; delete o.posterId; delete o.bannerId;
+  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.posterId; delete o.bannerId;
     if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
     if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
     return o; };
@@ -595,7 +601,7 @@ async function main() {
       '<p>Alongside a verdict, anyone signed in can write a review of up to 2,000 characters, and mark it as containing spoilers so it stays hidden until a reader chooses to open it. Reviews are public and shown with the writer’s name. You can edit or delete your own review at any time.</p>' +
       '<p>Reviews must be about the title. Reviews that are abusive, hateful, spam, copied from elsewhere or that reveal spoilers without the spoiler mark are removed.</p>' +
       '<h2>Where the information comes from</h2>' +
-      '<p>Titles, release dates, cast and crew are compiled by the Reelscore team from public release information Story summaries are written by the team in our own words. Trailers, teasers and songs are linked only from the official channels of the studios, music labels and streaming services that published them, and play on Reelscore without leaving the site.</p>' +
+      '<p>Titles, release dates, cast and crew are compiled by the Reelscore team from public release information, with many older film facts (release dates, languages, cast, crew and IMDb links) drawn from <a href="https://www.wikidata.org/" rel="noopener">Wikidata</a>, which is free to reuse (CC0). Story summaries are written by the team in our own words. TV show details and images marked as coming from TVmaze are from <a href="https://www.tvmaze.com/" rel="noopener">TVmaze</a>, licensed under <a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>. Posters are shown only with the permission of the film’s producer or distributor, or under a licence that allows it. Trailers, teasers and songs are linked only from the official channels of the studios, music labels and streaming services that published them, and play on Reelscore without leaving the site.</p>' +
       '<p><a href="/browse">Browse all titles</a> · <a href="/people">Actors and filmmakers</a> · <a href="/trailers">Latest trailers</a></p>';
     writeHub('about.html', { title: 'About Reelscore & How Scores Work', description: 'How Reelscore verdicts become a score: one verdict per person, the share that say watch it, Peer Score from people you follow, and the rules for reviews.', canonical: '/about', ogPath: '/about', route: 'about', body,
       jsonld: [{ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About Reelscore and how scores work', url: SITE + '/about', about: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' } },
@@ -674,7 +680,7 @@ async function main() {
     if (changed) fs.writeFileSync(f, html);
   }
 
-  console.log(`[seo] wrote ${nTitles} title pages (${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[seo] wrote ${nTitles} title pages (${nThinTitles} kept out of the index until they have a story; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
 main().catch(e => { console.error('[seo] build failed:', e && e.stack || e); process.exit(1); });
