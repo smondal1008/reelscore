@@ -288,7 +288,7 @@
   .addl:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .plat { position: absolute; right: 10px; bottom: 10px; min-width: 34px; height: 30px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; border-radius: 8px; color: #fff; font-size: 12px; font-weight: 800; letter-spacing: .1px; line-height: 1; box-shadow: 0 2px 8px rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.18); }
   .pc a.pa:has(.plat) .ptitle { right: 64px; }
-  .plat.logo { width: 32px; height: 32px; min-width: 0; padding: 0; overflow: hidden; background: #0B0A0F; }
+  .plat.logo { width: 32px; height: 32px; min-width: 0; padding: 0; overflow: hidden; background: #0B0A0F; border: 0; box-shadow: none; }
   .plat.logo.wide { width: auto; padding: 0 6px; }
   .plat.logo img { width: 100%; height: 100%; object-fit: contain; display: block; }
   .plat.logo.wide img { width: auto; height: 20px; }
