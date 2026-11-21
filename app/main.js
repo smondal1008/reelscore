@@ -286,6 +286,8 @@
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
+    S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
+    S.prevRoute = S.route;
     S.lastPath = location.pathname;
     if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
@@ -307,6 +309,10 @@
     var href = a.getAttribute('href');
     if (!href || href.charAt(0) !== '/' || href.charAt(1) === '/') return;
     if (/^\/(setup|data|js)\b|\.\w+$/.test(href)) return;
+    if (S.route === 'home') {
+      var sec = a.closest('.view section[aria-label]'), row = sec && sec.querySelector('.rowx');
+      S.homeSpot = sec ? { label: sec.getAttribute('aria-label'), left: row ? row.scrollLeft : 0 } : null;
+    }
     e.preventDefault(); go(href);
   });
   window.addEventListener('popstate', function () {
@@ -338,6 +344,16 @@
   (function () { var sel = $('navLang'); if (sel) sel.addEventListener('change', function () { setNavLang(sel.value); }); })();
   document.addEventListener('focusout', function () { setTimeout(function () { if (S.pending) render(); }, 0); });
 
+  // Back on the home page after opening a title from one of its rows: return to that row, scrolled as it was.
+  function restoreHomeSpot() {
+    var spot = S.homeSpot; if (!spot) return;
+    var sec = Array.prototype.filter.call(document.querySelectorAll('#view-home section[aria-label]'), function (x) { return x.getAttribute('aria-label') === spot.label; })[0];
+    if (!sec) return;
+    var row = sec.querySelector('.rowx'); if (row) row.scrollLeft = spot.left;
+    var nav = document.querySelector('header.nav'), off = (nav ? nav.getBoundingClientRect().height : 0) + 12;
+    var put = function () { window.scrollTo(0, Math.max(0, sec.getBoundingClientRect().top + window.pageYOffset - off)); if (row) row.scrollLeft = spot.left; };
+    put(); setTimeout(put, 60); setTimeout(put, 400);
+  }
   function draw() {
     // Keep each horizontal row's scroll position (and keyboard focus) across re-renders of the same page.
     var here = S.route + ':' + (S.param || ''), keep = {}, focusKey = null;
@@ -352,7 +368,7 @@
       }
     }
     S.lastDrawn = here;
-    if (S.route === 'home') drawHome();
+    if (S.route === 'home') { drawHome(); if (S.restoreHome) { S.restoreHome = false; restoreHomeSpot(); } }
     else if (S.route === 'title') drawTitle();
     else if (S.route === 'list') drawList();
     else if (S.route === 'browse') drawBrowse();
