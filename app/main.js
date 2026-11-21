@@ -452,6 +452,15 @@
   }
 
   // ---------- components ----------
+  // Streaming service tile, bottom right of a poster: the service's short name in plain text on its colour (not its logo).
+  var PLAT = [[/netflix/i, 'Netflix', '#B20710'], [/prime|amazon prime/i, 'Prime', '#0F79AF'], [/mini ?tv/i, 'miniTV', '#2B2F3D'], [/mx player/i, 'MX', '#1E5BD7'],
+    [/hotstar/i, 'Hotstar', '#0C1E5B'], [/jiocinema/i, 'JioCinema', '#C2185B'], [/zee5/i, 'ZEE5', '#5B2A86'], [/sony ?liv/i, 'SonyLIV', '#1F1F1F'], [/hoichoi/i, 'hoichoi', '#C0392B'],
+    [/altt/i, 'ALTT', '#7A1F3D'], [/sun ?nxt/i, 'Sun NXT', '#D35400'], [/\baha\b/i, 'aha', '#E65100'], [/youtube/i, 'YouTube', '#C4302B'], [/eros/i, 'Eros', '#2B2F3D'], [/viu/i, 'Viu', '#B8860B'], [/voot/i, 'Voot', '#5B2A86']];
+  function platBadge(p) {
+    var first = String(p).split('/')[0].trim(), hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
+    var label = hit ? hit[1] : (first.length > 9 ? first.split(/\s+/)[0] : first);
+    return h('span', { class: 'plat', title: 'On ' + p, 'aria-label': 'On ' + p, style: 'background:' + (hit ? hit[2] : 'rgba(11,10,15,.88)'), text: label });
+  }
   function posterCard(m, opts) {
     opts = opts || {};
     var d = m.data, sc = score(m.id), img = !!safeUrl(d.posterUrl);
@@ -468,7 +477,7 @@
       h('div', { class: 'pw' }, [
         h('a', { class: 'pa art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, [
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
-          isOtt(m) && d.platform ? h('span', { class: 'plat', text: d.platform }) : null
+          isOtt(m) && d.platform ? platBadge(d.platform) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
           'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
