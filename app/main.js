@@ -1190,7 +1190,7 @@
     // sections, in the order of the tabs above them
     var act = actionBlock(m, rel, ott);
     var theatre = keep && keep._mid === m.id ? keep : videosBlock(m);
-    var main = h('div', { class: 'colm' }, [act, aboutBlock(m), castBlock(m), reviewsBlock(m, rel)]);
+    var main = h('div', { class: 'colm' }, [act, aboutBlock(m), castBlock(m), rel ? reviewsBlock(m, rel) : null]); // no Reviews before release
     var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
@@ -1224,7 +1224,7 @@
       ['videos', 'Trailers & songs', nVids],
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
-      ['reviews', 'Reviews', nRev],
+      released(m) ? ['reviews', 'Reviews', nRev] : null,
       r ? ['more', 'More like this', 0] : null
     ].filter(Boolean)));
     put(theatre);
