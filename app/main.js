@@ -1902,6 +1902,12 @@
     fill();
   }
 
+  // Card actions by status: Book tickets for theatre titles, Watch now for released titles with a streaming link, reminders for upcoming ones.
+  function actOpts(m) {
+    var sec = m.data.section;
+    if (!released(m)) return { dateBadge: true, remind: true, book: sec === 'Coming soon' || sec === 'In theatres' };
+    return sec === 'In theatres' ? { book: true } : { stream: true };
+  }
   function drawBrowse() {
     var v = $('view-browse');
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
@@ -1955,7 +1961,7 @@
     var PER = 60, pages = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages);
     syncListUrl(browseHref(B, B.page));
     var from = (B.page - 1) * PER;
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
     if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { return browseHref(B, n); }));
   }
   // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
