@@ -962,7 +962,12 @@
         h('div', { class: 'kicker', style: 'margin-bottom:8px', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
         h('div', { class: 'vbtns' }, vs.map(function (x) {
           return h('button', { type: 'button', class: 'vb ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setVerdict(m.id, x[0]); } } }, [h('b', { text: x[1] }), h('small', { text: x[2] })]);
-        }))
+        })),
+        // After a verdict: ask friends for theirs. More verdicts make the score worth trusting.
+        my ? h('div', { class: 'sub', style: 'margin-top:10px' }, ['Ask friends who saw it: ',
+          h('a', { href: 'https://wa.me/?text=' + encodeURIComponent('My verdict on ' + d.title + ': ' + (vs.filter(function (x) { return x[0] === my; })[0] || [0, ''])[1] + '. What’s yours? ' + location.origin + movieUrl(m)), target: '_blank', rel: 'noopener', style: 'color:var(--accent);font-weight:600', text: 'Share on WhatsApp' }),
+          navigator.share ? ' · ' : null,
+          navigator.share ? h('a', { href: '#', style: 'color:var(--accent);font-weight:600', text: 'More…', on: { click: function (e) { e.preventDefault(); try { navigator.share({ title: d.title + ' on Reelscore', text: 'What’s your verdict on ' + d.title + '?', url: location.origin + movieUrl(m) }); } catch (er) {} } } }) : null]) : null
       ]) : h('button', { type: 'button', class: 'btn', 'aria-pressed': String(hasReminder(m.id)), on: { click: function () { toggleRemind(m.id); } } }, [hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me on release'])
     ]);
     var fr = friendScore.raters;

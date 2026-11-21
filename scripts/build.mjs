@@ -235,6 +235,16 @@ async function main() {
     console.log(`[seo] synopses applied from content/synopses.json: ${n}`);
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
 
+  // Short bios from content/bios.json fill people whose database bio is empty (an admin edit always wins).
+  try {
+    const bios = JSON.parse(fs.readFileSync(path.join(ROOT, 'content', 'bios.json'), 'utf8'));
+    let n = 0;
+    for (const p of data.people) { const b = bios[p.id]; if (typeof b === 'string' && !p.id.startsWith('_') && (!p.data.bio || p.data._bioFile)) { p.data = { ...p.data, bio: b, _bioFile: true }; n++; } }
+    const have = new Set(data.people.map(p => p.id));
+    for (const id of Object.keys(bios)) if (!id.startsWith('_') && !have.has(id) && typeof bios[id] === 'string') { data.people.push({ id, data: { bio: bios[id], _bioFile: true } }); n++; }
+    console.log(`[seo] bios applied from content/bios.json: ${n}`);
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
+
   fs.rmSync(OUT, { recursive: true, force: true });
   copyDir(ROOT, OUT);
   const shell = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -268,6 +278,7 @@ async function main() {
     const tally = {}; (credits[slug] || []).forEach(c => { tally[c.name] = (tally[c.name] || 0) + 1; });
     return Object.keys(tally).sort((a, b) => tally[b] - tally[a])[0] || slug;
   };
+  data.people.forEach(p => { if (p.data && p.data._bioFile && !p.data.name) { p.data = { ...p.data, name: personName(p.id) }; people[p.id] = p.data; } });
   const personLink = name => {
     const k = personSlug(name);
     return k && indexedPerson(k) ? '<a href="/person/' + k + '">' + esc(name) + '</a>' : esc(name);
@@ -332,7 +343,7 @@ async function main() {
       (d.genre ? String(d.genre).toLowerCase() + ' ' : '') + (tv ? 'series' : 'film') +
       (directors.length ? ' directed by ' + list(directors.slice(0, 2)) : '') +
       (actors.length ? ', starring ' + list(actors.slice(0, 3).map(c => c.name)) : '') + '.';
-    const description = clip((d.synopsis ? d.synopsis + ' ' : auto + ' ') + (sc.tot ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
+    const description = clip((d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto + ' ' : '') : auto + ' ') + (sc.tot ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
 
     const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages ? '\u0000' : '', d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean)
       .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
@@ -454,7 +465,7 @@ async function main() {
   // Home page (also the app shell other routes fall back to): share image and WebSite / Organization data.
   const homeLd = [
     { '@context': 'https://schema.org', '@type': 'WebSite', name: 'Reelscore', url: SITE + '/', description: 'Verdicts and reviews for Bollywood and regional Indian movies and series.', inLanguage: 'en-IN' },
-    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: SITE + OG_DEFAULT }
+    { '@context': 'https://schema.org', '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: SITE + '/icon-512.png', image: SITE + OG_DEFAULT }
   ];
   // ----- hub pages: home, Browse (all + each section), People -----
   // Pre-rendered so every title and person can be reached from the home page through plain links. index.html is also
@@ -465,7 +476,7 @@ async function main() {
     ['coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
     ['on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
     ['older-releases', 'Older releases', 'Older Indian Movies | Reelscore', 'Older Bollywood and regional Indian films, with cast, crew and verdicts.'],
-    ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series, with cast and verdicts.']
+    ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, with cast, trailers and verdicts.']
   ];
   const sectionOf = m => m.data.section === 'Releasing this week' ? 'In theatres' : (m.data.section || 'Older releases');
   const today = new Date().toISOString().slice(0, 10);
@@ -482,6 +493,8 @@ async function main() {
   const langList = Object.keys(langs).sort((a, b) => langs[b] - langs[a]).filter(l => langs[l] >= 5);
   const block = (h2, list, more) => list.length ? '<h2>' + h2 + '</h2><ul>' + list.join('') + '</ul>' + (more ? '<p><a href="' + more[0] + '">' + more[1] + '</a></p>' : '') : '';
   const writeHub = (rel, opts) => { write(rel, page(shell, { ogType: 'website', image: null, ...opts })); };
+  const crumbLd = (...items) => ({ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: items.map(([name, u], i) => ({ '@type': 'ListItem', position: i + 1, name, item: SITE + u })) });
+  const listLd = (name, urls) => ({ '@context': 'https://schema.org', '@type': 'ItemList', name, numberOfItems: urls.length, itemListElement: urls.slice(0, 100).map((u, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE + u })) });
 
   // Genres (pages written below)
   const GENRE_RULES = [['Action', /action|spy|superhero|heist/], ['Comedy', /comed|rom-com/], ['Drama', /drama/], ['Thriller', /thriller|mystery|crime/], ['Horror', /horror/],
@@ -508,7 +521,7 @@ async function main() {
     homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
   homeBody += '<p><a href="/about">About Reelscore and how scores work</a></p>';
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
-    canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
+    canonical: '/', ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
   write('index.html', homeHtml);
 
   // Browse: all sections, then one page per section listing every title in it
@@ -516,13 +529,15 @@ async function main() {
   HUBS.forEach(h => { browseBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
   browseBody += '<h2>By genre</h2><ul>' + genreLinks() + '</ul>';
   browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
-  writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', ogPath: '/browse', route: 'browse', body: browseBody });
+  writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', canonical: '/browse', ogPath: '/browse', route: 'browse', body: browseBody,
+    jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse']), listLd('Browse sections', HUBS.map(h => '/browse/' + h[0]))] });
   for (const [slug, name, title, desc] of HUBS) {
     const list = bySection[name];
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><p>' + list.length + ' title' + (list.length === 1 ? '' : 's') + '. ' + esc(desc) + '</p>' +
       (list.length ? '<ul>' + list.map(titleLi).join('') + '</ul>' : '<p>Nothing here right now.</p>') +
       '<h2>Other sections</h2><ul>' + HUBS.filter(x => x[0] !== slug).map(x => '<li><a href="/browse/' + x[0] + '">' + x[1] + '</a></li>').join('') + '</ul>';
-    writeHub('browse/' + slug + '.html', { title, description: desc, ogPath: '/browse/' + slug, route: 'browse', body });
+    writeHub('browse/' + slug + '.html', { title, description: desc, canonical: '/browse/' + slug, ogPath: '/browse/' + slug, route: 'browse', body,
+      jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse'], [name, '/browse/' + slug]), listLd(name, list.map(movieUrl))] });
     sitemap.push({ loc: '/browse/' + slug, pri: '0.7' });
   }
 
@@ -557,7 +572,8 @@ async function main() {
   // People
   const peopleBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › People</nav><h1>Indian actors and filmmakers</h1><p>' + hubPeople.length +
     ' actors, directors and crew, busiest first.</p><ul>' + hubPeople.map(personLi).join('') + '</ul>';
-  writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', ogPath: '/people', route: 'people', body: peopleBody });
+  writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', canonical: '/people', ogPath: '/people', route: 'people', body: peopleBody,
+    jsonld: [crumbLd(['Home', '/'], ['People', '/people']), listLd('Indian actors and filmmakers', hubPeople.map(k => '/person/' + k))] });
 
   // ----- About / how scores work -----
   {
