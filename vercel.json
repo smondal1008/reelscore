@@ -21,6 +21,14 @@
   ],
   "rewrites": [
     {
+      "source": "/trailers",
+      "destination": "/"
+    },
+    {
+      "source": "/songs",
+      "destination": "/"
+    },
+    {
       "source": "/movie/:slug",
       "destination": "/"
     },

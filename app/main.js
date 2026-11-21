@@ -258,6 +258,7 @@
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
+    else if (path === '/trailers' || path === '/songs') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
       S.route = 'genre'; S.param = mm[1].toLowerCase();
@@ -282,6 +283,7 @@
     else if (S.route === 'people') document.title = PEOPLE_TITLE;
     else if (S.route === 'genre') document.title = genreTitle(genreBySlug(S.param));
     else if (S.route === 'year') document.title = yearTitle(S.param);
+    else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.lastPath = location.pathname;
@@ -358,6 +360,7 @@
     else if (S.route === 'people') drawPeople();
     else if (S.route === 'genre') drawGenre();
     else if (S.route === 'year') drawYear();
+    else if (S.route === 'vids') drawVids();
     if (Object.keys(keep).length) {
       document.querySelectorAll('.view .rowx').forEach(function (r) {
         var s = r.closest('section'), k = s && s.getAttribute('aria-label');
@@ -546,62 +549,96 @@
   }
 
   // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
-  function trailerSection() {
+  function trailerPicks(all) {
     var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
     var picks = [];
     S.movies.forEach(function (m) {
-      if (!inNavLang(m) || isTv(m) || (m.data.releaseDate || '') < cut) return;
+      if (!inNavLang(m) || isTv(m) || (!all && (m.data.releaseDate || '') < cut)) return;
       var it = vidItems(m), k = -1;
       it.some(function (x, i) { if (x.cat === 'trailers' && (x.yt || x.clip)) { k = i; return true; } });
       if (k >= 0) picks.push({ m: m, i: k, x: it[k] });
     });
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
-    picks = picks.slice(0, 20);
+    return picks;
+  }
+  function trailerCard(p) {
+    var m = p.m, d = m.data, rel = released(m);
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+    return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault(); e.stopPropagation();
+      openTrailerOverlay(m, p.x, e.currentTarget);
+    } } }, [
+      h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+      h('span', { class: 'tt', text: d.title }),
+      h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
+    ]);
+  }
+  function showAll(href) { return h('span', { class: 'sub' }, [h('a', { href: href, text: 'Show all' })]); }
+  function trailerSection() {
+    var picks = trailerPicks(false).slice(0, 20);
     if (!picks.length) return null;
     return h('section', { class: 'sect', 'aria-label': 'New trailers' }, [
-      h('div', { class: 'sect-h' }, [h('h2', { text: 'New trailers' })]),
-      h('div', { class: 'rowx' }, picks.map(function (p) {
-        var m = p.m, d = m.data, rel = released(m);
-        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
-        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault(); e.stopPropagation();
-          openTrailerOverlay(m, p.x, e.currentTarget);
-        } } }, [
-          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tt', text: d.title }),
-          h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
-        ]);
-      }))
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New trailers' }), showAll('/trailers')]),
+      h('div', { class: 'rowx' }, picks.map(trailerCard))
     ]);
   }
 
   // ---------- New songs row: songs from recent and upcoming titles, played in the full-screen overlay ----------
-  function songSection() {
+  function songPicks(all) {
     var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10), picks = [];
     S.movies.forEach(function (m) {
-      if (!inNavLang(m) || isTv(m) || (m.data.releaseDate || '') < cut) return;
-      vidItems(m).filter(function (x) { return x.cat === 'songs' && (x.yt || x.clip); }).slice(0, 3).forEach(function (x) { picks.push({ m: m, x: x }); });
+      if (!inNavLang(m) || isTv(m) || (!all && (m.data.releaseDate || '') < cut)) return;
+      var ss = vidItems(m).filter(function (x) { return x.cat === 'songs' && (x.yt || x.clip); });
+      (all ? ss : ss.slice(0, 3)).forEach(function (x) { picks.push({ m: m, x: x }); });
     });
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
-    picks = picks.slice(0, 24);
+    return picks;
+  }
+  function songCard(p) {
+    var m = p.m, d = m.data;
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+    return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault(); e.stopPropagation();
+      openTrailerOverlay(m, p.x, e.currentTarget);
+    } } }, [
+      h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+      h('span', { class: 'tt', text: p.x.title }),
+      h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') })
+    ]);
+  }
+  function songSection() {
+    var picks = songPicks(false).slice(0, 20);
     if (!picks.length) return null;
     return h('section', { class: 'sect', 'aria-label': 'New songs' }, [
-      h('div', { class: 'sect-h' }, [h('h2', { text: 'New songs' })]),
-      h('div', { class: 'rowx' }, picks.map(function (p) {
-        var m = p.m, d = m.data;
-        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
-        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault(); e.stopPropagation();
-          openTrailerOverlay(m, p.x, e.currentTarget);
-        } } }, [
-          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tt', text: p.x.title }),
-          h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') })
-        ]);
-      }))
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New songs' }), showAll('/songs')]),
+      h('div', { class: 'rowx' }, picks.map(songCard))
     ]);
+  }
+
+  // ---------- /trailers and /songs: every trailer or video song, newest first, filterable by language ----------
+  var VID_PAGES = { trailers: { h: 'All trailers', t: 'Latest Movie Trailers | Reelscore', what: 'trailers', picks: trailerPicks, card: trailerCard },
+                    songs: { h: 'All video songs', t: 'Latest Video Songs | Reelscore', what: 'video songs', picks: songPicks, card: songCard } };
+  function drawVids() {
+    var v = $('view-vids'), P = VID_PAGES[S.param];
+    v.innerHTML = '';
+    var w = h('section', { class: 'wrapx', style: 'padding-top:28px', 'aria-label': P.h }); v.appendChild(w);
+    w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb', style: 'margin-bottom:10px' }, [h('a', { href: '/', text: 'Home' }), ' › ', P.h]));
+    w.appendChild(h('h1', { class: 'display', style: 'margin:0 0 6px', text: P.h }));
+    if (!S.loaded) { w.appendChild(h('p', { class: 'note', text: 'Loading…' })); return; }
+    var all = P.picks(true), langs = {};
+    all.forEach(function (p) { var l = langOf(p.m.data); if (l) langs[l] = 1; });
+    var list = all.filter(function (p) { return !S.vids.lang || langOf(p.m.data) === S.vids.lang; });
+    w.appendChild(h('p', { class: 'note', style: 'margin:0 0 18px', text: list.length + ' ' + P.what + ', newest first' + (S.navLang ? ' · ' + S.navLang + ' only' : '') }));
+    if (!S.navLang && Object.keys(langs).length > 1) {
+      var e = h('select', { class: 'in', id: 'vLang' }, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })).map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === S.vids.lang }); }));
+      e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); render(true); });
+      w.appendChild(h('div', { class: 'field', style: 'max-width:220px;margin-bottom:18px' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
+    }
+    w.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(P.card)));
+    if (list.length > S.vids.n) w.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; render(true); } } })]));
+    if (!list.length) w.appendChild(h('p', { class: 'note', text: 'Nothing here yet.' }));
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
