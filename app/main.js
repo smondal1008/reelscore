@@ -606,7 +606,6 @@
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      followUpSection(),
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       songSection(),
       genreSection(),
