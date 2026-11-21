@@ -57,6 +57,12 @@ function list(names) { return names.length < 2 ? names.join('') : names.slice(0,
 function ytId(u) { const mm = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return mm ? mm[1] : ''; }
 function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
 function ytVideos(d) { return (d.videos || []).map(x => ({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', yt: ytId(safeUrl(x.url)), cat: vidCat(x.kind), addedAt: x.addedAt || '' })).filter(x => x.yt); }
+// Same rule as app/main.js: ask Cloudinary for a sized, compressed copy instead of the uploaded original.
+function cld(u, w) {
+  const m = typeof u === 'string' && u.match(/^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)$/);
+  if (!m || /^[a-z]{1,3}_[^/]*\//.test(m[2])) return u;
+  return m[1] + 'f_auto,q_auto,c_limit,w_' + (w || 800) + '/' + m[2];
+}
 const ytThumb = id => 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
 function isoDuration(rt) {
   const s = String(rt || '').toLowerCase(); let h = 0, m = 0, x;
@@ -339,7 +345,7 @@ async function main() {
     const actors = cast.filter(c => !CREW_RE.test(c.role || '')), crew = cast.filter(c => CREW_RE.test(c.role || ''));
     const directors = String(d.director || '').split(/,| and /).map(s => s.trim()).filter(Boolean);
     const lang = String(d.languages || '').split(/[,;]/)[0].trim();
-    const poster = safeUrl(d.posterUrl), banner = safeUrl(d.bannerUrl);
+    const poster = cld(safeUrl(d.posterUrl), 400), banner = cld(safeUrl(d.bannerUrl), 1200);
     const label = tv ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (y || '');
 
     const title = movieTitleTag(m);
@@ -432,7 +438,7 @@ async function main() {
     const span = years.length ? (years[0] === years[years.length - 1] ? years[0] : years[0] + '–' + years[years.length - 1]) : '';
     const known = acting.length >= crewT.length ? 'Actor' : (crewT.some(t => /direct/i.test(t.roles.join(' '))) ? 'Director' : 'Film crew');
     const famous = (acting.length ? acting : crewT).filter(t => t.when && t.when <= new Date().toISOString().slice(0, 10)).slice(0, 4).map(t => t.m.data.title);
-    const photo = safeUrl(st.photoUrl);
+    const photo = cld(safeUrl(st.photoUrl), 400);
 
     const title = personTitleTag(name);
     const description = clip(st.bio ? st.bio : name + ' filmography: ' + titles.length + ' title' + (titles.length === 1 ? '' : 's') + (span ? ' (' + span + ')' : '') +
