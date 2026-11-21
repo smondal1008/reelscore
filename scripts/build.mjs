@@ -56,7 +56,7 @@ function list(names) { return names.length < 2 ? names.join('') : names.slice(0,
 // YouTube videos of a title, same parsing and categories as app/main.js (ytId, vidCat).
 function ytId(u) { const mm = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return mm ? mm[1] : ''; }
 function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
-function ytVideos(d) { return (d.videos || []).map(x => ({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', yt: ytId(safeUrl(x.url)), cat: vidCat(x.kind), addedAt: x.addedAt || '' })).filter(x => x.yt); }
+function ytVideos(d) { return (d.videos || []).map(x => ({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', yt: ytId(safeUrl(x.url)), cat: vidCat(x.kind), addedAt: x.addedAt || '', publishedAt: /^\d{4}-\d{2}-\d{2}/.test(x.publishedAt || '') ? x.publishedAt.slice(0, 10) : '' })).filter(x => x.yt); }
 // Same rule as app/main.js: ask Cloudinary for a sized, compressed copy instead of the uploaded original.
 function cld(u, w) {
   const m = typeof u === 'string' && u.match(/^(https:\/\/res\.cloudinary\.com\/[^/]+\/image\/upload\/)(.*)$/);
@@ -278,6 +278,10 @@ async function main() {
   // Only titles with real content (a story, poster or video) count towards a person's indexed page, so a filmography made
   // purely of data-only imports doesn't create thin person pages.
   const richTitle = d => !!(d.synopsis || safeUrl(d.posterUrl) || ytVideos(d).length);
+  // A title page with no story, poster, video or verdict is kept out of the index; indexable pages don't link to it either
+  // (its name is shown as plain text), so crawlers aren't sent to pages we've asked them not to index.
+  const thinT = d => !richTitle(d) && !score(d.__id || '').tot;
+  const tLink = m => thinT(Object.assign({ __id: m.id }, m.data)) ? esc(m.data.title) : '<a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a>';
   const richCount = slug => new Set((credits[slug] || []).filter(c => richTitle(c.m.data)).map(c => c.m.id)).size;
   const indexedPerson = slug => {
     const st = people[slug] || {};
@@ -303,7 +307,7 @@ async function main() {
   function similar(m) {
     const f = facts.get(m.id), out = [];
     for (const o of byLang[f.lang] || []) {
-      if (o.id === m.id) continue;
+      if (o.id === m.id || thinT(Object.assign({ __id: o.id }, o.data))) continue;
       const g = facts.get(o.id); let sc = 0;
       g.g.forEach(w => { if (f.g.has(w)) sc += 3; });
       g.ppl.forEach(p => { if (f.ppl.has(p)) sc += 4; });
@@ -369,11 +373,11 @@ async function main() {
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d);
-    if (vids.length) body += '<h2>Trailers &amp; songs</h2><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
+    if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
     if (d.srcTvmaze) body += '<p class="note">Show details and image from <a href="' + esc(safeUrl(d.srcTvmaze) || 'https://www.tvmaze.com/') + '" rel="noopener">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>).</p>';
     else if (d.wikidata) body += '<p class="note">Film facts from <a href="https://www.wikidata.org/wiki/' + esc(d.wikidata) + '" rel="noopener">Wikidata</a> (CC0).</p>';
     const more = similar(m);
-    if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li><a href="' + movieUrl(o) + '">' + esc(o.data.title) + '</a> <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
+    if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li>' + tLink(o) + ' <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
 
     const node = {
       '@context': 'https://schema.org', '@type': tv ? 'TVSeries' : 'Movie',
@@ -396,12 +400,11 @@ async function main() {
       { '@type': 'ListItem', position: 2, name: section[0], item: SITE + section[1] },
       { '@type': 'ListItem', position: 3, name: d.title, item: SITE + url }] };
 
-    // VideoObject per YouTube video so trailers and songs can show in video results. uploadDate is when the video
-    // was added to Reelscore (or the title's last update), since YouTube's own upload date isn't stored.
-    const vDate = x => /^\d{4}-\d{2}-\d{2}/.test(x.addedAt) ? x.addedAt.slice(0, 10) : /^\d{4}-\d{2}-\d{2}/.test(d.updatedAt || '') ? d.updatedAt.slice(0, 10) : String(data.builtAt || new Date().toISOString()).slice(0, 10);
-    const videoLd = vids.slice(0, 20).map(x => ({ '@context': 'https://schema.org', '@type': 'VideoObject',
+    // VideoObject per YouTube video so trailers and songs can show in video results. uploadDate must be YouTube's own
+    // publish date (stored as publishedAt); a video without one gets no VideoObject rather than a made-up date.
+    const videoLd = vids.filter(x => x.publishedAt).slice(0, 20).map(x => ({ '@context': 'https://schema.org', '@type': 'VideoObject',
       name: clip(d.title + ' – ' + x.title, 100), description: clip(x.kind + ' of ' + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + lang : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 300),
-      thumbnailUrl: ytThumb(x.yt), uploadDate: vDate(x), embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
+      thumbnailUrl: ytThumb(x.yt), uploadDate: x.publishedAt, embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
       inLanguage: lang || undefined }));
     // A title with no story, no videos and no poster is only a list of facts: it stays out of the index until it has more.
     const thinTitle = !d.synopsis && !vids.length && !poster && !sc.tot;
@@ -443,7 +446,7 @@ async function main() {
     const title = personTitleTag(name);
     const description = clip(st.bio ? st.bio : name + ' filmography: ' + titles.length + ' title' + (titles.length === 1 ? '' : 's') + (span ? ' (' + span + ')' : '') +
       (famous.length ? ', including ' + list(famous) : '') + '. Roles, verdicts and reviews on Reelscore.', 158);
-    const li = t => '<li><a href="' + movieUrl(t.m) + '">' + esc(t.m.data.title) + '</a> <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', ')].filter(Boolean).join(' · ')) + '</span></li>';
+    const li = t => '<li>' + tLink(t.m) + ' <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', ')].filter(Boolean).join(' · ')) + '</span></li>';
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav>';
     body += '<div class="pr-top">' + (photo ? '<img class="pr-photo" src="' + esc(photo) + '" alt="' + esc(name) + '" width="160" height="160" fetchpriority="high">' : '') + '<div>';
     body += '<h1>' + esc(name) + '</h1><div class="pr-meta">' + esc([known, titles.length + ' title' + (titles.length === 1 ? '' : 's'), span].filter(Boolean).join(' · ')) + '</div>';
@@ -507,7 +510,7 @@ async function main() {
   const newest = (a, b) => String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')) || String(a.data.title).localeCompare(String(b.data.title));
   const soonest = (a, b) => String(a.data.releaseDate || '9999').localeCompare(String(b.data.releaseDate || '9999')) || String(a.data.title).localeCompare(String(b.data.title));
   Object.keys(bySection).forEach(k => bySection[k].sort(k === 'Coming soon' ? soonest : newest));
-  const titleLi = m => '<li><a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a> <span class="note">' +
+  const titleLi = m => '<li>' + tLink(m) + ' <span class="note">' +
     esc([isTv(m.data) ? tvYears(m.data) : (/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate > today ? fmtDate(m.data.releaseDate) : year(m.data)), String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>';
   const hubPeople = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a) || personName(a).localeCompare(personName(b)));
   const personLi = k => '<li><a href="/person/' + k + '">' + esc(personName(k)) + '</a> <span class="note">' + titleCount(k) + ' title' + (titleCount(k) === 1 ? '' : 's') + '</span></li>';
@@ -633,7 +636,7 @@ async function main() {
   }
   for (const slug of thinPeople) {
     const name = personName(slug), titles = [...new Map(credits[slug].map(c => [c.m.id, c.m])).values()];
-    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><ul>' + titles.map(t => '<li><a href="' + movieUrl(t) + '">' + esc(t.data.title) + '</a></li>').join('') + '</ul>';
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><ul>' + titles.map(t => '<li>' + tLink(t) + '</li>').join('') + '</ul>';
     write('person/' + slug + '.html', page(shell, { title: personTitleTag(name), description: clip(name + ' on Reelscore: ' + list(titles.slice(0, 3).map(t => t.data.title)) + '.', 158), canonical: '/person/' + slug, ogType: 'profile', image: null, wide: false, jsonld: [], route: 'person', body, robots: 'noindex,follow' }));
   }
   write('404.html', page(shell, { title: 'Page not found | Reelscore', description: 'This page doesn’t exist on Reelscore.', canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: [], route: 'home', robots: 'noindex',

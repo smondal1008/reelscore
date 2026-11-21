@@ -466,6 +466,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .chip.off { display: inline-flex; align-items: center; opacity: .4; cursor: default; }
 .pr .pr-more ul { columns: 3 220px; }
 
+  .pr-embed { display: block; width: 100%; max-width: 720px; height: auto; aspect-ratio: 16 / 9; border: 0; border-radius: 12px; margin: 0 0 14px; background: #000; }
   .pr-vids { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .pr-vids img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; margin-bottom: 6px; }
   footer.ft a { color: var(--muted); }

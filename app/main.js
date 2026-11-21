@@ -971,11 +971,12 @@
     var v = $('view-title');
     // A pre-rendered page (built for search engines) stays on screen until the catalogue arrives.
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
-    var keep = S.vKeep && S.vKeep.parentNode === v && S.vplay && S.vKeep._mid === S.vplay.mid ? S.vKeep : null;
+    var keep = S.vKeep && S.vKeep.parentNode === v && ((S.vplay && S.vKeep._mid === S.vplay.mid) || (S.vIdle && S.vKeep._mid === S.vIdle.mid)) ? S.vKeep : null;
     Array.prototype.slice.call(v.childNodes).forEach(function (c) { if (c !== keep) v.removeChild(c); });
     if (!keep) S.vKeep = null;
     var put = function (n) { if (!n) return; if (n === keep) { keep = null; return; } if (keep) v.insertBefore(n, keep); else v.appendChild(n); };
     var m = findMovie(S.param);
+    if (keep && (!m || keep._mid !== m.id)) { if (keep.parentNode) keep.parentNode.removeChild(keep); keep = null; S.vKeep = null; S.vIdle = null; }
     if (!m || (S.vplay && S.vplay.mid !== m.id)) { S.vplay = null; if (S.vKeep && S.vKeep.parentNode) S.vKeep.parentNode.removeChild(S.vKeep); S.vKeep = null; keep = null; }
     if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
     setNoindex(!m && S.loaded);
@@ -1024,7 +1025,7 @@
     // columns
     // sections, in the order of the tabs above them
     var act = actionBlock(m, rel, ott);
-    var theatre = videosBlock(m);
+    var theatre = keep && keep._mid === m.id ? keep : videosBlock(m);
     var main = h('div', { class: 'colm' }, [act, castBlock(m), reviewsBlock(m, rel)]);
     var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
@@ -1229,7 +1230,7 @@
   }
   function playVid(mid, i, scroll) {
     S.vsel = S.vsel || {}; S.vsel[mid] = i;
-    S.vplay = { mid: mid, i: i }; S.vKeep = null;
+    S.vplay = { mid: mid, i: i }; S.vKeep = null; S.vIdle = null;
     if (S.tplay) { if (S.tpVideo) { try { S.tpVideo.pause(); } catch (e) {} } S.tplay = null; S.tpNode = null; S.tpVideo = null; }
     render(true);
     if (scroll) setTimeout(function () { var t = $('videos'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
@@ -1238,7 +1239,7 @@
     var it = vidItems(m), n = it.length; if (!n) return;
     var cur = (S.vsel && S.vsel[m.id]) || 0, k = cur;
     for (var t = 0; t < n; t++) { k = (k + dir + n) % n; if (it[k].yt || it[k].clip) break; }
-    if (play) playVid(m.id, k); else { S.vsel = S.vsel || {}; S.vsel[m.id] = k; S.vplay = null; S.vKeep = null; render(true); }
+    if (play) playVid(m.id, k); else { S.vsel = S.vsel || {}; S.vsel[m.id] = k; S.vplay = null; S.vKeep = null; S.vIdle = null; render(true); }
   }
   function videosBlock(m) {
     var d = m.data, items = vidItems(m), n = items.length;
@@ -1265,8 +1266,13 @@
       media.setAttribute('aria-label', d.title + ' · ' + x.title);
       setTimeout(function () { safePlay(media); }, 0);
     }
+    // A YouTube video sits in the page as a real (lazy) embed even before it is played, so search engines can see it;
+    // the section is then kept across re-renders so a video started in that player isn't interrupted.
+    var idle = !playing && !!x.yt;
+    if (idle) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?rel=0&playsinline=1&modestbranding=1', loading: 'lazy',
+      title: d.title + ' · ' + x.title, allow: 'encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/hqdefault.jpg")' : art(m, 'banner');
-    var stage = h('div', { class: 'stage' + (playing ? ' on' : ''), style: playing ? '' : bg }, playing ? [media] : [
+    var stage = h('div', { class: 'stage' + (playing || idle ? ' on' : ''), style: playing ? '' : bg }, playing || idle ? [media] : [
       h('div', { class: 'shade' }),
       h('div', { class: 'top' }, [h('span', { class: 'kb', text: String(x.kind).toUpperCase() }), h('span', { class: 'pos', text: (cur + 1) + ' / ' + n })]),
       x.yt || x.clip
@@ -1306,7 +1312,7 @@
       h('div', { class: 'thx-g' }, [h('div', { class: 'thx-p' }, [stage, info]), list])
     ]);
     sec._mid = m.id;
-    S.vKeep = playing ? sec : null;
+    S.vKeep = playing || idle ? sec : null; S.vIdle = idle ? { mid: m.id } : null;
     return sec;
   }
   function epText(n) { n = String(n || '').trim(); return n ? n + (n === '1' ? ' episode' : ' episodes') : ''; }
