@@ -21,6 +21,9 @@ import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist');
+// The "About" text for titles and people comes from the same file the app runs (app/about.js), so both say the same thing.
+const ABOUT = (() => { const w = {}; new Function('window', fs.readFileSync(path.join(ROOT, 'app', 'about.js'), 'utf8'))(w); return w.RS_ABOUT; })();
+const TODAY = new Date().toISOString().slice(0, 10);
 const SITE = (process.env.SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'https://reelscore-xi.vercel.app')).replace(/\/+$/, '');
 const MIN_VERDICTS = Math.max(1, parseInt(process.env.SEO_MIN_VERDICTS, 10) || 10);
@@ -241,6 +244,22 @@ async function main() {
     console.log(`[seo] synopses applied from content/synopses.json: ${n}`);
   } catch (e) { if (e.code !== 'ENOENT') throw e; }
 
+  // Real YouTube publish dates (YouTube Data API, videos.list) from content/video-dates.txt, one "<id> <YYYY-MM-DD>" per line.
+  // A date stored on the video in the database wins. Videos whose owners turned embedding off are dropped,
+  // because they can't play on the site.
+  try {
+    const dates = new Map(fs.readFileSync(path.join(ROOT, 'content', 'video-dates.txt'), 'utf8').split('\n').map(l => l.trim().split(/\s+/)).filter(p => /^[\w-]{11}$/.test(p[0]) && /^\d{4}-\d{2}-\d{2}$/.test(p[1] || '')));
+    const NO_EMBED = new Set(['jr8zEw9Uinw', 'cs4rnylG7Fc', 'tpTBrLtVPHs', 'q9lDVACRgjc']);
+    let n = 0, dropped = 0;
+    for (const m of data.movies) {
+      if (!Array.isArray(m.data.videos) || !m.data.videos.length) continue;
+      const vs = m.data.videos.filter(x => { const id = ytId(safeUrl(x.url)); if (NO_EMBED.has(id)) { dropped++; return false; } return true; })
+        .map(x => { const id = ytId(safeUrl(x.url)); if (!x.publishedAt && dates.has(id)) { n++; return { ...x, publishedAt: dates.get(id) }; } return x; });
+      m.data = { ...m.data, videos: vs };
+    }
+    console.log(`[seo] video publish dates applied: ${n}; non-embeddable videos dropped: ${dropped}`);
+  } catch (e) { if (e.code !== 'ENOENT') throw e; }
+
   // Short bios from content/bios.json fill people whose database bio is empty (an admin edit always wins).
   try {
     const bios = JSON.parse(fs.readFileSync(path.join(ROOT, 'content', 'bios.json'), 'utf8'));
@@ -370,13 +389,26 @@ async function main() {
     if (directors.length) body += '<div class="pr-meta">Directed by ' + directors.map(personLink).join(', ') + '</div>';
     body += '</div></div>';
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
+    body += '<h2>About ' + esc(d.title) + '</h2><p>' + esc(ABOUT.title({ title: d.title, tv, date: d.releaseDate || '', year: y,
+      upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', released: !!d.releaseDate && d.releaseDate <= TODAY,
+      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, endYear: d.endYear,
+      platform: d.platform, director: d.director, cast, verdicts: { pct: sc.pct, tot: sc.tot } })) + '</p>';
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d);
     if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
     if (d.srcTvmaze) body += '<p class="note">Show details and image from <a href="' + esc(safeUrl(d.srcTvmaze) || 'https://www.tvmaze.com/') + '" rel="noopener">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>).</p>';
     else if (d.wikidata) body += '<p class="note">Film facts from <a href="https://www.wikidata.org/wiki/' + esc(d.wikidata) + '" rel="noopener">Wikidata</a> (CC0).</p>';
-    const more = similar(m);
+    // Same rule as the app's "More from Cast & Crew" row: titles sharing people with this one, top-billed cast weighing more.
+    const ppl = {}; cast.forEach((c, i) => { const k = personSlug(c.name); if (k && !(k in ppl)) ppl[k] = i < 4 ? 3 : CREW_RE.test(c.role || '') ? 2 : 1; });
+    const shared = new Map();
+    for (const k of Object.keys(ppl)) for (const c of credits[k] || []) {
+      const x = c.m; if (x.id === m.id || !(x.data.cast || []).some(cc => cc && personSlug(cc.name) === k)) continue;
+      const e = shared.get(x.id) || { m: x, w: 0, seen: new Set() }; if (!e.seen.has(k)) { e.seen.add(k); e.w += ppl[k]; } shared.set(x.id, e);
+    }
+    const byCrew = [...shared.values()].sort((a, b) => b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || '')).slice(0, 12).map(e => e.m);
+    if (byCrew.length) body += '<h2>More from the cast &amp; crew</h2><ul>' + byCrew.map(o => '<li>' + tLink(o) + ' <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>';
+    const more = similar(m).filter(o => !shared.has(o.id));
     if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li>' + tLink(o) + ' <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
 
     const node = {
@@ -454,6 +486,16 @@ async function main() {
     if ((st.aka || []).filter(Boolean).length) body += '<div class="pr-meta">Also known as ' + esc(st.aka.filter(Boolean).join(', ')) + '</div>';
     body += '</div></div>';
     if (st.bio) body += '<p>' + esc(st.bio) + '</p>';
+    // About, Known for and Frequent collaborators: the same text and picks as the app (app/about.js).
+    const pfacts = titles.map(t => ({ m: t.m, title: t.m.data.title, year: t.when.slice(0, 4), date: t.m.data.releaseDate || '', languages: t.m.data.languages, genre: t.m.data.genre,
+      tv: isTv(t.m.data), acting: t.acting, crew: t.crew, roles: t.roles, synopsis: t.m.data.synopsis || '',
+      upcoming: !isTv(t.m.data) && (t.m.data.releaseDate ? t.m.data.releaseDate > TODAY : t.m.data.section === 'Coming soon') }));
+    const collab = ABOUT.collaborators(slug, titles.map(t => t.m.data), personSlug);
+    body += '<h2>About ' + esc(name) + '</h2><p>' + esc(ABOUT.person({ name, titles: pfacts, collab })) + '</p>';
+    const kf = ABOUT.knownFor(pfacts);
+    if (kf.length) body += '<h2>Known for</h2><ul>' + kf.map(k => '<li>' + tLink(k.t.m) + ' <span class="note">' + esc(k.t.year) + '</span> – ' + esc(k.line) + '</li>').join('') + '</ul>';
+    const cw = [...collab.directors.map(x => [x, 'director']), ...collab.costars.slice(0, 6).map(x => [x, 'co-star'])];
+    if (cw.length) body += '<h2>Frequent collaborators</h2><ul>' + cw.map(([x, r]) => '<li>' + personLink(x.name) + ' <span class="note">' + r + ' · ' + x.n + ' shared title' + (x.n === 1 ? '' : 's') + '</span></li>').join('') + '</ul>';
     if (acting.length) body += '<h2>Acting</h2><ul>' + acting.map(li).join('') + '</ul>';
     if (crewT.length) body += '<h2>Behind the camera</h2><ul>' + crewT.map(li).join('') + '</ul>';
 
@@ -686,7 +728,7 @@ async function main() {
   // The plain files stay too (catalogue.json is read by the next build; admin.js is loaded by name).
   const crypto = await import('node:crypto');
   const hashed = {};
-  for (const rel of ['app/app.css', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json', 'catalogue-core.json', 'catalogue-older.json']) {
+  for (const rel of ['app/app.css', 'app/about.js', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json', 'catalogue-core.json', 'catalogue-older.json']) {
     const buf = fs.readFileSync(path.join(OUT, rel)), h8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
     const base = path.basename(rel).replace(/\.(\w+)$/, '.' + h8 + '.$1');
     write('assets/' + base, buf); hashed['/' + rel] = '/assets/' + base;

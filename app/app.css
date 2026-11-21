@@ -476,3 +476,11 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .qb[aria-pressed="true"].a { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
   .qb[aria-pressed="true"].b { background: var(--text); border-color: var(--text); color: #0B0A0F; }
   .qb[aria-pressed="true"].c { background: #8E8899; border-color: #8E8899; color: #0B0A0F; }
+/* About text on title and person pages (app/about.js) */
+.about { margin: 0; line-height: 1.6; color: var(--text); max-width: 760px; }
+.pabout h3 { margin: 18px 0 8px; font-size: 16px; }
+.kfor { margin: 0; padding-left: 18px; max-width: 760px; line-height: 1.55; }
+.kfor li { margin: 0 0 6px; }
+.kfor a { font-weight: 600; color: inherit; }
+.collab { display: flex; flex-wrap: wrap; gap: 8px; }
+.collab .tag { text-decoration: none; }

@@ -1026,7 +1026,7 @@
     // sections, in the order of the tabs above them
     var act = actionBlock(m, rel, ott);
     var theatre = keep && keep._mid === m.id ? keep : videosBlock(m);
-    var main = h('div', { class: 'colm' }, [act, castBlock(m), reviewsBlock(m, rel)]);
+    var main = h('div', { class: 'colm' }, [act, aboutBlock(m), castBlock(m), reviewsBlock(m, rel)]);
     var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
@@ -1316,6 +1316,15 @@
     return sec;
   }
   function epText(n) { n = String(n || '').trim(); return n ? n + (n === '1' ? ' episode' : ' episodes') : ''; }
+  // Plain-language summary written from the title's facts (app/about.js; the pre-rendered page uses the same text).
+  function aboutBlock(m) {
+    if (!window.RS_ABOUT) return null;
+    var d = m.data, sc = score(m.id), y = String(d.releaseDate || '').slice(0, 4);
+    var text = RS_ABOUT.title({ title: d.title, tv: isTv(m), date: d.releaseDate || '', year: y, upcoming: isUpcoming(m), released: released(m),
+      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, endYear: d.endYear,
+      platform: d.platform, director: d.director, cast: (d.cast || []).filter(function (c) { return c && c.name; }), verdicts: { pct: sc.pct, tot: sc.tot } });
+    return h('section', { class: 'card', id: 'about' }, [h('h2', { text: 'About ' + d.title }), h('p', { class: 'about', text: text })]);
+  }
   function castBlock(m) {
     var cast = m.data.cast || [];
     return h('section', { class: 'card', id: 'cast' }, [h('h2', { text: 'Cast & crew' }),
@@ -1497,6 +1506,22 @@
           return card;
         }))
       ]);
+    }
+    // About, Known for and Frequent collaborators (app/about.js; the pre-rendered page uses the same text and picks).
+    if (window.RS_ABOUT) {
+      var facts = titles.map(function (t) { return { m: t.m, title: t.m.data.title, year: when(t).slice(0, 4), date: t.m.data.releaseDate || '', languages: t.m.data.languages, genre: t.m.data.genre,
+        tv: t.tv, acting: t.acting, crew: t.crew, roles: t.roles, synopsis: t.m.data.synopsis || '', upcoming: !t.tv && isUpcoming(t.m) }; });
+      var collab = RS_ABOUT.collaborators(slug, titles.map(function (t) { return t.m.data; }), personSlug);
+      var kf = RS_ABOUT.knownFor(facts);
+      var cw = collab.directors.map(function (x) { return [x, 'director']; }).concat(collab.costars.slice(0, 6).map(function (x) { return [x, 'co-star']; }));
+      v.appendChild(h('section', { class: 'wrapx pabout', style: 'padding-top:20px;padding-bottom:0' }, [
+        h('h2', { style: 'margin:0 0 10px;font-size:22px', text: 'About ' + name }),
+        h('p', { class: 'about', text: RS_ABOUT.person({ name: name, titles: facts, collab: collab }) }),
+        kf.length ? h('h3', { text: 'Known for' }) : null,
+        kf.length ? h('ul', { class: 'kfor' }, kf.map(function (k) { return h('li', {}, [h('a', { href: movieUrl(k.t.m), text: k.t.title }), ' ', h('span', { class: 'note', text: k.t.year }), ' – ' + k.line]); })) : null,
+        cw.length ? h('h3', { text: 'Frequent collaborators' }) : null,
+        cw.length ? h('div', { class: 'collab' }, cw.map(function (p) { return h('a', { class: 'tag', href: personUrl(p[0].name), text: p[0].name + ' · ' + p[1] + ' · ' + p[0].n }); })) : null
+      ]));
     }
     // Unreleased titles first, in their own section (soonest first; undated last), then released work.
     var films = titles.filter(function (t) { return !t.tv; }), tv = titles.filter(function (t) { return t.tv; });
