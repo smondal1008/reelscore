@@ -1253,7 +1253,7 @@
     }).filter(function (c) { return c[2]; });
     var vf = S.vf[m.id] || 'all'; if (!cats.some(function (c) { return c[0] === vf; })) vf = 'all';
     var chips = cats.length > 2 ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter videos' }, cats.map(function (c) {
-      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === c[0]), text: c[1] + ' · ' + c[2], on: { click: function () { S.vf[m.id] = c[0]; render(true); } } });
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === c[0]), text: c[1] + ' · ' + c[2], on: { click: function () { S.vf[m.id] = c[0]; if (!S.vplay) { S.vKeep = null; S.vIdle = null; } render(true); } } });
     })) : null;
 
     // the stage
