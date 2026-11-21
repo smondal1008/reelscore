@@ -603,7 +603,8 @@
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
     }
-    if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
+    // A Book tickets button replaces the reminder (advance booking is open).
+    if (opts.remind && !(cta && opts.book && !(opts.stream && safeUrl(d.platformUrl)))) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
       style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
       text: hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
     return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids);
@@ -2018,7 +2019,7 @@
     var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
     mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
       .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
-      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? act(m, { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) : { dateBadge: true, rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
+      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? act(m, { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) : act(m, { dateBadge: true, rate: true, book: m.data.section === 'Coming soon', tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) }); });
     var rank = function (list) { var pop = popularityOf(list); return list.sort(function (a, b) { var sa = score(a.id).pct, sb = score(b.id).pct; return ((sb === null ? -1 : sb) - (sa === null ? -1 : sa)) || (pop[b.id] - pop[a.id]); }); };
     var picks = rank(mine.filter(function (m) { return !seen[m.id] && released(m) && (!myVerdict(m.id) || jr[m.id]); })).slice(0, 5);
     picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: act(m, { rate: true, tag: 'From your watchlist' }) }); });
@@ -2062,7 +2063,7 @@
       })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
-      rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
+      rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true, book: m.data.section === 'In theatres' || m.data.section === 'Coming soon' }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
     var myV = S.verdicts[S.uid] ? Object.keys(S.verdicts[S.uid].v || {}).filter(function (id) { return S.byId[id]; }) : [];
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }),
       myV.length ? h('div', { class: 'grid-posters' }, myV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
