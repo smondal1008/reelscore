@@ -625,16 +625,18 @@
     v.innerHTML = '';
     var w = h('section', { class: 'wrapx', style: 'padding-top:28px', 'aria-label': P.h }); v.appendChild(w);
     w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb', style: 'margin-bottom:10px' }, [h('a', { href: '/', text: 'Home' }), ' › ', P.h]));
-    w.appendChild(h('h1', { class: 'display', style: 'margin:0 0 6px', text: P.h }));
-    if (!S.loaded) { w.appendChild(h('p', { class: 'note', text: 'Loading…' })); return; }
+    var head = h('div', {}, [h('h1', { class: 'display', style: 'margin:0 0 6px', text: P.h })]);
+    var bar = h('div', { style: 'display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px 24px;margin-bottom:18px' }, [head]);
+    w.appendChild(bar);
+    if (!S.loaded) { head.appendChild(h('p', { class: 'note', style: 'margin:0', text: 'Loading…' })); return; }
     var all = P.picks(true), langs = {};
     all.forEach(function (p) { var l = langOf(p.m.data); if (l) langs[l] = 1; });
     var list = all.filter(function (p) { return !S.vids.lang || langOf(p.m.data) === S.vids.lang; });
-    w.appendChild(h('p', { class: 'note', style: 'margin:0 0 18px', text: list.length + ' ' + P.what + ', newest first' + (S.navLang ? ' · ' + S.navLang + ' only' : '') }));
+    head.appendChild(h('p', { class: 'note', style: 'margin:0', text: list.length + ' ' + P.what + ', newest first' + (S.navLang ? ' · ' + S.navLang + ' only' : '') }));
     if (!S.navLang && Object.keys(langs).length > 1) {
       var e = h('select', { class: 'in', id: 'vLang' }, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })).map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === S.vids.lang }); }));
       e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); render(true); });
-      w.appendChild(h('div', { class: 'field', style: 'max-width:220px;margin-bottom:18px' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
+      bar.appendChild(h('div', { class: 'field', style: 'width:220px;margin:0' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
     w.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(P.card)));
     if (list.length > S.vids.n) w.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; render(true); } } })]));
