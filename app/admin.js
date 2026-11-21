@@ -840,6 +840,73 @@ window.ReelAdmin = function (env) {
   }
   function touch() { if (!dirty) setDirty(true); }
 
+  // ---------- genre picker ----------
+  // A fixed list so a typo can't create a new genre. Stored as "Crime, Thriller" (main genre first), which the
+  // site's genre pages already read (app/main.js genreTags, scripts/build.mjs GENRE_RULES).
+  var GENRE_LIST = ['Action', 'Adventure', 'Animated', 'Anthology', 'Biopic', 'Black comedy', "Children's", 'Comedy', 'Coming-of-age',
+    'Crime', 'Devotional', 'Disaster', 'Documentary', 'Drama', 'Erotic', 'Family', 'Fantasy', 'Game show', 'Gangster', 'Heist', 'Historical',
+    'Horror', 'Horror comedy', 'Legal', 'Masala', 'Medical', 'Melodrama', 'Musical', 'Mystery', 'Mythological', 'Period', 'Political',
+    'Psychological', 'Quiz show', 'Reality', 'Romance', 'Romantic comedy', 'Satire', 'Sci-fi', 'Sitcom', 'Soap opera', 'Social', 'Sports',
+    'Spy', 'Superhero', 'Supernatural', 'Survival', 'Talk show', 'Teen', 'Thriller', 'War', 'Western'];
+  var GENRE_MAX = 3;
+  // Old free-text labels → list entries ("Romantic drama" → Romance, Drama). Used only to pre-select the picker.
+  var GENRE_WORDS = [[/^rom-?com|^romantic comedy/, 'Romantic comedy'], [/^black comedy|^dark comedy/, 'Black comedy'], [/^horror comedy|^comedy horror/, 'Horror comedy'],
+    [/coming-of-age/, 'Coming-of-age'], [/roman/, 'Romance'], [/biograph|biopic/, 'Biopic'], [/science|sci-fi/, 'Sci-fi'], [/sport/, 'Sports'], [/histor/, 'Historical'],
+    [/animat/, 'Animated'], [/courtroom|legal/, 'Legal'], [/child/, "Children's"], [/music/, 'Musical'], [/myth/, 'Mythological'], [/epic/, 'Historical']];
+  function genreParts(s) {
+    var out = [];
+    String(s || '').split(/[,/;]/).forEach(function (p) {
+      p = p.trim().toLowerCase(); if (!p) return;
+      var exact = GENRE_LIST.filter(function (g) { return g.toLowerCase() === p; })[0];
+      var add = function (g) { if (g && out.indexOf(g) === -1) out.push(g); };
+      if (exact) return add(exact);
+      for (var i = 0; i < GENRE_WORDS.length; i++) if (GENRE_WORDS[i][0].test(p) && GENRE_WORDS[i][1].indexOf(' ') !== -1) { add(GENRE_WORDS[i][1]); return; }
+      p.split(/\s+/).forEach(function (w) {
+        var hit = GENRE_LIST.filter(function (g) { return g.toLowerCase() === w; })[0];
+        if (!hit) for (var j = 0; j < GENRE_WORDS.length; j++) if (GENRE_WORDS[j][0].test(w)) { hit = GENRE_WORDS[j][1]; break; }
+        add(hit);
+      });
+    });
+    return out;
+  }
+  // The site's browse genres a value appears under (same rules as app/main.js genreTags).
+  var BROWSE_RULES = [['Action', /action|spy|superhero|heist/], ['Comedy', /comed|rom-com/], ['Drama', /drama/], ['Thriller', /thriller|mystery|crime/], ['Horror', /horror/],
+    ['Romance', /roman|rom-com/], ['Family', /family/], ['Animated', /animat/], ['Biopic', /biograph|biopic/], ['Mythological', /myth|epic/], ['War', /war/], ['Sci-fi', /science|sci-fi/]];
+  function browseGenres(s) { s = String(s || '').toLowerCase(); return BROWSE_RULES.filter(function (r) { return r[1].test(s); }).map(function (r) { return r[0]; }); }
+  function genreField() {
+    var original = draft.genre || '';
+    var picked = genreParts(original);
+    var exactOld = picked.join(', ').toLowerCase() === original.trim().toLowerCase();
+    var isMissing = !original;
+    var pill = h('span', { class: 'miss', text: 'MISSING', hidden: !isMissing });
+    var box = h('div', { class: 'gpick' }), note = h('span', { class: 'note' });
+    function draw() {
+      box.innerHTML = '';
+      picked.forEach(function (g, i) {
+        box.appendChild(h('span', { class: 'gchip' + (i === 0 ? ' main' : '') }, [
+          i === 0 ? h('span', { class: 'sr', text: 'Main genre: ' }) : null, g,
+          h('button', { type: 'button', class: 'gx', 'aria-label': 'Remove ' + g, text: '×', disabled: !canWrite,
+            on: { click: function () { picked.splice(i, 1); changed(); } } })
+        ]));
+      });
+      if (picked.length < GENRE_MAX) {
+        var sel = h('select', { class: 'in', 'aria-label': 'Add a genre', disabled: !canWrite },
+          [h('option', { value: '', text: picked.length ? 'Add another genre…' : 'Choose a genre…' })].concat(
+            GENRE_LIST.filter(function (g) { return picked.indexOf(g) === -1; }).map(function (g) { return h('option', { value: g, text: g }); })));
+        sel.addEventListener('change', function () { if (sel.value) { picked.push(sel.value); changed(); } });
+        box.appendChild(sel);
+      }
+      var under = browseGenres(picked.join(', '));
+      var oldNote = original && !exactOld && draft.genre === original ? 'Saved as “' + original + '”, which stays as it is unless you change the genres here. ' : '';
+      note.textContent = oldNote + 'Pick up to ' + GENRE_MAX + ', main genre first. ' +
+        (picked.length ? (under.length ? 'Listed under the site’s genre pages: ' + under.join(', ') + '.' : 'Not listed under any of the site’s genre pages.') : '');
+      pill.hidden = !!picked.length;
+    }
+    function changed() { draft.genre = picked.join(', '); touch(); draw(); }
+    draw();
+    return h('div', { class: 'field' }, [h('span', { class: 'l' }, ['Genre', pill]), box, note]);
+  }
+
   // ---------- editor ----------
   function field(label, key, opts) {
     opts = opts || {};
@@ -1207,7 +1274,7 @@ window.ReelAdmin = function (env) {
 
     var g2 = h('div', { class: 'grid' }, [
       field('Languages', 'languages', { placeholder: 'Hindi, English' }),
-      field('Genre', 'genre', { placeholder: 'Crime thriller' }),
+      genreField(),
       field(tvEd ? 'Episode length' : 'Runtime', 'runtime', { placeholder: tvEd ? 'About 45 min' : '2h 18m' }),
       field('Certificate', 'certificate', { placeholder: 'U, UA 13+, A' }),
       field(tvEd ? 'Creator or director' : 'Director', 'director', { placeholder: 'Name' }),
