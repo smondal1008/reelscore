@@ -305,7 +305,7 @@
     }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else if (path === '/about') { S.route = 'about'; S.param = null; }
-    else if (window.RS_404 && path !== '/') { S.route = 'notfound'; S.param = path; }
+    else if ((window.RS_404 || document.querySelector('meta[name="rs-404"]')) && path !== '/') { S.route = 'notfound'; S.param = path; }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;

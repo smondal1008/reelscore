@@ -674,7 +674,7 @@ async function main() {
   // These exist so real links never hit the 404 page; none are in the sitemap and none are indexed.
   for (const [au, to] of aliases) {
     if (seen.has(au)) continue;
-    write(au.slice(1) + '.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Moved | Reelscore</title><meta name="robots" content="noindex,follow"><link rel="canonical" href="' + esc(SITE + to) + '"><meta http-equiv="refresh" content="0; url=' + esc(to) + '"><script>location.replace(' + JSON.stringify(to) + ' + location.search + location.hash)</script></head><body><p><a href="' + esc(to) + '">Continue to the page</a></p></body></html>');
+    write(au.slice(1) + '.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Moved | Reelscore</title><meta name="robots" content="noindex,follow"><link rel="canonical" href="' + esc(SITE + to) + '"><meta http-equiv="refresh" content="0; url=' + esc(to) + '"></head><body><p><a href="' + esc(to) + '">Continue to the page</a></p></body></html>');
   }
   for (const slug of thinPeople) {
     const name = personName(slug), titles = [...new Map(credits[slug].map(c => [c.m.id, c.m])).values()];
@@ -682,7 +682,7 @@ async function main() {
     write('person/' + slug + '.html', page(shell, { title: personTitleTag(name), description: clip(name + ' on Reelscore: ' + list(titles.slice(0, 3).map(t => t.data.title)) + '.', 158), canonical: '/person/' + slug, ogType: 'profile', image: null, wide: false, jsonld: [], route: 'person', body, robots: 'noindex,follow' }));
   }
   write('404.html', page(shell, { title: 'Page not found | Reelscore', description: 'This page doesn’t exist on Reelscore.', canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: [], route: 'home', robots: 'noindex',
-    body: '<h1>Page not found</h1><p>This page doesn’t exist, or the title has moved.</p><p><a href="/">Go to the home page</a> · <a href="/browse">Browse all titles</a></p>' }).replace('<head>', '<head>\n<script>window.RS_404 = true;</script>'));
+    body: '<h1>Page not found</h1><p>This page doesn’t exist, or the title has moved.</p><p><a href="/">Go to the home page</a> · <a href="/browse">Browse all titles</a></p>' }).replace('<head>', '<head>\n<meta name="rs-404" content="1">'));
 
   // ----- all trailers, songs and TV promotionals: /trailers, /songs, /tv-promos (same lists as app/main.js) -----
   const vidHubs = [
@@ -733,11 +733,15 @@ async function main() {
     const base = path.basename(rel).replace(/\.(\w+)$/, '.' + h8 + '.$1');
     write('assets/' + base, buf); hashed['/' + rel] = '/assets/' + base;
   }
+  // Catalogue file names for the app, as a small external script: the Content-Security-Policy in vercel.json allows no inline scripts.
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';\n';
+  const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
+  fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
   for (const f of htmlFiles) {
     let html = fs.readFileSync(f, 'utf8'), changed = false;
     for (const [from, to] of Object.entries(hashed)) { if (/^\/catalogue/.test(from)) continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
-    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script>window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + '</script>'); changed = true; }
+    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script defer src="' + catPtr + '"></script>'); changed = true; }
     if (changed) fs.writeFileSync(f, html);
   }
 

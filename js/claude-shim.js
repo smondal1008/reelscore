@@ -13,3 +13,5 @@
   // If Firebase never loads (bad config, offline), fail open so the page shows its own message.
   setTimeout(function () { resolveReady({}); }, 12000);
 })();
+// Web fonts: the font CSS is preloaded in index.html and switched on here (no inline onload; see the CSP in vercel.json).
+(function () { var l = document.getElementById('fontcss'); if (l) l.rel = 'stylesheet'; })();
