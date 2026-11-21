@@ -464,6 +464,8 @@
   .grid-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px; }
   .grid-posters .pc { width: auto; }
   .pc .cta { text-decoration: none; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pc .cta { gap: 7px; align-items: center; }
+  .pc .cta .ctalogo { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; flex: none; }
   .pc .fu-b { display: flex; gap: 8px; }
   .pc .fu-b .btn { flex: 1; }
   .pc .pctag { font-size: 12px; font-weight: 600; color: var(--muted); }

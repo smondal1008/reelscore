@@ -499,6 +499,14 @@
     return h('span', { class: 'plat', title: 'On ' + p, 'aria-label': 'On ' + p, style: 'background:' + (hit ? hit[2] : 'rgba(11,10,15,.88)'), text: label });
   }
 
+  // Small inline logo for a button; null if the platform has no logo on file.
+  function platLogo(p) {
+    if (!p) return null;
+    var hit = null;
+    String(p).split('/').some(function (part) { hit = PLAT.filter(function (x) { return x[3] && x[0].test(part.trim()); })[0] || null; return !!hit; });
+    return hit ? h('img', { class: 'ctalogo', src: hit[3], alt: '', loading: 'lazy', decoding: 'async' }) : null;
+  }
+
   function posterCard(m, opts) {
     opts = opts || {};
     var d = m.data, sc = score(m.id), img = !!safeUrl(d.posterUrl);
@@ -526,8 +534,8 @@
       h('span', { class: 'mt', text: meta, title: meta })
     ];
     if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
-    if (opts.stream && safeUrl(d.platformUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', text: '▶ Stream now' + (d.platform ? ' on ' + d.platform : '') }));
-    else if (opts.book && safeUrl(d.bookingUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.bookingUrl, target: '_blank', rel: 'noopener', text: '🎟 Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '') }));
+    if (opts.stream && safeUrl(d.platformUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]));
+    else if (opts.book && safeUrl(d.bookingUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.bookingUrl, target: '_blank', rel: 'noopener', text: '🎟 Book tickets', 'aria-label': 'Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '') }));
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !(opts.stream && safeUrl(d.platformUrl)) && !(opts.book && safeUrl(d.bookingUrl))) {
       var my = myVerdict(m.id);
