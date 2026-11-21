@@ -2015,7 +2015,7 @@
     var iso = function (d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
     var from = iso(new Date(t.getTime() - dow * 864e5)), to = iso(new Date(t.getTime() + (13 - dow) * 864e5));
     var seen = {}, out = [], jr = S.justRated || {};
-    var act = function (m, o) { o = o || {}; if (m.data.section === 'On OTT') o.stream = true; if (m.data.section === 'In theatres') o.book = true; return o; }; // titles rated this visit stay, showing the verdict just given
+    var act = function (m, o) { o = o || {}; if (m.data.section === 'In theatres') o.book = true; else o.stream = true; return o; }; // titles rated this visit stay, showing the verdict just given
     var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
     mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
       .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
