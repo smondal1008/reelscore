@@ -885,6 +885,18 @@
     }).filter(function (o) { return o.w > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 20).map(function (o) { return o.m; }) : [];
     var rc = byCrew.length ? rowSection('More from Cast & Crew', byCrew, null) : null;
     if (rc) rc.id = 'morecast';
+    // 10 titles most like this one: shared genre words, same language, close release year. Skips titles already in the cast row.
+    var gw = function (x) { return String(x.data.genre || '').toLowerCase().split(/[^a-z-]+/).filter(function (t) { return t.length > 2 && t !== 'and'; }); };
+    var lang = function (x) { return String(x.data.languages || '').split(/[,;]/)[0].trim().toLowerCase(); };
+    var myG = gw(m), myL = lang(m), myY = +(String(d.releaseDate || d.year || '').slice(0, 4)) || 0, inCrew = {};
+    byCrew.forEach(function (x) { inCrew[x.id] = 1; });
+    var similar = myG.length ? S.movies.filter(function (x) { return x.id !== m.id && !inCrew[x.id] && isTv(x) === isTv(m); }).map(function (x) {
+      var g = gw(x), shared = myG.filter(function (t) { return g.indexOf(t) !== -1; }).length;
+      var y = +(String(x.data.releaseDate || x.data.year || '').slice(0, 4)) || 0;
+      return { m: x, shared: shared, w: shared * 3 + (lang(x) === myL ? 2 : 0) + (myY && y ? Math.max(0, 2 - Math.abs(myY - y) / 3) : 0) };
+    }).filter(function (o) { return o.shared > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 10).map(function (o) { return o.m; }) : [];
+    var rs = similar.length ? rowSection(inList(m.id) ? 'Because it’s on your list' : 'More like ' + d.title, similar, null) : null;
+    if (rs) rs.id = 'similar';
     var nVids = vidItems(m).length, nRev = 0;
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
     var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
@@ -898,6 +910,7 @@
     put(theatre);
     put(h('div', { class: 'cols' }, [main, side]));
     if (rc) put(rc);
+    if (rs) put(rs);
     if (r) put(r);
     put(footer());
   }
