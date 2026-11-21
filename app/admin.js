@@ -907,6 +907,44 @@ window.ReelAdmin = function (env) {
     return h('div', { class: 'field', role: 'group', 'aria-label': 'Genre' }, [h('label', { class: 'l' }, ['Genre', pill]), box, note]);
   }
 
+  // ---------- streaming platform picker ----------
+  // A list instead of free text, so names match the logos on poster tiles (app/main.js PLAT). Platforms already used on any
+  // title are added to the list, so one you add by hand shows up as an option next time.
+  var OTT_LIST = ['Netflix', 'Prime Video', 'JioHotstar', 'ZEE5', 'SonyLIV', 'Sun NXT', 'aha', 'Hoichoi', 'ALTT', 'Amazon MX Player', 'Amazon miniTV',
+    'Apple TV', 'YouTube', 'Lionsgate Play', 'discovery+', 'Eros Now', 'ShemarooMe', 'Hungama Play', 'Ultra Jhakaas', 'Planet Marathi', 'ManoramaMAX',
+    'Simply South', 'Chaupal', 'Addatimes', 'Klikk', 'Tentkotta', 'Namma Flix', 'Saina Play', 'Neestream', 'Koode', 'Crunchyroll', 'MUBI',
+    'BookMyShow Stream', 'Vi Movies & TV', 'YuppTV', 'Airtel Xstream Play', 'Tata Play Binge', 'Waves', 'Stage', 'Epic ON', 'DocuBay', 'Dangal Play',
+    'TVFPlay', 'Ullu', 'Gemplex', 'Bongo', 'Bioscope', 'Chorki', 'JioCinema (now JioHotstar)', 'Voot (now JioHotstar)', 'Disney+ Hotstar (now JioHotstar)'];
+  var TV_LIST = ['StarPlus', 'Colors', 'Sony Entertainment Television', 'Zee TV', 'Star Bharat', '&TV', 'Sony SAB', 'DD National', 'Sony Pal', 'Zee Anmol',
+    'Dangal', 'Shemaroo TV', 'Sun TV', 'Star Vijay', 'Zee Tamil', 'Colors Tamil', 'Asianet', 'Mazhavil Manorama', 'Zee Keralam', 'Flowers TV',
+    'Star Maa', 'Gemini TV', 'Zee Telugu', 'ETV Telugu', 'Colors Kannada', 'Zee Kannada', 'Star Suvarna', 'Udaya TV', 'Star Pravah', 'Zee Marathi',
+    'Colors Marathi', 'Sony Marathi', 'Star Jalsha', 'Zee Bangla', 'Colors Bangla', 'Colors Gujarati', 'PTC Punjabi', 'Nickelodeon', 'Disney Channel',
+    'Pogo', 'Cartoon Network', 'MTV', 'Discovery', 'Animal Planet', 'History TV18', 'TLC', 'Investigation Discovery', 'Epic TV'];
+  function platformField(label, withTv, note) {
+    var cur = draft.platform || '', used = {};
+    movies.forEach(function (m) { var p = (m.data.platform || '').trim(); if (p) used[p] = 1; });
+    var known = OTT_LIST.concat(TV_LIST), lower = known.map(function (x) { return x.toLowerCase(); });
+    var extra = Object.keys(used).filter(function (p) { return lower.indexOf(p.toLowerCase()) === -1; }).sort();
+    var sel = h('select', { id: 'f_platform', class: 'in', disabled: !canWrite });
+    var opt = function (v, t) { return h('option', { value: v, text: t || v, selected: v === cur }); };
+    sel.appendChild(opt('', withTv ? 'Not set' : 'Not known'));
+    sel.appendChild(h('optgroup', { label: 'Streaming services' }, OTT_LIST.map(function (x) { return opt(x); })));
+    if (withTv) sel.appendChild(h('optgroup', { label: 'TV channels' }, TV_LIST.map(function (x) { return opt(x); })));
+    if (extra.length) sel.appendChild(h('optgroup', { label: 'Also used on titles here' }, extra.map(function (x) { return opt(x); })));
+    if (cur && known.indexOf(cur) === -1 && extra.indexOf(cur) === -1) sel.appendChild(opt(cur));
+    sel.appendChild(h('option', { value: '__new__', text: '+ Add a new platform…' }));
+    var box = h('input', { class: 'in', type: 'text', placeholder: 'Type the platform’s name, e.g. Lionsgate Play', hidden: true, disabled: !canWrite });
+    sel.addEventListener('change', function () {
+      if (sel.value === '__new__') { box.hidden = false; box.value = ''; box.focus(); return; }
+      box.hidden = true; draft.platform = sel.value; touch();
+    });
+    box.addEventListener('input', function () { draft.platform = box.value.trim(); touch(); });
+    return h('div', { class: 'field' }, [
+      h('label', { class: 'l', for: 'f_platform' }, [label]), sel, box,
+      h('span', { class: 'note', text: (note ? note + ' ' : '') + 'Pick from the list, or choose “+ Add a new platform…” to type one. A platform you add is offered on every title after that.' })
+    ]);
+  }
+
   // ---------- editor ----------
   function field(label, key, opts) {
     opts = opts || {};
@@ -1263,7 +1301,7 @@ window.ReelAdmin = function (env) {
       field('Title', 'title', { placeholder: 'e.g. Ramayana' }),
       field('Subtitle', 'subtitle', { placeholder: 'e.g. Rise of a Legend · Part One' }),
       field('Home page section', 'section', { type: 'select', options: SECTIONS }),
-      draft.section === 'On OTT' ? field('Streaming platform', 'platform', { placeholder: 'Netflix, Prime Video, Sony LIV…' }) : draft.section === 'Older releases' ? field('Now streaming on', 'platform', { placeholder: 'Leave blank if not known' }) : tvEd ? field('Channel or platform', 'platform', { placeholder: 'Sony TV, SonyLIV, YouTube…' }) : null,
+      draft.section === 'On OTT' ? platformField('Streaming platform', false) : draft.section === 'Older releases' ? platformField('Now streaming on', false, 'Leave as “Not known” if you are not sure.') : tvEd ? platformField('Channel or platform', true) : null,
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
       tvEd ? field('Last aired (year)', 'endYear', { placeholder: 'e.g. 2019', note: 'Leave blank if the show is still running.' }) : null,
