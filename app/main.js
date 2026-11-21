@@ -1924,7 +1924,7 @@
         if (!needUser()) return;
         if (!inList(m.id)) S.mine.watchlist.push(m.id);
         var i = (S.mine.wtw || []).indexOf(m.id); if (i !== -1) S.mine.wtw.splice(i, 1);
-        var card = box.closest('.pc'); if (card) card.remove();
+        var card = box.closest('.pc'), sec = box.closest('section'); if (card) card.remove(); if (sec && !sec.querySelector('.pc')) sec.remove();
         saveMine('Added back to your watchlist');
       } } })
     ]));
