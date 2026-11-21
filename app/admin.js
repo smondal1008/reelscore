@@ -904,7 +904,7 @@ window.ReelAdmin = function (env) {
     }
     function changed() { draft.genre = picked.join(', '); touch(); draw(); }
     draw();
-    return h('div', { class: 'field' }, [h('span', { class: 'l' }, ['Genre', pill]), box, note]);
+    return h('div', { class: 'field', role: 'group', 'aria-label': 'Genre' }, [h('label', { class: 'l' }, ['Genre', pill]), box, note]);
   }
 
   // ---------- editor ----------
