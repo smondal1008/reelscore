@@ -1865,7 +1865,7 @@
     var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
     mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
       .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
-      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } : { dateBadge: true, remind: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
+      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } : { dateBadge: true, rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
     var rank = function (list) { var pop = popularityOf(list); return list.sort(function (a, b) { var sa = score(a.id).pct, sb = score(b.id).pct; return ((sb === null ? -1 : sb) - (sa === null ? -1 : sa)) || (pop[b.id] - pop[a.id]); }); };
     var picks = rank(mine.filter(function (m) { return !seen[m.id] && released(m) && (!myVerdict(m.id) || jr[m.id]); })).slice(0, 5);
     picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: { rate: true, tag: 'From your watchlist' } }); });
