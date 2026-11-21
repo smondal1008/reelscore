@@ -1986,7 +1986,7 @@
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'Your watchlist titles releasing this week or next, then up to 5 picks: unwatched titles from your watchlist first, then popular releases you haven’t rated.' }),
       h('div', { class: 'grid-posters' }, wk.map(function (x) { return posterCard(x.m, x.opts); }))]));
     // Titles that were in What to watch while in theatres and have since left: Rate or Not seen.
-    if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Out of theatres: seen these?' }),
+    if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen these? Give your verdict' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Rate it. Not yet? Keep it on your watchlist.' }),
       h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { followUp: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
