@@ -875,6 +875,16 @@
     var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
     if (r) r.id = 'more';
+    // Titles sharing cast or crew with this one: more shared people (top-billed weigh more) first, then newest.
+    var ppl = {};
+    (d.cast || []).forEach(function (c, i) { var k = personSlug(c.name); if (k && !(k in ppl)) ppl[k] = i < 4 ? 3 : CREW_RE.test(c.role || '') ? 2 : 1; });
+    var byCrew = Object.keys(ppl).length ? S.movies.filter(function (x) { return x.id !== m.id; }).map(function (x) {
+      var w = 0, seen = {};
+      (x.data.cast || []).forEach(function (c) { var k = personSlug(c.name); if (k && ppl[k] && !seen[k]) { seen[k] = 1; w += ppl[k]; } });
+      return { m: x, w: w };
+    }).filter(function (o) { return o.w > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 20).map(function (o) { return o.m; }) : [];
+    var rc = byCrew.length ? rowSection('More from Cast & Crew', byCrew, null) : null;
+    if (rc) rc.id = 'morecast';
     var nVids = vidItems(m).length, nRev = 0;
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
     var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
@@ -887,6 +897,7 @@
     ].filter(Boolean)));
     put(theatre);
     put(h('div', { class: 'cols' }, [main, side]));
+    if (rc) put(rc);
     if (r) put(r);
     put(footer());
   }
