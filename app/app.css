@@ -431,6 +431,13 @@
   .thx-l { flex: 1 1 280px; max-width: 400px; min-width: 0; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
   .thx-lh { display: flex; justify-content: space-between; align-items: baseline; padding: 2px 4px 0; }
   .thx-ls { display: flex; flex-direction: column; gap: 6px; max-height: 520px; overflow-y: auto; }
+  /* Playlist and pick-list scrollbars: thin, dark, no light track. */
+  .thx-ls, .picklist { scrollbar-width: thin; scrollbar-color: rgba(244,241,234,.22) transparent; }
+  .thx-ls { padding-right: 4px; }
+  .thx-ls::-webkit-scrollbar, .picklist::-webkit-scrollbar { width: 6px; background: transparent; }
+  .thx-ls::-webkit-scrollbar-track, .picklist::-webkit-scrollbar-track { background: transparent; }
+  .thx-ls::-webkit-scrollbar-thumb, .picklist::-webkit-scrollbar-thumb { background: rgba(244,241,234,.22); border-radius: 3px; }
+  .thx-ls::-webkit-scrollbar-thumb:hover, .picklist::-webkit-scrollbar-thumb:hover { background: rgba(244,241,234,.42); }
   .pli { display: flex; gap: 12px; align-items: center; text-align: left; width: 100%; padding: 8px; border-radius: 12px; border: 1px solid transparent; background: transparent; color: var(--text); cursor: pointer; }
   .pli:hover:not(:disabled) { background: #1C1A23; }
   .pli[aria-current="true"] { background: #221F2A; border-color: var(--accent); }
