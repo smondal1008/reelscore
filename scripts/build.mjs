@@ -477,6 +477,12 @@ async function main() {
     movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: slim(m.data) })),
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
+  // The app loads it in two parts: the core (every section but Older releases, plus people) first, Older releases after.
+  // catalogue.json stays whole: the next build reads it, and the app falls back to it.
+  const isOlder = m => m.data.section === 'Older releases';
+  write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => !isOlder(m)), people: cat.people }));
+  write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(isOlder) }));
+  console.log(`[seo] catalogue split: core ${(fs.statSync(path.join(OUT, 'catalogue-core.json')).size / 1024).toFixed(0)} KB, older ${(fs.statSync(path.join(OUT, 'catalogue-older.json')).size / 1024).toFixed(0)} KB`);
   console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
   // Home page (also the app shell other routes fall back to): share image and WebSite / Organization data.
   const homeLd = [
@@ -677,7 +683,7 @@ async function main() {
   // The plain files stay too (catalogue.json is read by the next build; admin.js is loaded by name).
   const crypto = await import('node:crypto');
   const hashed = {};
-  for (const rel of ['app/app.css', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json']) {
+  for (const rel of ['app/app.css', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json', 'catalogue-core.json', 'catalogue-older.json']) {
     const buf = fs.readFileSync(path.join(OUT, rel)), h8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
     const base = path.basename(rel).replace(/\.(\w+)$/, '.' + h8 + '.$1');
     write('assets/' + base, buf); hashed['/' + rel] = '/assets/' + base;
@@ -685,8 +691,8 @@ async function main() {
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
   for (const f of htmlFiles) {
     let html = fs.readFileSync(f, 'utf8'), changed = false;
-    for (const [from, to] of Object.entries(hashed)) { if (from === '/catalogue.json') continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
-    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script>window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + '</script>'); changed = true; }
+    for (const [from, to] of Object.entries(hashed)) { if (/^\/catalogue/.test(from)) continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
+    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script>window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + '</script>'); changed = true; }
     if (changed) fs.writeFileSync(f, html);
   }
 

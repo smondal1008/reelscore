@@ -389,7 +389,11 @@
     var put = function () { window.scrollTo(0, Math.max(0, sec.getBoundingClientRect().top + window.pageYOffset - off)); if (row) row.scrollLeft = spot.left; };
     put(); setTimeout(put, 60); setTimeout(put, 400);
   }
+  // While only the core part of the catalogue is in (everything except Older releases), only the home page draws from
+  // it; other pages wait for the rest so "not found" and counts are never decided on part of the data.
+  function syncLoaded() { S.loaded = !!S.hasCat && (!S.partial || S.route === 'home'); if (S.partial && S.route !== 'home' && S.kickOlder) S.kickOlder(); }
   function draw() {
+    syncLoaded();
     // Keep each horizontal row's scroll position (and keyboard focus) across re-renders of the same page.
     var here = S.route + ':' + (S.param || ''), keep = {}, focusKey = null;
     if (S.lastDrawn === here) {
@@ -1755,6 +1759,7 @@
     hit.forEach(function (m) { res.appendChild(h('a', { href: movieUrl(m), on: { click: function () { sq.value = ''; res.hidden = true; } } }, [h('span', { class: 'thumb art', style: art(m, 'poster', 120) }), h('span', {}, [h('div', { style: 'font-weight:600;font-size:14px', text: m.data.title }), h('div', { class: 'note', text: m.data.section + ' · ' + fmtDate(m.data.releaseDate) })])])); });
     res.hidden = false;
   }
+  sq.addEventListener('focus', function () { if (S.kickOlder) S.kickOlder(); });
   sq.addEventListener('input', drawResults);
   sq.addEventListener('keydown', function (e) { if (e.key === 'Escape') { sq.value = ''; drawResults(); } if (e.key === 'Enter') { var a = res.querySelector('a'); if (a) { go(a.getAttribute('href')); sq.value = ''; drawResults(); } } });
   document.addEventListener('click', function (e) { if (!e.target.closest('.navr')) res.hidden = true; });
@@ -1793,22 +1798,31 @@
     S.movies = list.map(function (m) { return { id: m.id, data: fixSection(m.data) }; })
       .sort(function (a, b) { return (+a.data.order || 0) - (+b.data.order || 0); });
     S.byId = {}; S.movies.forEach(function (m) { S.byId[m.id] = m; });
-    S.loaded = true; render();
+    S.hasCat = true; syncLoaded(); render();
   }
   function loadAllFromFirestore(db) {
     db.collection('movies').orderBy('order').onSnapshot(function (snap) {
       if (!snap.metadata.fromCache) clearTimeout(timer);
       setMovies(snap.docs.map(function (s) { return { id: s.id, data: s.data() }; }));
-    }, function () { clearTimeout(timer); S.loaded = true; S.loadMsg = 'Lost connection to the catalogue. Reload to retry.'; render(true); });
+    }, function () { clearTimeout(timer); S.hasCat = true; S.partial = false; S.loaded = true; S.loadMsg = 'Lost connection to the catalogue. Reload to retry.'; render(true); });
     db.collection('people').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (d) { o[d.id] = d.data(); }); S.people = o; if (S.route === 'title' || S.route === 'person' || S.route === 'people') render();
     }, function () {});
   }
+  function getJson(u) { return window.fetch(u).then(function (r) { if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }); }
+  // The catalogue comes in two parts: a small core (every section except Older releases, plus people) that the home page
+  // needs first, and the much larger Older releases part, fetched right after the home page has drawn (or at once on
+  // any other page). Pages built before the split only know the single full file.
   function loadCatalogue(db) {
-    var f = window.fetch ? (window.RS_CAT ? window.fetch(window.RS_CAT) : window.fetch('/catalogue.json', { cache: 'no-cache' })) : Promise.reject();
-    f.then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }).then(function (cat) {
+    var split = !!(window.RS_CAT_CORE && window.RS_CAT_OLD && window.fetch), olderP = null;
+    function older() { if (!olderP) olderP = getJson(window.RS_CAT_OLD); return olderP; }
+    if (split && S.route !== 'home') older();
+    var f = !window.fetch ? Promise.reject() : split ? getJson(window.RS_CAT_CORE)
+      : (window.RS_CAT ? getJson(window.RS_CAT) : window.fetch('/catalogue.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }));
+    f.then(function (cat) {
       if (!cat || !Array.isArray(cat.movies) || !cat.builtAt) throw new Error('bad catalogue');
       clearTimeout(timer);
+      S.partial = split;
       // An hour of overlap covers admins whose clocks run a little behind.
       var since = new Date(Date.parse(cat.builtAt) - 3600 * 1000).toISOString();
       var base = {}, baseP = cat.people || {}, dm = {}, dp = {}, goneM = {}, goneP = {}, tomb = { movies: {}, people: {} };
@@ -1834,6 +1848,22 @@
         };
       }
       apply();
+      if (split) {
+        var addOlder = function () {
+          older().then(function (o) {
+            (o && o.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
+            S.partial = false; apply();
+          }).catch(function () {
+            getJson(window.RS_CAT || '/catalogue.json').then(function (full) {
+              (full && full.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
+              S.partial = false; apply();
+            }).catch(function () { loadAllFromFirestore(db); });
+          });
+        };
+        S.kickOlder = function () { S.kickOlder = null; addOlder(); };
+        if (S.route === 'home') { var kick = function () { if (S.kickOlder) S.kickOlder(); }; if (window.requestIdleCallback) requestIdleCallback(kick, { timeout: 2500 }); else setTimeout(kick, 1200); }
+        else S.kickOlder();
+      }
       db.collection('movies').where('updatedAt', '>', since).onSnapshot(track(dm, goneM), function () {});
       db.collection('people').where('updatedAt', '>', since).onSnapshot(track(dp, goneP), function () {});
       db.doc('settings/deleted').onSnapshot(function (snap) {
