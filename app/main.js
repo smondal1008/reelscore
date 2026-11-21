@@ -186,7 +186,7 @@
     if (!needUser()) return;
     var i = S.mine.watchlist.indexOf(id);
     if (i === -1) S.mine.watchlist.push(id); else S.mine.watchlist.splice(i, 1);
-    render(); saveMine(i === -1 ? 'Added to your list' : 'Removed from your list');
+    render(); saveMine(i === -1 ? 'Added to your watchlist' : 'Removed from your watchlist');
   }
   function toggleFollow(uid) {
     if (!needUser() || uid === S.uid) return;
@@ -469,8 +469,8 @@
           isOtt(m) && d.platform ? h('span', { class: 'plat', text: d.platform }) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
-          'aria-label': on ? 'Remove ' + d.title + ' from my list' : 'Add ' + d.title + ' to my list',
-          title: on ? 'In my list' : 'Add to my list', text: on ? '✓' : '+',
+          'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
+          title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
           on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } })
       ]),
       h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
@@ -482,6 +482,10 @@
         return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
           on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); } } });
       })));
+    }
+    if (opts.myVerdict) {
+      var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
+      if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
     }
     if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
       style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
@@ -504,7 +508,7 @@
   }
   function listBtn(m) {
     var on = inList(m.id);
-    return h('button', { type: 'button', class: 'btn lg glass', 'aria-pressed': String(on), on: { click: function () { toggleList(m.id); } } }, [on ? '✓  In my list' : '+  Watchlist']);
+    return h('button', { type: 'button', class: 'btn lg glass', 'aria-pressed': String(on), on: { click: function () { toggleList(m.id); } } }, [on ? '✓  In my watchlist' : '+  Watchlist']);
   }
 
   // ---------- home ----------
@@ -1029,7 +1033,7 @@
             : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
           h('a', { class: 'pill info', href: movieUrl(m), text: 'More Info' }),
           playing && !yt ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
-          playing ? null : h('button', { type: 'button', class: 'roundadd', 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my list' : 'Add ' + d.title + ' to my list', title: on ? 'In my list' : 'Add to my list', text: on ? '✓' : '+',
+          playing ? null : h('button', { type: 'button', class: 'roundadd', 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist', title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
             on: { click: function () { toggleList(m.id); } } })
         ])
       ]),
@@ -1832,17 +1836,15 @@
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:18px', text: 'My List' }));
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My list (' + mine.length + ')' }),
+    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }),
       mine.length ? h('div', { class: 'grid-posters' }, mine.map(function (m) { return posterCard(m, released(m) ? null : { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
       rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
     var myV = S.verdicts[S.uid] ? Object.keys(S.verdicts[S.uid].v || {}).filter(function (id) { return S.byId[id]; }) : [];
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }),
-      myV.length ? h('div', { class: 'people' }, myV.map(function (id) {
-        var m = S.byId[id], vv = S.verdicts[S.uid].v[id], lab = vset(m).filter(function (x) { return x[0] === vv; })[0];
-        return h('a', { class: 'person', href: movieUrl(S.byId[id] || id), style: 'color:var(--text);text-decoration:none' }, [h('span', { class: 'nmx', text: m.data.title }), lab ? h('span', { class: 'vtag', style: 'background:' + VCOL[vv], text: lab[1].toUpperCase() }) : null]);
-      })) : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
+      myV.length ? h('div', { class: 'grid-posters' }, myV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
+        : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
 
     // following
     var fol = S.mine.following;
