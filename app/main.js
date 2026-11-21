@@ -1838,6 +1838,9 @@
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:18px', text: 'My List' }));
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
+    // Released titles first (in the order they were added), then upcoming ones, soonest release first.
+    mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
+      .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }),
       mine.length ? h('div', { class: 'grid-posters' }, mine.map(function (m) { return posterCard(m, released(m) ? null : { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
