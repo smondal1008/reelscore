@@ -52,8 +52,8 @@
   function bookBtn(m, cls) {
     var d = m.data; if (!hasBooking(d)) return null;
     var say = 'Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '');
-    if (S.city) { var u = bookUrlFor(d); return u ? h('a', { class: cls, href: u, target: '_blank', rel: 'noopener', text: '🎟 Book tickets', 'aria-label': say + ' in ' + S.city }) : null; }
-    return h('button', { type: 'button', class: cls, text: '🎟 Book tickets', 'aria-label': say, on: { click: function (e) { e.preventDefault(); cityPicker(m); } } });
+    if (S.city) { var u = bookUrlFor(d); return u ? h('a', { class: cls, href: u, target: '_blank', rel: 'noopener', text: 'Book tickets', 'aria-label': say + ' in ' + S.city }) : null; }
+    return h('button', { type: 'button', class: cls, text: 'Book tickets', 'aria-label': say, on: { click: function (e) { e.preventDefault(); cityPicker(m); } } });
   }
   function cityPicker(m) {
     var d = m.data, prev = document.activeElement;
@@ -591,7 +591,7 @@
       h('span', { class: 'mt', text: meta, title: meta })
     ];
     if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
-    var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small primary cta') : null;
+    var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta) {
@@ -606,9 +606,9 @@
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
     }
     // A Book tickets button replaces the reminder (advance booking is open).
-    if (opts.remind && !(cta && opts.book && !(opts.stream && safeUrl(d.platformUrl)))) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
-      style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
-      text: hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
+    if (opts.remind && !(cta && opts.book && !(opts.stream && safeUrl(d.platformUrl)))) kids.push(h('button', { type: 'button', class: 'btn small rem' + (hasReminder(m.id) ? ' on' : ''), 'aria-pressed': String(hasReminder(m.id)),
+      title: hasReminder(m.id) ? 'Tap to cancel the reminder' : 'Get a reminder on release day',
+      text: hasReminder(m.id) ? 'Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
     return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids);
   }
   function rowSection(title, items, opts, link) {
