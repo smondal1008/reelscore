@@ -32,7 +32,7 @@ const slugify = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀
 const personSlug = n => String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
 const VERD = {
-  theatre: [['a', 'Theatre'], ['b', 'OTT'], ['c', 'Skip']],
+  theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Skip', 'Not worth it']],
   ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Skip']]
 };
 const isTv = d => d.section === 'TV shows';
@@ -440,8 +440,14 @@ async function main() {
 
   // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
   const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
+  // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
+  // empty lists and the default "Cast" role.
+  const slim = d => { const o = compact(d); delete o.source; delete o.posterId; delete o.bannerId;
+    if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
+    if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
+    return o; };
   const cat = { builtAt: data.builtAt, fullAt: data.fullAt,
-    movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: compact(m.data) })),
+    movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: slim(m.data) })),
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
   console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
@@ -500,6 +506,7 @@ async function main() {
   homeBody += '<h2>Genres</h2><ul>' + genreLinks() + '</ul>';
   { const ny = new Date().getFullYear(), ys = []; for (let k = ny; k > ny - 10; k--) ys.push(k);
     homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
+  homeBody += '<p><a href="/about">About Reelscore and how scores work</a></p>';
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
     canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
   write('index.html', homeHtml);
@@ -552,6 +559,34 @@ async function main() {
     ' actors, directors and crew, busiest first.</p><ul>' + hubPeople.map(personLi).join('') + '</ul>';
   writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', ogPath: '/people', route: 'people', body: peopleBody });
 
+  // ----- About / how scores work -----
+  {
+    const t = VERD.theatre, o = VERD.ott;
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › About</nav>' +
+      '<h1>About Reelscore and how scores work</h1>' +
+      '<p>Reelscore is an independent site, built in India, for people who watch films and series in more than one Indian language. It answers one practical question about every title: is it worth the trip to the theatre, worth streaming at home, or worth skipping? The catalogue covers ' + movies.length + ' Bollywood and regional titles in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi and more, with pages for ' + nPeople + ' actors and filmmakers.</p>' +
+      '<h2>Verdicts</h2>' +
+      '<p>Anyone signed in with a Google account can give a verdict once a title is out. Each person has one verdict per title and can change or remove it at any time. There are three choices:</p>' +
+      '<ul><li>For films in theatres: <b>' + esc(t[0][1]) + '</b> (' + esc(t[0][2].toLowerCase()) + '), <b>' + esc(t[1][1]) + '</b> (' + esc(t[1][2].toLowerCase()) + ') or <b>' + esc(t[2][1]) + '</b> (' + esc(t[2][2].toLowerCase()) + ').</li>' +
+      '<li>For films on OTT and TV shows: <b>' + esc(o[0][1]) + '</b>, <b>' + esc(o[1][1]) + '</b> or <b>' + esc(o[2][1]) + '</b>.</li></ul>' +
+      '<p>Verdicts for upcoming films open on their release date, so a score only reflects people who could have seen the film.</p>' +
+      '<h2>How the score is worked out</h2>' +
+      '<p>A title’s score is the share of its verdicts that recommend watching it at all: the first two choices count as positive, Skip counts as negative. If 80 people give a verdict and 60 of them pick ' + esc(t[0][1]) + ' or ' + esc(t[1][1]) + ', the score is 75%. Below the score you can see how the verdicts split across all three choices, so a 75% made mostly of “' + esc(t[1][1]) + '” reads differently from one made mostly of “' + esc(t[0][1]) + '”.</p>' +
+      '<p>Every verdict counts the same. There are no critic weightings, no paid placements and no hidden adjustments, and nobody at Reelscore edits or removes verdicts to change a score. A score appears in search results only once a title has at least ' + MIN_VERDICTS + ' verdicts.</p>' +
+      '<h2>Peer Score</h2>' +
+      '<p>You can follow people whose taste you trust. On every title, the Peer Score shows the same percentage worked out only from the people you follow. It appears once at least three of them have given a verdict.</p>' +
+      '<h2>Reviews</h2>' +
+      '<p>Alongside a verdict, anyone signed in can write a review of up to 2,000 characters, and mark it as containing spoilers so it stays hidden until a reader chooses to open it. Reviews are public and shown with the writer’s name. You can edit or delete your own review at any time.</p>' +
+      '<p>Reviews must be about the title. Reviews that are abusive, hateful, spam, copied from elsewhere or that reveal spoilers without the spoiler mark are removed.</p>' +
+      '<h2>Where the information comes from</h2>' +
+      '<p>Titles, release dates, cast and crew are compiled by the Reelscore team from public release information Story summaries are written by the team in our own words. Trailers, teasers and songs are linked only from the official channels of the studios, music labels and streaming services that published them, and play on Reelscore without leaving the site.</p>' +
+      '<p><a href="/browse">Browse all titles</a> · <a href="/people">Actors and filmmakers</a> · <a href="/trailers">Latest trailers</a></p>';
+    writeHub('about.html', { title: 'About Reelscore & How Scores Work', description: 'How Reelscore verdicts become a score: one verdict per person, the share that say watch it, Peer Score from people you follow, and the rules for reviews.', canonical: '/about', ogPath: '/about', route: 'about', body,
+      jsonld: [{ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About Reelscore and how scores work', url: SITE + '/about', about: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' } },
+        { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'About', item: SITE + '/about' }] }] });
+    sitemap.push({ loc: '/about', pri: '0.5' });
+  }
+
   // ----- aliases, people with too few credits for an indexed page, 404 -----
   // These exist so real links never hit the 404 page; none are in the sitemap and none are indexed.
   for (const [au, to] of aliases) {
@@ -597,13 +632,31 @@ async function main() {
     '# Reelscore', '',
     '> Reelscore collects verdicts and reviews for Bollywood and regional Indian movies and series. Each title page shows cast, crew and release details; people say whether a film is worth the theatre, worth streaming on OTT, or worth skipping. A title shows a score once it has ' + MIN_VERDICTS + ' or more verdicts.', '',
     `The catalogue has ${movies.length} titles in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali and other languages, and pages for ${nPeople} actors and filmmakers.`, '',
-    '## Browse', '', '- [All titles](' + SITE + '/browse)', ...sections.map(([n, u]) => '- [' + n + '](' + SITE + u + ')'), '- [People](' + SITE + '/people): actors and filmmakers', '',
+    '## Browse', '', '- [All titles](' + SITE + '/browse)', ...sections.map(([n, u]) => '- [' + n + '](' + SITE + u + ')'), '- [People](' + SITE + '/people): actors and filmmakers', '- [About and how scores work](' + SITE + '/about)', '- [Latest trailers](' + SITE + '/trailers)', '- [Video songs](' + SITE + '/songs)', '',
     '## Recent titles', '', ...recent.map(m => '- [' + m.data.title + ' (' + (isTv(m.data) ? 'TV' : year(m.data)) + ')](' + SITE + movieUrl(m) + ')'), '',
     '## Prolific people', '', ...busiest.map(k => '- [' + personName(k) + '](' + SITE + '/person/' + k + ')'), '',
     '## Optional', '', '- [Sitemap](' + SITE + '/sitemap.xml): every title and person page', ''
   ].join('\n'));
 
   write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
+
+  // ----- fingerprinted assets: /assets/<name>.<hash>.<ext>, cached for a year (vercel.json) -----
+  // Every HTML page points at the hashed copies, so a deploy changes the URLs and browsers never run stale code.
+  // The plain files stay too (catalogue.json is read by the next build; admin.js is loaded by name).
+  const crypto = await import('node:crypto');
+  const hashed = {};
+  for (const rel of ['app/app.css', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json']) {
+    const buf = fs.readFileSync(path.join(OUT, rel)), h8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);
+    const base = path.basename(rel).replace(/\.(\w+)$/, '.' + h8 + '.$1');
+    write('assets/' + base, buf); hashed['/' + rel] = '/assets/' + base;
+  }
+  const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
+  for (const f of htmlFiles) {
+    let html = fs.readFileSync(f, 'utf8'), changed = false;
+    for (const [from, to] of Object.entries(hashed)) { if (from === '/catalogue.json') continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
+    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script>window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + '</script>'); changed = true; }
+    if (changed) fs.writeFileSync(f, html);
+  }
 
   console.log(`[seo] wrote ${nTitles} title pages (${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }

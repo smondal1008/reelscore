@@ -275,6 +275,7 @@
       S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.page = qPage();
     }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
+    else if (path === '/about') { S.route = 'about'; S.param = null; }
     else if (window.RS_404 && path !== '/') { S.route = 'notfound'; S.param = path; }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
@@ -286,6 +287,7 @@
     else if (S.route === 'year') document.title = yearTitle(S.param);
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
+    else if (S.route === 'about') document.title = 'About Reelscore & How Scores Work';
     else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
@@ -382,6 +384,7 @@
     else if (S.route === 'year') drawYear();
     else if (S.route === 'vids') drawVids();
     else if (S.route === 'notfound') drawNotFound();
+    else if (S.route === 'about') drawAbout();
     if (Object.keys(keep).length) {
       document.querySelectorAll('.view .rowx').forEach(function (r) {
         var s = r.closest('section'), k = s && s.getAttribute('aria-label');
@@ -424,6 +427,13 @@
       h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
       h('span', { class: 'mt', text: meta, title: meta })
     ];
+    if (opts.rate) {
+      var my = myVerdict(m.id);
+      kids.push(h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + d.title }, vset(m).map(function (x) {
+        return h('button', { type: 'button', class: 'qb ' + x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
+          on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); } } });
+      })));
+    }
     if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
       style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
       text: hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
@@ -480,6 +490,7 @@
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
+      rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       songSection(),
@@ -568,6 +579,23 @@
     if (t.opener && t.opener.isConnected) t.opener.focus({ preventScroll: true });
   }
 
+  // ---------- Give your verdict row: recent and popular titles you haven't rated yet, one tap to rate ----------
+  function rateSection() {
+    var today = new Date().toISOString().slice(0, 10), cut = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
+    var done = S.justRated || {};
+    var list = S.movies.filter(function (m) {
+      var d = m.data, r = d.releaseDate || '';
+      if (!inNavLang(m) || !released(m) || d.section === 'Coming soon') return false;
+      if (myVerdict(m.id) && !done[m.id]) return false;
+      return d.section === 'In theatres' || d.section === 'On OTT' || (isTv(m) ? !d.endYear || String(d.endYear) >= today.slice(0, 4) : r.length === 10 && r >= cut && r <= today);
+    });
+    var pop = popularityOf(list);
+    list.sort(function (a, b) { return pop[b.id] - pop[a.id] || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); });
+    list = list.slice(0, 15);
+    var n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
+    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub', text: n ? 'Thanks — ' + n + ' verdict' + (n === 1 ? '' : 's') + ' added. Every one counts toward the score.' : 'One tap each. Your verdict counts toward the score.' }));
+  }
+
   // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
   function trailerPicks(all) {
     var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
@@ -641,6 +669,8 @@
   var VID_PAGES = { trailers: { h: 'All trailers', t: 'Latest Movie Trailers | Reelscore', what: 'trailers', picks: trailerPicks, card: trailerCard },
                     'tv-promos': { h: 'All TV promotionals', t: 'TV Show Trailers, Promos & Episodes | Reelscore', what: 'TV promotionals', picks: tvPromoPicks, card: tvPromoCard },
                     songs: { h: 'All video songs', t: 'Latest Video Songs | Reelscore', what: 'video songs', picks: songPicks, card: songCard } };
+  // /about is a static page; navigating to it inside the app loads it in full.
+  function drawAbout() { if (!$('view-about').querySelector('[data-prerendered]')) location.reload(); }
   function drawNotFound() {
     var v = $('view-home');
     if (v.querySelector('[data-prerendered]') && !S.nfDrawn) { S.nfDrawn = true; return; }
@@ -893,7 +923,7 @@
     S.slide = (S.slide + 1) % S.feat.length; drawHero();
   }, 8000);
   function footer() {
-    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('span', { text: 'Catalogue data: Admin' })]);
+    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' })]);
   }
 
   // ---------- title ----------
@@ -926,7 +956,7 @@
         h('div', { class: 'kicker', text: 'Overall score' }),
         h('div', { class: 'big', style: 'color:var(--accent);font-size:' + (sc.pct === null ? '34px' : '52px'), text: sc.pct === null ? (rel ? 'Verdicts open' : 'Opens on release') : sc.pct + '%' }),
         sc.tot ? h('div', { class: 'split', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + (100 * sc.n.a / sc.tot) + '%;background:var(--accent)' }), h('span', { style: 'width:' + (100 * sc.n.b / sc.tot) + '%;background:var(--text)' })]) : null,
-        h('div', { class: 'sub', style: 'margin-top:6px', text: sc.tot ? vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(' · ') + ' · ' + sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') : (rel ? 'Seen it? Your verdict starts the score.' : 'Verdicts open on ' + fmtDate(d.releaseDate, true) + '.') })
+        h('div', { class: 'sub', style: 'margin-top:6px' }, [sc.tot ? vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(' · ') + ' · ' + sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') : (rel ? 'Seen it? Your verdict starts the score.' : 'Verdicts open on ' + fmtDate(d.releaseDate, true) + '.'), ' ', h('a', { href: '/about', style: 'color:var(--muted)', text: 'How scores work' })])
       ]),
       rel ? h('div', { role: 'group', 'aria-label': 'Your verdict' }, [
         h('div', { class: 'kicker', style: 'margin-bottom:8px', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
@@ -1733,7 +1763,7 @@
     }, function () {});
   }
   function loadCatalogue(db) {
-    var f = window.fetch ? window.fetch('/catalogue.json', { cache: 'no-cache' }) : Promise.reject();
+    var f = window.fetch ? (window.RS_CAT ? window.fetch(window.RS_CAT) : window.fetch('/catalogue.json', { cache: 'no-cache' })) : Promise.reject();
     f.then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }).then(function (cat) {
       if (!cat || !Array.isArray(cat.movies) || !cat.builtAt) throw new Error('bad catalogue');
       clearTimeout(timer);

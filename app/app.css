@@ -168,7 +168,7 @@
   .results a:hover, .results a:focus { background: var(--panel2); outline: none; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: var(--panel2); }
   .view { display: none; }
-  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-notfound #view-home, body.r-admin #view-admin { display: block; }
+  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-notfound #view-home, body.r-about #view-about, body.r-admin #view-admin { display: block; }
   body:not(.r-admin) #savebar { display: none !important; }
   .nav { background: linear-gradient(to bottom, #1a0f10, var(--bg)); border-bottom: 0; padding-top: 18px; padding-bottom: 18px; }
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
@@ -468,3 +468,10 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 
   .pr-vids { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .pr-vids img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; margin-bottom: 6px; }
+  footer.ft a { color: var(--muted); }
+  .qv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .qb { padding: 8px 4px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qb:hover { border-color: var(--muted); }
+  .qb[aria-pressed="true"].a { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+  .qb[aria-pressed="true"].b { background: var(--text); border-color: var(--text); color: #0B0A0F; }
+  .qb[aria-pressed="true"].c { background: #8E8899; border-color: #8E8899; color: #0B0A0F; }

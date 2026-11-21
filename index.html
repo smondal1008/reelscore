@@ -13,11 +13,13 @@
 <meta name="twitter:card" content="summary">
 <!--/seo-->
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap"></noscript>
 <link rel="stylesheet" href="/app/app.css">
 <style>.authbtn{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}.authbtn:hover{background:rgba(255,255,255,.1)}</style>
-<script src="/firebase-config.js"></script>
-<script src="/js/claude-shim.js"></script>
+<script defer src="/firebase-config.js"></script>
+<script defer src="/js/claude-shim.js"></script>
 <script type="module" src="/js/firebase-adapter.js"></script>
 </head>
 <body class="r-home">
@@ -55,6 +57,7 @@
 <div class="view" id="view-genre"></div>
 <div class="view" id="view-year"></div>
 <div class="view" id="view-vids"></div>
+<div class="view" id="view-about"></div>
 
 <div class="view" id="view-admin"><template id="adminTpl">
   <div class="ahead">
@@ -102,6 +105,6 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 
-<script src="/app/main.js"></script>
+<script defer src="/app/main.js"></script>
 </body>
 </html>
