@@ -60,6 +60,8 @@ function main() {
     const url = rel === 'index.html' ? '/' : '/' + rel.replace(/\.html$/, '').replace(/\/index$/, '');
     // <template> content is inert: browsers and crawlers do not render it or follow its links.
     const html = fs.readFileSync(f, 'utf8').replace(/<template\b[\s\S]*?<\/template>/gi, '');
+    // noindex pages (old-address pointers, people with too few credits) aren't search pages: leave them out.
+    if (/noindex/i.test(metaContent(html, 'name', 'robots') || '')) continue;
     const pr = prerendered(html);
     const body = pr ?? html.slice(html.indexOf('<body'));
     const links = [...body.matchAll(/<a\b[^>]*>/gi)].map(m => attr(m[0], 'href')).filter(h => h && h.startsWith('/') && !h.startsWith('//')).map(h => h.split('#')[0]);
@@ -190,7 +192,7 @@ function main() {
   if (noDim.length) add('Images', 'Low', 'img-no-size', noDim.length + ' images have no width/height (layout shift)', '', sample(noDim.map(i => i.p)));
   const withImg = content.filter(p => p.imgs.length).length;
   if (withImg < content.length / 2) add('Images', 'Medium', 'few-images', 'Only ' + withImg + ' of ' + content.length + ' pages have an image', 'Most titles have no poster and most people no photo; image search and rich results need them.');
-  const lcpHint = titles.filter(p => p.imgs.length && !/fetchpriority="high"/.test(p.imgs[0]));
+  const lcpHint = titles.filter(p => p.imgs.some(i => /class="pr-poster"/.test(i)) && !/fetchpriority="high"/.test(p.imgs.find(i => /class="pr-poster"/.test(i))));
   if (lcpHint.length) add('Images', 'Low', 'lcp-priority', lcpHint.length + ' poster images lack fetchpriority="high"', 'The poster is usually the largest element on the first screen.', sample(lcpHint));
 
   // ---------- AI search readiness ----------

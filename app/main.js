@@ -275,6 +275,7 @@
       S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.page = qPage();
     }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
+    else if (window.RS_404 && path !== '/') { S.route = 'notfound'; S.param = path; }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;
@@ -284,14 +285,17 @@
     else if (S.route === 'genre') document.title = genreTitle(genreBySlug(S.param));
     else if (S.route === 'year') document.title = yearTitle(S.param);
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
+    else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
     else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
     S.prevRoute = S.route;
     S.lastPath = location.pathname;
-    if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
+    if (S.route === 'notfound') setNoindex(true);
+    else if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
     else if (S.route === 'browse' || S.route === 'people' || S.route === 'genre' || S.route === 'year') setCanonical(listCanonical());
+    else if (S.route === 'notfound') setCanonical(null);
     else if (S.route !== 'title' && S.route !== 'person') setCanonical(location.pathname);
     S.rtab = 'all';
     render(true);
@@ -377,6 +381,7 @@
     else if (S.route === 'genre') drawGenre();
     else if (S.route === 'year') drawYear();
     else if (S.route === 'vids') drawVids();
+    else if (S.route === 'notfound') drawNotFound();
     if (Object.keys(keep).length) {
       document.querySelectorAll('.view .rowx').forEach(function (r) {
         var s = r.closest('section'), k = s && s.getAttribute('aria-label');
@@ -636,8 +641,15 @@
   var VID_PAGES = { trailers: { h: 'All trailers', t: 'Latest Movie Trailers | Reelscore', what: 'trailers', picks: trailerPicks, card: trailerCard },
                     'tv-promos': { h: 'All TV promotionals', t: 'TV Show Trailers, Promos & Episodes | Reelscore', what: 'TV promotionals', picks: tvPromoPicks, card: tvPromoCard },
                     songs: { h: 'All video songs', t: 'Latest Video Songs | Reelscore', what: 'video songs', picks: songPicks, card: songCard } };
+  function drawNotFound() {
+    var v = $('view-home');
+    if (v.querySelector('[data-prerendered]') && !S.nfDrawn) { S.nfDrawn = true; return; }
+    v.innerHTML = '';
+    v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This page doesn’t exist, or the title has moved. ', h('a', { href: '/', text: 'Go to the home page' }), ' · ', h('a', { href: '/browse', text: 'Browse all titles' })])]));
+  }
   function drawVids() {
     var v = $('view-vids'), P = VID_PAGES[S.param];
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
     v.innerHTML = '';
     var w = h('section', { class: 'wrapx', style: 'padding-top:28px', 'aria-label': P.h }); v.appendChild(w);
     w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb', style: 'margin-bottom:10px' }, [h('a', { href: '/', text: 'Home' }), ' › ', P.h]));

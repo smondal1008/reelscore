@@ -53,6 +53,11 @@ const esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g,
 const ld = o => '<script type="application/ld+json">' + JSON.stringify(o).replace(/</g, '\\u003c') + '</script>';
 function clip(s, n) { s = String(s || '').replace(/\s+/g, ' ').trim(); if (s.length <= n) return s; const c = s.slice(0, n - 1); return c.slice(0, Math.max(c.lastIndexOf(' '), n - 20)).replace(/[,;:.\s]+$/, '') + '…'; }
 function list(names) { return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; }
+// YouTube videos of a title, same parsing and categories as app/main.js (ytId, vidCat).
+function ytId(u) { const mm = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return mm ? mm[1] : ''; }
+function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
+function ytVideos(d) { return (d.videos || []).map(x => ({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', yt: ytId(safeUrl(x.url)), cat: vidCat(x.kind), addedAt: x.addedAt || '' })).filter(x => x.yt); }
+const ytThumb = id => 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
 function isoDuration(rt) {
   const s = String(rt || '').toLowerCase(); let h = 0, m = 0, x;
   if ((x = s.match(/(\d+)\s*h/))) h = +x[1];
@@ -306,7 +311,7 @@ async function main() {
   }
 
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
-  const seen = new Set(); let nTitles = 0, nRated = 0, nPeople = 0;
+  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0;
 
   // ----- title pages -----
   for (const m of movies) {
@@ -342,6 +347,8 @@ async function main() {
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
+    const vids = ytVideos(d);
+    if (vids.length) body += '<h2>Trailers &amp; songs</h2><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
     const more = similar(m);
     if (more.length) body += '<div class="pr-more"><h2>More like this</h2><ul>' + more.map(o => '<li><a href="' + movieUrl(o) + '">' + esc(o.data.title) + '</a> <span class="note">' + esc([isTv(o.data) ? 'TV' : '', year(o.data)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul></div>';
 
@@ -365,15 +372,30 @@ async function main() {
       { '@type': 'ListItem', position: 2, name: section[0], item: SITE + section[1] },
       { '@type': 'ListItem', position: 3, name: d.title, item: SITE + url }] };
 
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body }));
+    // VideoObject per YouTube video so trailers and songs can show in video results. uploadDate is when the video
+    // was added to Reelscore (or the title's last update), since YouTube's own upload date isn't stored.
+    const vDate = x => /^\d{4}-\d{2}-\d{2}/.test(x.addedAt) ? x.addedAt.slice(0, 10) : /^\d{4}-\d{2}-\d{2}/.test(d.updatedAt || '') ? d.updatedAt.slice(0, 10) : String(data.builtAt || new Date().toISOString()).slice(0, 10);
+    const videoLd = vids.slice(0, 20).map(x => ({ '@context': 'https://schema.org', '@type': 'VideoObject',
+      name: clip(d.title + ' – ' + x.title, 100), description: clip(x.kind + ' of ' + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + lang : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 300),
+      thumbnailUrl: ytThumb(x.yt), uploadDate: vDate(x), embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
+      inLanguage: lang || undefined }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs, ...videoLd], route: 'title', body }));
+    // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
+    for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
+      const au = (tv ? '/tv/' : '/movie/') + alias;
+      if (!alias || au === url || !/^[a-z0-9-]+$/.test(alias) || seen.has(au) || aliasSeen.has(au)) continue;
+      aliasSeen.add(au); aliases.push([au, url]);
+    }
     sitemap.push({ loc: url, lastmod: (d.updatedAt || m.updated || '').slice(0, 10), pri: '0.8' });
     nTitles++;
   }
 
   // ----- person pages -----
+  const thinPeople = [];
   const when = c => (isTv(c.m.data) && /\d{4}/.test(String(c.year)) ? String(c.year).match(/\d{4}/g).sort().pop() : (c.m.data.releaseDate || ''));
   for (const slug of Object.keys(credits)) {
-    if (!/^[a-z0-9-]+$/.test(slug) || !indexedPerson(slug)) continue;
+    if (!/^[a-z0-9-]+$/.test(slug)) continue;
+    if (!indexedPerson(slug)) { thinPeople.push(slug); continue; }
     const st = people[slug] || {}, name = personName(slug), url = '/person/' + slug;
     const byTitle = new Map();
     credits[slug].forEach(c => {
@@ -529,6 +551,37 @@ async function main() {
   const peopleBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › People</nav><h1>Indian actors and filmmakers</h1><p>' + hubPeople.length +
     ' actors, directors and crew, busiest first.</p><ul>' + hubPeople.map(personLi).join('') + '</ul>';
   writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', ogPath: '/people', route: 'people', body: peopleBody });
+
+  // ----- aliases, people with too few credits for an indexed page, 404 -----
+  // These exist so real links never hit the 404 page; none are in the sitemap and none are indexed.
+  for (const [au, to] of aliases) {
+    if (seen.has(au)) continue;
+    write(au.slice(1) + '.html', '<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Moved | Reelscore</title><meta name="robots" content="noindex,follow"><link rel="canonical" href="' + esc(SITE + to) + '"><meta http-equiv="refresh" content="0; url=' + esc(to) + '"><script>location.replace(' + JSON.stringify(to) + ' + location.search + location.hash)</script></head><body><p><a href="' + esc(to) + '">Continue to the page</a></p></body></html>');
+  }
+  for (const slug of thinPeople) {
+    const name = personName(slug), titles = [...new Map(credits[slug].map(c => [c.m.id, c.m])).values()];
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><ul>' + titles.map(t => '<li><a href="' + movieUrl(t) + '">' + esc(t.data.title) + '</a></li>').join('') + '</ul>';
+    write('person/' + slug + '.html', page(shell, { title: personTitleTag(name), description: clip(name + ' on Reelscore: ' + list(titles.slice(0, 3).map(t => t.data.title)) + '.', 158), canonical: '/person/' + slug, ogType: 'profile', image: null, wide: false, jsonld: [], route: 'person', body, robots: 'noindex,follow' }));
+  }
+  write('404.html', page(shell, { title: 'Page not found | Reelscore', description: 'This page doesn’t exist on Reelscore.', canonical: null, ogPath: '/', ogType: 'website', image: null, jsonld: [], route: 'home', robots: 'noindex',
+    body: '<h1>Page not found</h1><p>This page doesn’t exist, or the title has moved.</p><p><a href="/">Go to the home page</a> · <a href="/browse">Browse all titles</a></p>' }).replace('<head>', '<head>\n<script>window.RS_404 = true;</script>'));
+
+  // ----- all trailers, songs and TV promotionals: /trailers, /songs, /tv-promos (same lists as app/main.js) -----
+  const vidHubs = [
+    ['trailers', 'All trailers', 'Latest Movie Trailers | Reelscore', 'Official trailers and teasers of new Bollywood and regional Indian movies, newest first.', m => !isTv(m.data), x => x.cat === 'trailers', true],
+    ['songs', 'All video songs', 'Latest Video Songs | Reelscore', 'Official video and lyric songs from new Bollywood and regional Indian movies, newest first.', m => !isTv(m.data), x => x.cat === 'songs', false],
+    ['tv-promos', 'All TV promotionals', 'TV Show Trailers, Promos & Episodes | Reelscore', 'Official trailers, promos and full episodes of Indian TV shows and web series.', m => isTv(m.data), () => true, false]
+  ];
+  for (const [slug, h1, title, desc, pickM, pickV, onePer] of vidHubs) {
+    const items = [];
+    movies.filter(pickM).sort(newest).forEach(m => { const vs = ytVideos(m.data).filter(pickV); (onePer ? vs.slice(0, 1) : vs).forEach(x => items.push([m, x])); });
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + esc(h1) + '</nav><h1>' + esc(h1) + '</h1><p>' + items.length + ' videos. ' + esc(desc) + '</p>' +
+      '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
+      '<h2>More videos</h2><ul>' + vidHubs.filter(v => v[0] !== slug).map(v => '<li><a href="/' + v[0] + '">' + esc(v[1]) + '</a></li>').join('') + '</ul>';
+    writeHub(slug + '.html', { title, description: desc, canonical: '/' + slug, ogPath: '/' + slug, route: 'vids', body,
+      jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: h1, item: SITE + '/' + slug }] }] });
+    if (items.length) sitemap.push({ loc: '/' + slug, pri: '0.6' });
+  }
 
   // ----- sitemap + robots -----
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n' +

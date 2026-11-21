@@ -21,35 +21,7 @@
   ],
   "rewrites": [
     {
-      "source": "/tv-promos",
-      "destination": "/"
-    },
-    {
-      "source": "/trailers",
-      "destination": "/"
-    },
-    {
-      "source": "/songs",
-      "destination": "/"
-    },
-    {
-      "source": "/movie/:slug",
-      "destination": "/"
-    },
-    {
-      "source": "/genre/:slug",
-      "destination": "/"
-    },
-    {
-      "source": "/year/:y",
-      "destination": "/"
-    },
-    {
       "source": "/people",
-      "destination": "/"
-    },
-    {
-      "source": "/tv/:slug",
       "destination": "/"
     },
     {
@@ -70,10 +42,6 @@
     },
     {
       "source": "/admin/:path*",
-      "destination": "/"
-    },
-    {
-      "source": "/person/:slug",
       "destination": "/"
     }
   ],
