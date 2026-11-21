@@ -448,6 +448,8 @@
   .person .nmx { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; }
   .grid-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px; }
   .grid-posters .pc { width: auto; }
+  .pc .pctag { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .pc .pctag.hot { color: var(--accent); }
   .pc .vtag.myv { align-self: flex-start; margin-top: 6px; font-size: 12px; padding: 5px 9px; border-radius: 6px; letter-spacing: .2px; }
   .castg a.cp { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--text); text-decoration: none; border-radius: 12px; padding: 6px 2px; }
   .castg a.cp:hover .cn, .castg a.cp:focus-visible .cn { text-decoration: underline; }

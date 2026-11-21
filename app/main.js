@@ -507,6 +507,7 @@
           on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); } } });
       })));
     }
+    if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
@@ -1853,6 +1854,30 @@
     return nav;
   }
 
+  // ---------- What to watch this weekend or next week (top of My List) ----------
+  // 1) every watchlist title releasing from this Monday to the end of next week; 2) up to 5 picks: released watchlist titles
+  // you haven't rated (best score first), then popular In theatres / On OTT titles you haven't rated or listed.
+  function weekendPicks(mine) {
+    var t = new Date(today() + 'T00:00:00'), dow = (t.getDay() + 6) % 7; // Monday = 0
+    var iso = function (d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
+    var from = iso(new Date(t.getTime() - dow * 864e5)), to = iso(new Date(t.getTime() + (13 - dow) * 864e5));
+    var seen = {}, out = [];
+    var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
+    mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
+      .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
+      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? { tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } : { dateBadge: true, remind: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
+    var rank = function (list) { var pop = popularityOf(list); return list.sort(function (a, b) { var sa = score(a.id).pct, sb = score(b.id).pct; return ((sb === null ? -1 : sb) - (sa === null ? -1 : sa)) || (pop[b.id] - pop[a.id]); }); };
+    var picks = rank(mine.filter(function (m) { return !seen[m.id] && released(m) && !myVerdict(m.id); })).slice(0, 5);
+    picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: { tag: 'From your watchlist' } }); });
+    if (picks.length < 5) {
+      var more = rank(S.movies.filter(function (m) {
+        return !seen[m.id] && !inList(m.id) && !myVerdict(m.id) && released(m) && inNavLang(m) && (m.data.section === 'In theatres' || m.data.section === 'On OTT');
+      })).slice(0, 5 - picks.length);
+      more.forEach(function (m) { out.push({ m: m, opts: { tag: 'Recommended' } }); });
+    }
+    return out;
+  }
+
   // ---------- my list & friends ----------
   function drawList() {
     var v = $('view-list'); v.innerHTML = '';
@@ -1860,6 +1885,10 @@
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:18px', text: 'My List' }));
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
+    var wk = weekendPicks(mine);
+    if (wk.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'What to watch this weekend or next week' }),
+      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'Your watchlist titles releasing this week or next, then up to 5 picks: unwatched titles from your watchlist first, then popular releases you haven’t rated.' }),
+      h('div', { class: 'grid-posters' }, wk.map(function (x) { return posterCard(x.m, x.opts); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
