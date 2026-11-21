@@ -14,7 +14,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', query = '', langF = '', sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
+  var filter = 'All', query = '', langF = '', yearF = '', sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -623,11 +623,12 @@ window.ReelAdmin = function (env) {
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
   var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers' };
+  function yearOf(d) { var y = (d.releaseDate || '').slice(0, 4); return /^\d{4}$/.test(y) ? y : 'none'; }
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
   function readListState() {
     var q = new URLSearchParams(location.search);
     if (!location.search) return;
-    query = q.get('q') || ''; langF = q.get('lang') || '';
+    query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || '';
     var sec = q.get('section'); filter = 'All';
     Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) filter = k; });
     sortKey = SORTS[q.get('sort')] ? q.get('sort') : 'release';
@@ -641,6 +642,7 @@ window.ReelAdmin = function (env) {
     if (query.trim()) q.set('q', query.trim());
     if (filter !== 'All') q.set('section', SEC_SLUG[filter]);
     if (langF) q.set('lang', langF);
+    if (yearF) q.set('year', yearF);
     if (sortKey !== 'release' || sortDir !== 'desc') { q.set('sort', sortKey); if (sortDir !== defaultDir(sortKey)) q.set('dir', sortDir); }
     if (pageNo > 1) q.set('page', String(pageNo));
     var url = '/admin/titles' + (q.toString() ? '?' + q.toString() : '');
@@ -662,6 +664,14 @@ window.ReelAdmin = function (env) {
     ls.innerHTML = '';
     ls.appendChild(h('option', { value: '', text: 'All languages' }));
     langs.forEach(function (l) { ls.appendChild(h('option', { value: l, text: l + ' (' + (counts[l] || 0) + ')', selected: l === langF })); });
+    var ys = $('yearSel'), yc = {};
+    movies.forEach(function (m) { var y = yearOf(m.data); yc[y] = (yc[y] || 0) + 1; });
+    var years = Object.keys(yc).filter(function (y) { return y !== 'none'; }).sort().reverse();
+    if (yearF && !yc[yearF]) yc[yearF] = 0;
+    ys.innerHTML = '';
+    ys.appendChild(h('option', { value: '', text: 'All years' }));
+    years.forEach(function (y) { ys.appendChild(h('option', { value: y, text: y + ' (' + yc[y] + ')', selected: y === yearF })); });
+    if (yc.none) ys.appendChild(h('option', { value: 'none', text: 'No release date (' + yc.none + ')', selected: yearF === 'none' }));
     var ss = $('sortSel'); ss.innerHTML = '';
     [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section']].forEach(function (o) {
       ss.appendChild(h('option', { value: o[0] + ':' + o[1], text: o[2], selected: sortKey === o[0] && sortDir === o[1] }));
@@ -674,6 +684,7 @@ window.ReelAdmin = function (env) {
   function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : d.section === f); }
   function passQL(d) {
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
+    if (yearF && yearOf(d) !== yearF) return false;
     var q = query.trim().toLowerCase(); if (!q) return true;
     var hay = [d.title, d.subtitle, d.director, d.platform, slugOf({ data: d, id: '' }), (d.cast || []).map(function (c) { return c.name; }).join(' ')].join(' ').toLowerCase();
     return q.split(/\s+/).every(function (w) { return hay.indexOf(w) !== -1; });
@@ -719,7 +730,7 @@ window.ReelAdmin = function (env) {
     $('list').parentNode.hidden = !total;
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
-      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; filter = 'All'; pageNo = 1; }); } } })]));
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; filter = 'All'; pageNo = 1; }); } } })]));
       return;
     }
     function th(key, label, cls) {
@@ -1502,6 +1513,7 @@ window.ReelAdmin = function (env) {
   var qTimer = null;
   $('q').addEventListener('input', function (e) { var v = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(function () { setList(function () { query = v; pageNo = 1; }); }, 120); });
   $('langSel').addEventListener('change', function (e) { setList(function () { langF = e.target.value; pageNo = 1; }); });
+  $('yearSel').addEventListener('change', function (e) { setList(function () { yearF = e.target.value; pageNo = 1; }); });
   $('sortSel').addEventListener('change', function (e) { var v = e.target.value.split(':'); setList(function () { sortKey = v[0]; sortDir = v[1]; pageNo = 1; }); });
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
