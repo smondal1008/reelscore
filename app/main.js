@@ -608,8 +608,26 @@
       allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
     var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: closeTrailerOverlay } });
+    // Go to the title's page from the player: close it, remember the home row it was opened from, then navigate.
+    var toPage = function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault(); e.stopPropagation();
+      var href = movieUrl(m);
+      if (S.route === 'home' && opener && opener.closest) {
+        var sec = opener.closest('.view section[aria-label]'), row = sec && sec.querySelector('.rowx');
+        S.homeSpot = sec ? { label: sec.getAttribute('aria-label'), left: row ? row.scrollLeft : 0 } : null;
+      }
+      S.tov && (S.tov.opener = null);
+      closeTrailerOverlay();
+      if (S.route === 'title' && location.pathname === href) return;
+      go(href);
+    };
+    var more = h('a', { class: 'btn small tov-go', href: movieUrl(m), text: isTv(m) ? 'Go to show page' : 'Go to movie page', on: { click: toPage } });
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
-      h('div', { class: 'tov-bar' }, [h('div', { class: 'tov-t' }, [h('b', { text: d.title }), h('span', { class: 'note', text: ' · ' + x.title })]), close]),
+      h('div', { class: 'tov-bar' }, [
+        h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
+        h('div', { class: 'tov-acts' }, [more, close])
+      ]),
       h('div', { class: 'tov-v' }, [media])
     ]);
     box.addEventListener('click', function (e) { if (e.target === box) closeTrailerOverlay(); });

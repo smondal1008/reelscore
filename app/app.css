@@ -333,6 +333,11 @@
   .tov-t { min-width: 0; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .tov-x { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 50%; border: 1px solid rgba(244,241,234,.35); background: rgba(28,26,35,.9); color: var(--text); font-size: 30px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; }
   .tov-x:hover { background: var(--accent); color: #0B0A0F; border-color: var(--accent); }
+  .tov-acts { flex: 0 0 auto; display: flex; align-items: center; gap: 12px; }
+  .tov-go { text-decoration: none; color: var(--text); background: rgba(28,26,35,.9); border-color: rgba(244,241,234,.35); }
+  .tov-go:hover { background: var(--accent); color: #0B0A0F; border-color: var(--accent); }
+  .tov-tl { color: var(--text); font-weight: 700; text-decoration: none; }
+  .tov-tl:hover { text-decoration: underline; }
   .tov-v { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 20px 20px; }
   .tov-v iframe, .tov-v video { width: min(100%, calc((100vh - 92px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto; border: 0; border-radius: 12px; background: #000; }
   body.tov-open { overflow: hidden; }
