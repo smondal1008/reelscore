@@ -296,7 +296,26 @@
     if (hsh === 'home') return '/';
     return null;
   }
+  // Where a title page was opened from, for its "← Back to …" link.
+  function backLabel(f) {
+    if (!f) return 'Back to home';
+    var nm = function () { return String(f.docTitle || '').split(/ \(| – | \| /)[0].trim(); };
+    switch (f.route) {
+      case 'home': return 'Back to home';
+      case 'browse': return f.status && f.status !== 'All' ? 'Back to ' + f.status : 'Back to Browse';
+      case 'people': return 'Back to People';
+      case 'list': return 'Back to My List';
+      case 'genre': return 'Back to ' + genreBySlug(f.param) + ' movies';
+      case 'year': return 'Back to ' + f.param + ' movies';
+      case 'vids': return 'Back to ' + (VID_PAGES[f.param] ? VID_PAGES[f.param].h : 'videos');
+      case 'about': return 'Back to About';
+      case 'title': case 'person': return nm() ? 'Back to ' + nm() : 'Back';
+      default: return 'Back';
+    }
+  }
   function parseRoute() {
+    var from = S.route && S.lastPath ? { route: S.route, param: S.param, status: S.browse && S.browse.status, path: S.lastPath + (S.lastSearch || ''), docTitle: document.title, pushed: !!S.pushed } : null;
+    S.pushed = false;
     var hsh = (location.hash || '').replace(/^#/, '');
     var legacy = hsh && legacyHashToPath(hsh);
     if (legacy) history.replaceState(null, '', legacy);
@@ -339,7 +358,9 @@
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
     S.prevRoute = S.route;
-    S.lastPath = location.pathname;
+    if (S.route === 'title' && from && from.path !== location.pathname + location.search && !(from.route === 'title' && from.param === S.param)) S.titleFrom = from;
+    else if (S.route === 'title' && !from) S.titleFrom = null;
+    S.lastPath = location.pathname; S.lastSearch = location.search;
     if (S.route === 'notfound') setNoindex(true);
     else if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
@@ -353,7 +374,7 @@
   function go(href) {
     if (href === location.pathname + location.search) { window.scrollTo(0, 0); return; }
     if (S.adminApi && S.route === 'admin' && !S.adminApi.canLeave(href)) return;
-    history.pushState(null, '', href); parseRoute();
+    history.pushState(null, '', href); S.pushed = true; parseRoute();
   }
   // Same-site links navigate without a page reload.
   document.addEventListener('click', function (e) {
@@ -1260,7 +1281,14 @@
       h('div', { class: 'in' }, [
         h('div', { class: 'poster art', style: art(m, 'poster', 480), role: 'img', 'aria-label': d.title + ' poster' }),
         h('div', { class: 'txt' }, [
-          h('a', { href: '/', style: 'color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', text: '← Back to home' }),
+          (function () {
+            var f = S.titleFrom;
+            return h('a', { href: f ? f.path : '/', style: 'color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', text: '← ' + backLabel(f),
+              on: { click: function (e) {
+                if (!f || !f.pushed || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+                e.preventDefault(); e.stopPropagation(); history.back(); // back through history, so the page comes back where it was
+              } } });
+          })(),
           h('div', { class: 'tags' }, tags),
           h('h1', { class: 'display ttl', style: 'font-size:clamp(44px,6vw,84px)', text: d.title }),
           d.subtitle ? h('div', { class: 'display sbt', style: 'font-size:clamp(24px,3vw,36px);color:#D9D5DF', text: d.subtitle }) : null,
