@@ -297,6 +297,7 @@
   .badge i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
   .datebadge { position: absolute; left: 10px; top: 10px; width: 54px; padding: 6px 0; border-radius: 8px; background: rgba(11,10,15,.9); display: flex; flex-direction: column; align-items: center; line-height: 1; }
   .datebadge b { font-family: Anton, Impact, sans-serif; font-size: 22px; font-weight: 400; }
+  .datebadge.tba b { font-size: 19px; }
   .datebadge small { margin-top: 3px; font-size: 11px; font-weight: 700; letter-spacing: .8px; color: var(--accent); }
   .pw { position: relative; }
   .addl { position: absolute; right: 8px; top: 8px; width: 40px; height: 40px; border-radius: 50%; border: 1px solid rgba(244,241,234,.45); background: rgba(11,10,15,.72); color: var(--text); font-size: 22px; line-height: 1; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 2; transition: transform .12s ease, background .12s ease; }

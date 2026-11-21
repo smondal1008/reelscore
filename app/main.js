@@ -566,7 +566,9 @@
     opts = opts || {};
     var d = m.data, sc = score(m.id), img = !!safeUrl(d.posterUrl);
     var top;
-    if (opts.dateBadge && d.releaseDate) {
+    if (opts.dateBadge && !d.releaseDate && !released(m)) {
+      top = h('span', { class: 'datebadge tba', title: 'Release date not announced yet' }, [h('b', { text: 'TBA' }), h('small', { text: 'DATE' })]);
+    } else if (opts.dateBadge && d.releaseDate) {
       var p = d.releaseDate.split('-');
       top = h('span', { class: 'datebadge' }, [h('b', { text: String(+p[2]) }), h('small', { text: MONTHS[+p[1] - 1].toUpperCase() })]);
     } else {
