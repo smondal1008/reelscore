@@ -269,9 +269,13 @@ async function main() {
     });
   });
   const titleCount = slug => new Set((credits[slug] || []).map(c => c.m.id)).size;
+  // Only titles with real content (a story, poster or video) count towards a person's indexed page, so a filmography made
+  // purely of data-only imports doesn't create thin person pages.
+  const richTitle = d => !!(d.synopsis || safeUrl(d.posterUrl) || ytVideos(d).length);
+  const richCount = slug => new Set((credits[slug] || []).filter(c => richTitle(c.m.data)).map(c => c.m.id)).size;
   const indexedPerson = slug => {
     const st = people[slug] || {};
-    return titleCount(slug) >= MIN_CREDITS || (titleCount(slug) >= 1 && (safeUrl(st.photoUrl) || st.bio));
+    return richCount(slug) >= MIN_CREDITS || (richCount(slug) >= 1 && (safeUrl(st.photoUrl) || st.bio)) || (titleCount(slug) >= 1 && !!st.bio);
   };
   const personName = slug => {
     const st = people[slug]; if (st && st.name) return st.name;
