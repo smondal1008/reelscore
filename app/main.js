@@ -659,10 +659,10 @@
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
+      }), { book: true }, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
+      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true, book: true }),
       songSection(),
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT')),
