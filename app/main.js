@@ -456,7 +456,7 @@
   // JioHotstar, SonyLIV, Prime Video, ZEE5, Apple TV, YuppTV and Vi Movies icons from provider-static.plex.tv, supplied by the owner; the rest public-domain files from Wikimedia
   // Commons; the logos stay their owners' trademarks), else its short name on its colour.
   var PLAT = [[/netflix/i, 'Netflix', '#B20710', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278115/spekvxajic0oi9ol4afr.svg'], [/prime|amazon prime/i, 'Prime', '#0F79AF', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280078/ac5gnb40dhij723apdsq.svg'], [/mini ?tv/i, 'miniTV', '#2B2F3D', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277618/favq4myki6jl5iygkxdk.png'],
-    [/mx player/i, 'MX', '#1E5BD7'], [/hotstar/i, 'Hotstar', '#0C1E5B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg'], [/jiocinema/i, 'JioCinema', '#C2185B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277578/t0ck0ntwqk7z4m8ipqt5.png'], [/zee5/i, 'ZEE5', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280075/ya5lndxvqdeaszeon5j6.svg'],
+    [/mx player/i, 'MX', '#1E5BD7'], [/hotstar/i, 'Hotstar', '#0C1E5B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg'], [/jiocinema/i, 'JioCinema', '#C2185B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg', 'now on JioHotstar'], [/zee5/i, 'ZEE5', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280075/ya5lndxvqdeaszeon5j6.svg'],
     [/sony ?liv/i, 'SonyLIV', '#1F1F1F', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278117/vybazqeucxvmpipazla0.svg'], [/hoichoi/i, 'hoichoi', '#C0392B'], [/altt/i, 'ALTT', '#7A1F3D'], [/sun ?nxt/i, 'Sun NXT', '#D35400'],
     [/\baha\b/i, 'aha', '#E65100'], [/youtube/i, 'YouTube', '#C4302B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277562/hbr6zyrvtrw6u2lphsjz.png'], [/eros/i, 'Eros', '#2B2F3D'], [/viu/i, 'Viu', '#B8860B'], [/apple ?tv|itunes/i, 'Apple TV', '#000000', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280070/ijn0w6xe9tyivzfddetv.svg'], [/yupp/i, 'YuppTV', '#000000', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280072/ohxewc8wkm8co4j90ceo.svg'],
     [/\bvi movies|vi movies/i, 'Vi Movies', '#E4002B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795280073/lf3wglbbvsvr9cqtv51a.svg'], [/voot/i, 'Voot', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg', 'now on JioHotstar']];
@@ -469,7 +469,7 @@
       if (!hit) return null;
     }
     var label = hit ? hit[1] : (first.length > 9 ? first.split(/\s+/)[0] : first);
-    var say = 'On ' + p + (hit && hit[4] ? ', ' + hit[4] : '');
+    var say = 'On ' + p + (hit && hit[4] && !/\bnow\b/i.test(p) ? ', ' + hit[4] : '');
     if (hit && hit[3]) return h('span', { class: 'plat logo' + (hit[1] === 'miniTV' ? ' wide' : ''), title: say, role: 'img', 'aria-label': say }, [h('img', { src: hit[3], alt: '', loading: 'lazy', decoding: 'async' })]);
     return h('span', { class: 'plat', title: 'On ' + p, 'aria-label': 'On ' + p, style: 'background:' + (hit ? hit[2] : 'rgba(11,10,15,.88)'), text: label });
   }

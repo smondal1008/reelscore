@@ -914,7 +914,7 @@ window.ReelAdmin = function (env) {
     'Apple TV', 'YouTube', 'Lionsgate Play', 'discovery+', 'Eros Now', 'ShemarooMe', 'Hungama Play', 'Ultra Jhakaas', 'Planet Marathi', 'ManoramaMAX',
     'Simply South', 'Chaupal', 'Addatimes', 'Klikk', 'Tentkotta', 'Namma Flix', 'Saina Play', 'Neestream', 'Koode', 'Crunchyroll', 'MUBI',
     'BookMyShow Stream', 'Vi Movies & TV', 'YuppTV', 'Airtel Xstream Play', 'Tata Play Binge', 'Waves', 'Stage', 'Epic ON', 'DocuBay', 'Dangal Play',
-    'TVFPlay', 'Ullu', 'Gemplex', 'Bongo', 'Bioscope', 'Chorki', 'JioCinema (now JioHotstar)', 'Voot (now JioHotstar)', 'Disney+ Hotstar (now JioHotstar)'];
+    'TVFPlay', 'Viu', 'Ullu', 'Gemplex', 'Bongo', 'Bioscope', 'Binge', 'Chorki', 'Flipkart Video', 'PowerKids', 'JioCinema (now JioHotstar)', 'Voot (now JioHotstar)', 'Disney+ Hotstar (now JioHotstar)'];
   var TV_LIST = ['StarPlus', 'Colors', 'Sony Entertainment Television', 'Zee TV', 'Star Bharat', '&TV', 'Sony SAB', 'DD National', 'Sony Pal', 'Zee Anmol',
     'Dangal', 'Shemaroo TV', 'Sun TV', 'Star Vijay', 'Zee Tamil', 'Colors Tamil', 'Asianet', 'Mazhavil Manorama', 'Zee Keralam', 'Flowers TV',
     'Star Maa', 'Gemini TV', 'Zee Telugu', 'ETV Telugu', 'Colors Kannada', 'Zee Kannada', 'Star Suvarna', 'Udaya TV', 'Star Pravah', 'Zee Marathi',
