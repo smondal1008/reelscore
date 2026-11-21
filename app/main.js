@@ -601,10 +601,11 @@
   }
 
   // Full-screen trailer player over the current page; Esc, the close button or a click outside the video closes it.
-  function openTrailerOverlay(m, x, opener) {
+  // queue: { list: [{m, x}], i } — the row the video was opened from, so the next one can follow.
+  function openTrailerOverlay(m, x, opener, queue) {
     closeTrailerOverlay();
     var d = m.data, media;
-    if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: d.title + ' · ' + x.title,
+    if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin), title: d.title + ' · ' + x.title,
       allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
     var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: closeTrailerOverlay } });
@@ -633,14 +634,73 @@
     box.addEventListener('click', function (e) { if (e.target === box) closeTrailerOverlay(); });
     S.tov = { node: box, opener: opener, key: function (e) { if (e.key === 'Escape') closeTrailerOverlay(); } };
     document.addEventListener('keydown', S.tov.key);
+    upNext(box, media, opener, queue);
     document.body.appendChild(box); document.body.classList.add('tov-open');
     close.focus();
+  }
+  // "Up next": in the last 10 seconds, a card offers the next video from the same row; it plays when this one ends
+  // unless the viewer cancels. YouTube reports progress through its embed postMessage protocol (no extra script).
+  function upNext(box, media, opener, queue) {
+    var nx = queue && queue.list && queue.list[queue.i + 1];
+    if (!nx || !nx.m || !nx.x) return;
+    var t = S.tov, shown = false, cancelled = false, done = false, left = null;
+    var playNext = function () { if (done || S.tov !== t) return; done = true; openTrailerOverlay(nx.m, nx.x, opener, { list: queue.list, i: queue.i + 1 }); };
+    var count = h('span', { class: 'un-c' });
+    var thumb = nx.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + nx.x.yt + '/mqdefault.jpg', alt: '' }) : h('span', { class: 'ph', style: artLazy(nx.m, 'banner', 320).style });
+    var card = h('div', { class: 'upnext', role: 'status', hidden: true }, [
+      h('button', { type: 'button', class: 'un-th', 'aria-label': 'Play next: ' + nx.m.data.title, on: { click: playNext } }, [thumb, h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+      h('div', { class: 'un-b' }, [
+        h('span', { class: 'un-k' }, ['Up next', count]),
+        h('b', { class: 'un-t', text: nx.m.data.title }),
+        h('span', { class: 'note', text: nx.x.title }),
+        h('div', { class: 'un-a' }, [
+          h('button', { type: 'button', class: 'btn small primary', text: 'Play now', on: { click: playNext } }),
+          h('button', { type: 'button', class: 'btn small ghost', text: 'Cancel', on: { click: function () { cancelled = true; card.hidden = true; } } })
+        ])
+      ])
+    ]);
+    box.querySelector('.tov-v').appendChild(card);
+    var tick = function (cur, dur, ended) {
+      if (done || S.tov !== t) return;
+      if (ended) { if (!cancelled) playNext(); return; }
+      if (!(dur > 15) || !(cur >= 0)) return;
+      left = Math.max(0, Math.ceil(dur - cur));
+      if (left <= 10 && !cancelled) { if (!shown) { shown = true; card.hidden = false; } count.textContent = ' · in ' + left + 's'; }
+      else if (shown && left > 10) { shown = false; card.hidden = true; } // viewer seeked back
+    };
+    if (media.tagName === 'VIDEO') {
+      media.addEventListener('timeupdate', function () { tick(media.currentTime, media.duration, false); });
+      media.addEventListener('ended', function () { tick(0, 0, true); });
+      return;
+    }
+    var YT = 'https://www.youtube-nocookie.com', cur = 0, dur = 0;
+    var onMsg = function (e) {
+      if (e.origin !== YT || e.source !== media.contentWindow) return;
+      var m; try { m = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (er) { return; }
+      var info = m && m.info;
+      if (m && m.event === 'onStateChange' && info === 0) return tick(0, 0, true);
+      if (!info || typeof info !== 'object') return;
+      if (typeof info.duration === 'number' && info.duration) dur = info.duration;
+      if (typeof info.currentTime === 'number') cur = info.currentTime;
+      if (info.playerState === 0) return tick(0, 0, true);
+      tick(cur, dur, false);
+    };
+    var hello = function () {
+      try {
+        media.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'rs-tov', channel: 'widget' }), YT);
+        media.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'], id: 'rs-tov', channel: 'widget' }), YT);
+      } catch (er) {}
+    };
+    window.addEventListener('message', onMsg);
+    media.addEventListener('load', function () { hello(); setTimeout(hello, 1000); });
+    t.cleanup = function () { window.removeEventListener('message', onMsg); };
   }
   function closeTrailerOverlay() {
     if (!S.tov) return;
     var t = S.tov; S.tov = null;
     document.removeEventListener('keydown', t.key);
     if (document.fullscreenElement) { try { document.exitFullscreen(); } catch (e) {} }
+    if (t.cleanup) t.cleanup();
     if (t.node.parentNode) t.node.parentNode.removeChild(t.node);
     document.body.classList.remove('tov-open');
     if (t.opener && t.opener.isConnected) t.opener.focus({ preventScroll: true });
@@ -688,7 +748,7 @@
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
     return picks;
   }
-  function trailerCard(p) {
+  function trailerCard(p, i, arr) {
     var m = p.m, d = m.data, rel = released(m);
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     // The thumbnail plays the trailer in the overlay; the button below goes to the title's page.
@@ -696,7 +756,7 @@
       h('a', { class: 'tplay', href: movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
         if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault(); e.stopPropagation();
-        openTrailerOverlay(m, p.x, e.currentTarget);
+        openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
       } } }, [
         h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
         h('span', { class: 'tt', text: d.title }),
@@ -726,13 +786,13 @@
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
     return picks;
   }
-  function songCard(p) {
+  function songCard(p, i, arr) {
     var m = p.m, d = m.data;
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
-      openTrailerOverlay(m, p.x, e.currentTarget);
+      openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
     } } }, [
       h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
       h('span', { class: 'tt', text: p.x.title }),
@@ -794,13 +854,13 @@
     shows.forEach(function (m) { var vs = vidItems(m).filter(function (x) { return x.yt || x.clip; }); (all ? vs : vs.slice(0, 2)).forEach(function (x) { picks.push({ m: m, x: x }); }); });
     return picks;
   }
-  function tvPromoCard(p) {
+  function tvPromoCard(p, i, arr) {
     var m = p.m, d = m.data;
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
-      openTrailerOverlay(m, p.x, e.currentTarget);
+      openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
     } } }, [
       h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
       h('span', { class: 'tt', text: d.title }),
