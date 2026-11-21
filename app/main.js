@@ -137,9 +137,25 @@
     var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {};
     if (cur.v[mid] === val) delete cur.v[mid]; else cur.v[mid] = val;
     cur.at = new Date().toISOString();
-    S.verdicts[S.uid] = cur; render();
+    S.verdicts[S.uid] = cur;
+    if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else render();
     writing.v = true;
     guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
+  }
+  // Home page: show a new verdict (and changed scores) on the cards already drawn, without rebuilding the page,
+  // so images don't reload and rows keep their place.
+  function patchVerdicts() {
+    var v = $('view-home'); if (!v) return;
+    v.querySelectorAll('.pc[data-id]').forEach(function (pc) {
+      var id = pc.getAttribute('data-id'), my = myVerdict(id), b = pc.querySelector('.badge');
+      pc.querySelectorAll('.qb[data-v]').forEach(function (q) { q.setAttribute('aria-pressed', String(my === q.getAttribute('data-v'))); });
+      if (b && b.lastChild && b.lastChild.nodeType === 3) {
+        var m = S.byId[id], sc = score(id);
+        if (m) b.lastChild.nodeValue = sc.pct === null ? (released(m) ? 'New' : fmtDate(m.data.releaseDate)) : sc.pct + '%';
+      }
+    });
+    var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub');
+    if (sub) sub.textContent = rateNote();
   }
   function saveReview(mid, text, spoiler) {
     if (!needUser() || writing.r) return;
@@ -463,14 +479,14 @@
     if (opts.rate) {
       var my = myVerdict(m.id);
       kids.push(h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + d.title }, vset(m).map(function (x) {
-        return h('button', { type: 'button', class: 'qb ' + x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
+        return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
           on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); } } });
       })));
     }
     if (opts.remind) kids.push(h('button', { type: 'button', class: 'btn small', 'aria-pressed': String(hasReminder(m.id)),
       style: hasReminder(m.id) ? 'background:var(--accent);border-color:var(--accent);color:#0B0A0F' : '',
       text: hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
-    return h('div', { class: 'pc' + (img ? ' img' : '') }, kids);
+    return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids);
   }
   function rowSection(title, items, opts, link) {
     if (!items.length) return null;
@@ -624,9 +640,21 @@
     });
     var pop = popularityOf(list);
     list.sort(function (a, b) { return pop[b.id] - pop[a.id] || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); });
+    // Keep the order the row was first shown in: a new verdict raises a title's popularity, which would otherwise
+    // move it to the front. Titles new to the row go after the ones already shown.
+    var ro = S.rateOrder && S.rateOrder.lang === S.navLang ? S.rateOrder.ids : null;
+    if (ro) {
+      var at = {}; ro.forEach(function (id, i) { at[id] = i; });
+      list = list.filter(function (m) { return m.id in at; }).sort(function (a, b) { return at[a.id] - at[b.id]; })
+        .concat(list.filter(function (m) { return !(m.id in at); }));
+    }
     list = list.slice(0, 15);
-    var n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
-    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub', text: n ? 'Thanks — ' + n + ' verdict' + (n === 1 ? '' : 's') + ' added. Every one counts toward the score.' : 'One tap each. Your verdict counts toward the score.' }));
+    S.rateOrder = { lang: S.navLang, ids: list.map(function (m) { return m.id; }) };
+    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub', text: rateNote() }));
+  }
+  function rateNote() {
+    var done = S.justRated || {}, n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
+    return n ? 'Thanks — ' + n + ' verdict' + (n === 1 ? '' : 's') + ' added. Every one counts toward the score.' : 'One tap each. Your verdict counts toward the score.';
   }
 
   // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
@@ -1929,7 +1957,10 @@
     db.collection('verdicts').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (s) { o[s.id] = s.data(); });
       if (S.uid && writing.v && S.verdicts[S.uid]) o[S.uid] = S.verdicts[S.uid];
-      S.verdicts = o; render();
+      S.verdicts = o;
+      // After the first load, verdict changes only update scores and buttons on a drawn home page.
+      if (S.verdictsIn && S.route === 'home' && S.lastDrawn === 'home:' && S.loaded) patchVerdicts(); else render();
+      S.verdictsIn = true;
     }, function () {});
     db.doc('settings/home').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {};
