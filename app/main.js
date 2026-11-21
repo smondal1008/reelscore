@@ -350,7 +350,7 @@
     var sec = Array.prototype.filter.call(document.querySelectorAll('#view-home section[aria-label]'), function (x) { return x.getAttribute('aria-label') === spot.label; })[0];
     if (!sec) return;
     var row = sec.querySelector('.rowx'); if (row) row.scrollLeft = spot.left;
-    var nav = document.querySelector('header.nav'), off = (nav ? nav.getBoundingClientRect().height : 0) + 12;
+    var off = 16;
     var put = function () { window.scrollTo(0, Math.max(0, sec.getBoundingClientRect().top + window.pageYOffset - off)); if (row) row.scrollLeft = spot.left; };
     put(); setTimeout(put, 60); setTimeout(put, 400);
   }
