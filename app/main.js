@@ -1993,7 +1993,12 @@
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }),
-      mine.length ? h('div', { class: 'grid-posters' }, mine.map(function (m) { return posterCard(m, released(m) ? null : { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
+      mine.length ? h('div', { class: 'grid-posters' }, mine.map(function (m) {
+        // Watch now for released titles out of theatres with a streaming link; Book tickets for theatre titles (incl. advance booking) with a booking link.
+        var th = m.data.section === 'In theatres' || m.data.section === 'Coming soon';
+        var o = released(m) ? { stream: !th, book: th } : { dateBadge: true, remind: true, book: th };
+        return posterCard(m, o);
+      })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
       rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
