@@ -1846,6 +1846,9 @@
       myV.length ? h('div', { class: 'grid-posters' }, myV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
         : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
 
+    // People you follow and Find people are hidden until following is ready; set SHOW_PEOPLE to true to bring them back.
+    var SHOW_PEOPLE = false;
+    if (!SHOW_PEOPLE) return;
     // following
     var fol = S.mine.following;
     var people = h('section', { class: 'card' }, [h('h2', { text: 'People you follow (' + fol.length + ')' }),
