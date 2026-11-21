@@ -376,7 +376,7 @@ async function main() {
       (d.genre ? String(d.genre).toLowerCase() + ' ' : '') + (tv ? 'series' : 'film') +
       (directors.length ? ' directed by ' + list(directors.slice(0, 2)) : '') +
       (actors.length ? ', starring ' + list(actors.slice(0, 3).map(c => c.name)) : '') + '.';
-    const description = clip((d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto + ' ' : '') : auto + ' ') + (sc.tot ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
+    const description = clip((d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto + ' ' : '') : auto + ' ') + (sc.tot >= 3 ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
 
     const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages ? '\u0000' : '', d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean)
       .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
@@ -385,7 +385,7 @@ async function main() {
     body += '<div class="pr-top">' + (poster ? '<img class="pr-poster" src="' + esc(poster) + '" alt="' + esc(d.title) + ' poster" width="200" height="300" fetchpriority="high">' : '') + '<div>';
     body += '<h1>' + esc(d.title) + '</h1>' + (d.subtitle ? '<div class="pr-sub">' + esc(d.subtitle) + '</div>' : '');
     body += metaLine ? '<div class="pr-meta">' + metaLine + '</div>' : '';
-    if (sc.tot) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
+    if (sc.tot >= 3) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
     if (directors.length) body += '<div class="pr-meta">Directed by ' + directors.map(personLink).join(', ') + '</div>';
     body += '</div></div>';
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';

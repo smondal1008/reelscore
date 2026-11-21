@@ -42,7 +42,7 @@
     if (crew.length) s.push('The crew includes ' + list(crew.slice(0, 4).map(function (c) { return c.name + ' (' + String(c.role).toLowerCase() + ')'; })) + '.');
     if (t.platform) s.push(t.released ? 'Reelscore lists it on ' + t.platform + '.' : 'It is set to come to ' + t.platform + '.');
     var v = t.verdicts || {};
-    if (v.tot) s.push('On Reelscore, ' + v.pct + '% of ' + v.tot + ' viewer verdict' + (v.tot === 1 ? ' is' : 's are') + ' positive.');
+    if (v.tot >= 3) s.push('On Reelscore, ' + v.pct + '% of ' + v.tot + ' viewer verdict' + (v.tot === 1 ? ' is' : 's are') + ' positive.');
     else s.push(t.released || t.tv ? 'No one has given it a verdict on Reelscore yet.' : 'Verdicts open on Reelscore once it is out.');
     return s.join(' ');
   }
