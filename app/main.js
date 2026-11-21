@@ -655,7 +655,7 @@
         h('span', { class: 'note', text: nx.x.title }),
         h('div', { class: 'un-a' }, [
           h('button', { type: 'button', class: 'btn small primary', text: 'Play now', on: { click: playNext } }),
-          h('button', { type: 'button', class: 'btn small ghost', text: 'Cancel', on: { click: function () { cancelled = true; card.hidden = true; } } })
+          h('button', { type: 'button', class: 'btn small ghost', text: 'Cancel', on: { click: function () { cancelled = true; card.hidden = true; box.classList.remove('has-next'); } } })
         ])
       ])
     ]);
@@ -665,8 +665,8 @@
       if (ended) { if (!cancelled) playNext(); return; }
       if (!(dur > 15) || !(cur >= 0)) return;
       left = Math.max(0, Math.ceil(dur - cur));
-      if (left <= 10 && !cancelled) { if (!shown) { shown = true; card.hidden = false; } count.textContent = ' · in ' + left + 's'; }
-      else if (shown && left > 10) { shown = false; card.hidden = true; } // viewer seeked back
+      if (left <= 10 && !cancelled) { if (!shown) { shown = true; card.hidden = false; box.classList.add('has-next'); } count.textContent = ' · in ' + left + 's'; }
+      else if (shown && left > 10) { shown = false; card.hidden = true; box.classList.remove('has-next'); } // viewer seeked back
     };
     if (media.tagName === 'VIDEO') {
       media.addEventListener('timeupdate', function () { tick(media.currentTime, media.duration, false); });

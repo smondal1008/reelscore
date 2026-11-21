@@ -339,7 +339,10 @@
   .tov-tl { color: var(--text); font-weight: 700; text-decoration: none; }
   .tov-tl:hover { text-decoration: underline; }
   .tov-v { position: relative; }
-  .upnext { position: absolute; right: 36px; bottom: 36px; z-index: 2; display: flex; gap: 14px; align-items: center; width: min(440px, calc(100% - 40px)); padding: 12px; border-radius: 14px;
+  /* Up next sits below the player (never over YouTube's controls); the player shrinks to make room while it shows. */
+  .tov-v { flex-direction: column; gap: 14px; }
+  .tov.has-next .tov-v iframe, .tov.has-next .tov-v video { width: min(100%, calc((100vh - 92px - 124px) * 16 / 9)); }
+  .upnext { flex: 0 0 auto; display: flex; gap: 14px; align-items: center; width: min(520px, 100%); padding: 10px; border-radius: 14px;
     background: rgba(18,17,24,.94); border: 1px solid rgba(244,241,234,.2); box-shadow: 0 16px 40px rgba(0,0,0,.5); }
   .upnext[hidden] { display: none; }
   .un-th { position: relative; flex: 0 0 150px; aspect-ratio: 16 / 9; border-radius: 10px; overflow: hidden; border: 0; padding: 0; background: #1E2350; cursor: pointer; display: flex; align-items: center; justify-content: center; }
@@ -350,7 +353,7 @@
   .un-t { font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .un-b .note { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .un-a { display: flex; gap: 8px; margin-top: 6px; }
-  @media (max-width: 760px) { .upnext { right: 10px; bottom: 22px; width: calc(100% - 20px); } .un-th { flex-basis: 110px; } }
+  @media (max-width: 760px) { .upnext { width: calc(100% - 20px); } .un-th { flex-basis: 110px; } }
   .tov-v { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; padding: 0 20px 20px; }
   .tov-v iframe, .tov-v video { width: min(100%, calc((100vh - 92px) * 16 / 9)); aspect-ratio: 16 / 9; height: auto; border: 0; border-radius: 12px; background: #000; }
   body.tov-open { overflow: hidden; }
