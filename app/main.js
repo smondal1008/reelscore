@@ -1022,7 +1022,7 @@
     if (d.certificate) { meta.appendChild(h('i', { 'aria-hidden': 'true' })); meta.appendChild(h('span', { class: 'cert', text: d.certificate })); }
     var v = firstVideo(m), on = inList(m.id);
     var langs = langShort(d), rk = rankIn(m);
-    var secName = { 'In theatres': 'in Theatres', 'On OTT': 'on OTT', 'Coming soon': 'Coming soon', 'Older releases': 'of 2025–26', 'TV shows': 'in TV shows' }[d.section] || '';
+    var secName = { 'In theatres': 'in Theatres', 'On OTT': 'on OTT', 'Coming soon': 'Coming soon', 'Older releases': 'in Older releases', 'TV shows': 'in TV shows' }[d.section] || '';
     var chips = [];
     if (langs.length) chips.push(h('span', { class: 'hc' }, [h('span', { 'aria-hidden': 'true', text: '🗣' }), 'In ' + langs.join(', ')]));
     if (rk && rk <= 10) chips.push(h('span', { class: 'hc' }, [h('b', { text: 'TOP' }), '#' + rk + ' ' + secName]));
@@ -1790,7 +1790,7 @@
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var B = S.browse;
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'Browse' }));
-    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Every film and series on Reelscore, from 2025–26 releases to what’s coming next.' }));
+    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Every film and series on Reelscore, from classics to what’s coming next.' }));
     var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Status', style: 'margin-bottom:14px' }, statuses.map(function (st) {
       return h('a', { class: 'chip', href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year }, 1), 'aria-current': B.status === st ? 'page' : null, 'aria-pressed': String(B.status === st), text: st });
