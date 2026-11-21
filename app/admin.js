@@ -945,6 +945,25 @@ window.ReelAdmin = function (env) {
     ]);
   }
 
+  // Ticket booking platform: a list, with “+ Add a new platform…” for anything else (offered on every title after that).
+  var BOOK_LIST = ['BookMyShow', 'District', 'PVR INOX', 'Cinépolis', 'Miraj Cinemas', 'Movietime Cinemas', 'Carnival Cinemas', 'Rajhans Cinemas', 'Mukta A2 Cinemas', 'Ticketnew'];
+  function bookingField() {
+    var cur = draft.bookingPlatform || '', extra = {};
+    movies.forEach(function (m) { var p = (m.data.bookingPlatform || '').trim(); if (p && BOOK_LIST.indexOf(p) === -1) extra[p] = 1; });
+    var opt = function (v, t) { return h('option', { value: v, text: t || v, selected: v === cur }); };
+    var sel = h('select', { id: 'f_bookingPlatform', class: 'in', disabled: !canWrite },
+      [opt('', 'Not set')].concat(BOOK_LIST.map(function (x) { return opt(x); }), Object.keys(extra).sort().map(function (x) { return opt(x); }),
+        [h('option', { value: '__new__', text: '+ Add a new platform…' })]));
+    var box = h('input', { class: 'in', type: 'text', placeholder: 'Type the booking platform’s name', hidden: true, disabled: !canWrite });
+    sel.addEventListener('change', function () {
+      if (sel.value === '__new__') { box.hidden = false; box.value = ''; box.focus(); return; }
+      box.hidden = true; draft.bookingPlatform = sel.value; touch();
+    });
+    box.addEventListener('input', function () { draft.bookingPlatform = box.value.trim(); touch(); });
+    return h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_bookingPlatform' }, ['Ticket booking platform']), sel, box,
+      h('span', { class: 'note', text: 'Names the Book tickets button, e.g. “Book on BookMyShow”.' })]);
+  }
+
   // ---------- editor ----------
   function field(label, key, opts) {
     opts = opts || {};
@@ -1310,6 +1329,16 @@ window.ReelAdmin = function (env) {
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
 
+    // links shown on the title page: a Watch on … button, and for films a Book tickets button
+    var gL = h('div', { class: 'grid' }, [
+      field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
+        note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
+      tvEd ? null : bookingField(),
+      tvEd ? null : field('Ticket booking URL', 'bookingUrl', { type: 'url', placeholder: 'https://in.bookmyshow.com/…',
+        note: 'Shown as a “Book tickets” button on the title page while the film is in theatres or coming soon. Leave blank to hide it.' })
+    ]);
+    main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [h('h2', { text: tvEd ? 'Where to watch' : 'Where to watch & tickets' }), gL]));
+
     var g2 = h('div', { class: 'grid' }, [
       field('Languages', 'languages', { placeholder: 'Hindi, English' }),
       genreField(),
@@ -1377,6 +1406,8 @@ window.ReelAdmin = function (env) {
   function save() {
     if (!draft || saving || !db) return Promise.resolve(false);
     if (!draft.title.trim()) { setStatus('Add a title before saving.'); return Promise.resolve(false); }
+    var badUrl = [['platformUrl', 'Streaming platform URL'], ['bookingUrl', 'Ticket booking URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
+    if (badUrl) { setStatus(badUrl[1] + ' must be a full link starting with https://'); var bf = $('f_' + badUrl[0]); if (bf) bf.focus(); return Promise.resolve(false); }
     saving = true; setDirty(true);
     var isNew = !movies.some(function (m) { return m.id === currentId; });
     var slug = urlSlug(draft.slug) || suggestedSlug(draft);

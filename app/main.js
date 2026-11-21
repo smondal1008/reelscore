@@ -1150,7 +1150,7 @@
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
-    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : null; // ticket booking hidden until a partner is integrated
+    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : safeUrl(d.bookingUrl) ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) ? 'Where to watch' : null;
     put(titleHero(m, tags, actLabel));
 
     // scores
@@ -1507,18 +1507,30 @@
         return pk ? h('a', { class: 'cp', href: personUrl(c.name), 'aria-label': c.name + (c.role ? ', ' + c.role : '') + ' — see all titles' }, kids) : h('div', {}, kids);
       })) : h('div', { class: 'note', text: 'Cast and crew not added yet.' })]);
   }
+  // "Watch on …": a real link once a streaming URL is added in Admin, otherwise a disabled button.
+  function watchBtn(d, label, off) {
+    var u = safeUrl(d.platformUrl);
+    return u && !off ? h('a', { class: 'btn primary', href: u, target: '_blank', rel: 'noopener', text: label + ' ↗' }) : h('button', { type: 'button', class: 'btn primary', disabled: true, text: label });
+  }
   function actionBlock(m, rel, ott) {
     var d = m.data;
     if (ott) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
       h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: (d.platform || 'OTT').slice(0, 2).toUpperCase() }),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform || 'Streaming service' }), h('div', { class: 'note', text: rel ? 'Streaming now · included with subscription' : 'Streams from ' + fmtDate(d.releaseDate, true) })])]),
-      h('button', { type: 'button', class: 'btn primary', disabled: true, text: rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet' }),
-      h('div', { class: 'note', text: 'Deep links go live once the platform partnership is in place.' })]);
+      watchBtn(d, rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet', !rel),
+      safeUrl(d.platformUrl) ? null : h('div', { class: 'note', text: 'A link to watch it will show here once it’s added.' })]);
     if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
       d.platform ? h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: d.platform.slice(0, 2).toUpperCase() }),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
-      d.platform ? h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'Watch on ' + d.platform }) : null]);
-    return null; // ticket booking hidden until a ticketing partner is integrated
+      d.platform || safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
+    // In theatres / coming soon: Book tickets, when a booking link has been added in Admin
+    var bk = safeUrl(d.bookingUrl), bp = d.bookingPlatform || '';
+    if (bk) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
+      h('div', { class: 'note', text: rel ? 'Showtimes, seats and prices are on ' + (bp || 'the booking site') + '.' : 'Bookings open on ' + (bp || 'the booking site') + ' closer to release.' }),
+      h('a', { class: 'btn primary', href: bk, target: '_blank', rel: 'noopener', text: bp ? 'Book on ' + bp : 'Book tickets' }),
+      safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
+    if (safeUrl(d.platformUrl)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }), watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false)]);
+    return null; // no booking or streaming link added for this film
     var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'city', text: 'City' }), h('select', { class: 'in', id: 'city' }, ['Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune'].map(function (c) { return h('option', { text: c }); }))]),
