@@ -27,7 +27,7 @@
     var want = [''].concat(langs).join('|');
     if (sel.getAttribute('data-k') !== want) {
       sel.innerHTML = '';
-      sel.appendChild(h('option', { value: '', text: 'All languages' }));
+      sel.appendChild(h('option', { value: '', text: 'Lang' }));
       langs.forEach(function (l) { sel.appendChild(h('option', { value: l, text: l })); });
       sel.setAttribute('data-k', want);
     }

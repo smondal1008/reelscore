@@ -180,6 +180,7 @@
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
   .nav a.lnk:hover { color: var(--text); }
   .nav .navsel { appearance: none; -webkit-appearance: none; background: rgba(244,241,234,.08) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23D9D5DF' stroke-width='1.5'/%3E%3C/svg%3E") no-repeat right 14px center; color: #D9D5DF; border: 1px solid rgba(244,241,234,.18); border-radius: 22px; padding: 9px 34px 9px 16px; font: inherit; font-size: 15px; font-weight: 500; cursor: pointer; }
+  .nav .navr .navsel { font-size: 14px; padding: 7px 30px 7px 14px; background-position: right 12px center; }
   .nav .navsel:hover, .nav .navsel:focus-visible { color: var(--text); border-color: rgba(244,241,234,.4); }
   .nav .navsel.on { background-color: rgba(244,241,234,.14); color: var(--text); font-weight: 600; }
   .nav .navsel option { color: #111; }
