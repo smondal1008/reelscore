@@ -459,8 +459,14 @@
     [/mx player/i, 'MX', '#1E5BD7'], [/hotstar/i, 'Hotstar', '#0C1E5B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278113/zfybbia3pipljitcb1wl.svg'], [/jiocinema/i, 'JioCinema', '#C2185B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277578/t0ck0ntwqk7z4m8ipqt5.png'], [/zee5/i, 'ZEE5', '#5B2A86', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277575/qk0iqwvgcw0rgyhh7npo.svg'],
     [/sony ?liv/i, 'SonyLIV', '#1F1F1F', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795278117/vybazqeucxvmpipazla0.svg'], [/hoichoi/i, 'hoichoi', '#C0392B'], [/altt/i, 'ALTT', '#7A1F3D'], [/sun ?nxt/i, 'Sun NXT', '#D35400'],
     [/\baha\b/i, 'aha', '#E65100'], [/youtube/i, 'YouTube', '#C4302B', 'https://res.cloudinary.com/g7mcmxdv/image/upload/f_png,h_96/v1795277562/hbr6zyrvtrw6u2lphsjz.png'], [/eros/i, 'Eros', '#2B2F3D'], [/viu/i, 'Viu', '#B8860B'], [/voot/i, 'Voot', '#5B2A86']];
-  function platBadge(p) {
-    var first = String(p).split('/')[0].trim(), hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
+  // TV shows (logoOnly) get a tile only when one of their platforms has a logo, so TV channels get none.
+  function platBadge(p, logoOnly) {
+    var parts = String(p).split('/').map(function (x) { return x.trim(); }), first = parts[0], hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
+    if (logoOnly) {
+      hit = null;
+      parts.some(function (part) { hit = PLAT.filter(function (x) { return x[3] && x[0].test(part); })[0] || null; return !!hit; });
+      if (!hit) return null;
+    }
     var label = hit ? hit[1] : (first.length > 9 ? first.split(/\s+/)[0] : first);
     if (hit && hit[3]) return h('span', { class: 'plat logo' + (hit[1] === 'miniTV' ? ' wide' : ''), title: 'On ' + p, role: 'img', 'aria-label': 'On ' + p }, [h('img', { src: hit[3], alt: '', loading: 'lazy', decoding: 'async' })]);
     return h('span', { class: 'plat', title: 'On ' + p, 'aria-label': 'On ' + p, style: 'background:' + (hit ? hit[2] : 'rgba(11,10,15,.88)'), text: label });
@@ -482,7 +488,7 @@
       h('div', { class: 'pw' }, [
         h('a', { class: 'pa art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, [
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
-          isOtt(m) && d.platform ? platBadge(d.platform) : null
+          d.platform && (isOtt(m) || isTv(m)) ? platBadge(d.platform, isTv(m)) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
           'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
