@@ -21,6 +21,10 @@
   ],
   "rewrites": [
     {
+      "source": "/tv-promos",
+      "destination": "/"
+    },
+    {
       "source": "/trailers",
       "destination": "/"
     },

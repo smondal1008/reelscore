@@ -258,7 +258,7 @@
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
-    else if (path === '/trailers' || path === '/songs') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
+    else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
       S.route = 'genre'; S.param = mm[1].toLowerCase();
@@ -619,6 +619,7 @@
 
   // ---------- /trailers and /songs: every trailer or video song, newest first, filterable by language ----------
   var VID_PAGES = { trailers: { h: 'All trailers', t: 'Latest Movie Trailers | Reelscore', what: 'trailers', picks: trailerPicks, card: trailerCard },
+                    'tv-promos': { h: 'All TV promotionals', t: 'TV Show Trailers, Promos & Episodes | Reelscore', what: 'TV promotionals', picks: tvPromoPicks, card: tvPromoCard },
                     songs: { h: 'All video songs', t: 'Latest Video Songs | Reelscore', what: 'video songs', picks: songPicks, card: songCard } };
   function drawVids() {
     var v = $('view-vids'), P = VID_PAGES[S.param];
@@ -644,30 +645,34 @@
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
-  function tvPromoSection() {
+  function tvPromoPicks(all) {
     var thisYear = String(new Date().getFullYear()), picks = [];
     var shows = homeSection('TV shows').slice().sort(function (a, b) {
       var aa = !a.data.endYear || String(a.data.endYear) >= thisYear ? 1 : 0, bb = !b.data.endYear || String(b.data.endYear) >= thisYear ? 1 : 0;
       return bb - aa || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
     });
-    shows.forEach(function (m) { vidItems(m).filter(function (x) { return x.yt || x.clip; }).slice(0, 2).forEach(function (x) { picks.push({ m: m, x: x }); }); });
-    picks = picks.slice(0, 24);
+    shows.forEach(function (m) { var vs = vidItems(m).filter(function (x) { return x.yt || x.clip; }); (all ? vs : vs.slice(0, 2)).forEach(function (x) { picks.push({ m: m, x: x }); }); });
+    return picks;
+  }
+  function tvPromoCard(p) {
+    var m = p.m, d = m.data;
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
+    return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+      e.preventDefault(); e.stopPropagation();
+      openTrailerOverlay(m, p.x, e.currentTarget);
+    } } }, [
+      h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+      h('span', { class: 'tt', text: d.title }),
+      h('span', { class: 'note', text: [p.x.title, d.platform].filter(Boolean).join(' · ') })
+    ]);
+  }
+  function tvPromoSection() {
+    var picks = tvPromoPicks(false).slice(0, 20);
     if (!picks.length) return null;
     return h('section', { class: 'sect', 'aria-label': 'New TV promotionals' }, [
-      h('div', { class: 'sect-h' }, [h('h2', { text: 'New TV promotionals' })]),
-      h('div', { class: 'rowx' }, picks.map(function (p) {
-        var m = p.m, d = m.data;
-        var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: art(m, 'banner') });
-        return h('a', { class: 'tcard', href: p.x.url || movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
-          if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-          e.preventDefault(); e.stopPropagation();
-          openTrailerOverlay(m, p.x, e.currentTarget);
-        } } }, [
-          h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tt', text: d.title }),
-          h('span', { class: 'note', text: [p.x.title, d.platform].filter(Boolean).join(' · ') })
-        ]);
-      }))
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'New TV promotionals' }), showAll('/tv-promos')]),
+      h('div', { class: 'rowx' }, picks.map(tvPromoCard))
     ]);
   }
 
