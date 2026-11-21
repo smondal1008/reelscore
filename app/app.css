@@ -463,6 +463,9 @@
   .person .nmx { flex: 1; min-width: 0; font-weight: 600; font-size: 14px; }
   .grid-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 18px; }
   .grid-posters .pc { width: auto; }
+  .pc .cta { text-decoration: none; justify-content: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pc .fu-b { display: flex; gap: 8px; }
+  .pc .fu-b .btn { flex: 1; }
   .pc .pctag { font-size: 12px; font-weight: 600; color: var(--muted); }
   .pc .pctag.hot { color: var(--accent); }
   .pc .vtag.myv { align-self: flex-start; margin-top: 6px; font-size: 12px; padding: 5px 9px; border-radius: 6px; letter-spacing: .2px; }

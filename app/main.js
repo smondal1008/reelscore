@@ -12,7 +12,7 @@
   // ---------- state ----------
   var S = {
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
-    featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [] }, mineLoaded: false,
+    featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [], wtw: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, yr: { year: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
@@ -526,7 +526,10 @@
       h('span', { class: 'mt', text: meta, title: meta })
     ];
     if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
-    if (opts.rate) {
+    if (opts.stream && safeUrl(d.platformUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', text: '▶ Stream now' + (d.platform ? ' on ' + d.platform : '') }));
+    else if (opts.book && safeUrl(d.bookingUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.bookingUrl, target: '_blank', rel: 'noopener', text: '🎟 Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '') }));
+    else if (opts.followUp) kids.push(followUpBox(m));
+    if (opts.rate && !(opts.stream && safeUrl(d.platformUrl)) && !(opts.book && safeUrl(d.bookingUrl))) {
       var my = myVerdict(m.id);
       kids.push(h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + d.title }, vset(m).map(function (x) {
         return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
@@ -595,6 +598,7 @@
       }), null, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
+      followUpSection(),
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true }),
       songSection(),
       genreSection(),
@@ -1898,6 +1902,44 @@
     return nav;
   }
 
+  // ---------- follow-up on titles that were in What to watch while in theatres and have since left ----------
+  // Rate shows the verdict buttons in place; Not seen puts the title (back) on the watchlist. Either way it leaves the row.
+  function wtwDone(id) {
+    var i = (S.mine.wtw || []).indexOf(id); if (i !== -1) { S.mine.wtw.splice(i, 1); saveMine(null); }
+  }
+  function verdictButtons(m, after) {
+    var my = myVerdict(m.id);
+    return h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + m.data.title }, vset(m).map(function (x) {
+      return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
+        on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); if (after) after(); } } });
+    }));
+  }
+  function followUpBox(m) {
+    var box = h('div', { class: 'fu' });
+    var showRate = function () { box.innerHTML = ''; box.appendChild(verdictButtons(m, function () { wtwDone(m.id); })); };
+    if (myVerdict(m.id)) { showRate(); return box; }
+    box.appendChild(h('div', { class: 'fu-b' }, [
+      h('button', { type: 'button', class: 'btn small primary', text: 'Rate', on: { click: showRate } }),
+      h('button', { type: 'button', class: 'btn small', text: 'Not seen', on: { click: function () {
+        if (!needUser()) return;
+        if (!inList(m.id)) S.mine.watchlist.push(m.id);
+        var i = (S.mine.wtw || []).indexOf(m.id); if (i !== -1) S.mine.wtw.splice(i, 1);
+        var card = box.closest('.pc'); if (card) card.remove();
+        saveMine('Added back to your watchlist');
+      } } })
+    ]));
+    return box;
+  }
+  function followUpSection() {
+    if (!S.uid) return null;
+    var jr = S.justRated || {};
+    var list = (S.mine.wtw || []).map(function (id) { return S.byId[id]; }).filter(function (m) {
+      return m && inNavLang(m) && m.data.section !== 'In theatres' && m.data.section !== 'Coming soon' && (!myVerdict(m.id) || jr[m.id]);
+    });
+    return rowSection('What to watch this weekend or next week', list, { followUp: true },
+      h('span', { class: 'sub', text: 'Out of theatres now. Seen it? Rate it, or keep it on your watchlist.' }));
+  }
+
   // ---------- What to watch this weekend or next week (top of My List) ----------
   // 1) every watchlist title releasing from this Monday to the end of next week; 2) up to 5 picks: released watchlist titles
   // you haven't rated (best score first), then popular In theatres / On OTT titles you haven't rated or listed.
@@ -1905,19 +1947,20 @@
     var t = new Date(today() + 'T00:00:00'), dow = (t.getDay() + 6) % 7; // Monday = 0
     var iso = function (d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
     var from = iso(new Date(t.getTime() - dow * 864e5)), to = iso(new Date(t.getTime() + (13 - dow) * 864e5));
-    var seen = {}, out = [], jr = S.justRated || {}; // titles rated this visit stay, showing the verdict just given
+    var seen = {}, out = [], jr = S.justRated || {};
+    var act = function (m, o) { o = o || {}; if (m.data.section === 'On OTT') o.stream = true; if (m.data.section === 'In theatres') o.book = true; return o; }; // titles rated this visit stay, showing the verdict just given
     var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
     mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
       .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
-      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } : { dateBadge: true, rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
+      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? act(m, { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) : { dateBadge: true, rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' } }); });
     var rank = function (list) { var pop = popularityOf(list); return list.sort(function (a, b) { var sa = score(a.id).pct, sb = score(b.id).pct; return ((sb === null ? -1 : sb) - (sa === null ? -1 : sa)) || (pop[b.id] - pop[a.id]); }); };
     var picks = rank(mine.filter(function (m) { return !seen[m.id] && released(m) && (!myVerdict(m.id) || jr[m.id]); })).slice(0, 5);
-    picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: { rate: true, tag: 'From your watchlist' } }); });
+    picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: act(m, { rate: true, tag: 'From your watchlist' }) }); });
     if (picks.length < 5) {
       var more = rank(S.movies.filter(function (m) {
         return !seen[m.id] && !inList(m.id) && (!myVerdict(m.id) || jr[m.id]) && released(m) && inNavLang(m) && (m.data.section === 'In theatres' || m.data.section === 'On OTT');
       })).slice(0, 5 - picks.length);
-      more.forEach(function (m) { out.push({ m: m, opts: { rate: true, tag: 'Recommended' } }); });
+      more.forEach(function (m) { out.push({ m: m, opts: act(m, { rate: true, tag: 'Recommended' }) }); });
     }
     return out;
   }
@@ -1930,6 +1973,9 @@
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
     var wk = weekendPicks(mine);
+    // Remember titles shown here while in theatres, so the home page can ask about them once they leave theatres.
+    var newIds = wk.filter(function (x) { return x.m.data.section === 'In theatres' && (S.mine.wtw || []).indexOf(x.m.id) === -1 && !myVerdict(x.m.id); }).map(function (x) { return x.m.id; });
+    if (newIds.length && S.mineLoaded) { S.mine.wtw = (S.mine.wtw || []).concat(newIds).slice(-60); saveMine(null); }
     if (wk.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'What to watch this weekend or next week' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'Your watchlist titles releasing this week or next, then up to 5 picks: unwatched titles from your watchlist first, then popular releases you haven’t rated.' }),
       h('div', { class: 'grid-posters' }, wk.map(function (x) { return posterCard(x.m, x.opts); }))]));
@@ -2163,7 +2209,7 @@
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
-      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice() };
+      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice() };
       S.mineLoaded = true; render();
     }, function () {});
   }).catch(function () { clearTimeout(timer); S.loadMsg = 'The catalogue is unavailable in this view.'; render(true); });
