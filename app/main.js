@@ -645,14 +645,18 @@
   function trailerCard(p) {
     var m = p.m, d = m.data, rel = released(m);
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
-    return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
-      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-      e.preventDefault(); e.stopPropagation();
-      openTrailerOverlay(m, p.x, e.currentTarget);
-    } } }, [
-      h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-      h('span', { class: 'tt', text: d.title }),
-      h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
+    // The thumbnail plays the trailer in the overlay; the button below goes to the title's page.
+    return h('div', { class: 'tcard' }, [
+      h('a', { class: 'tplay', href: movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
+        if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault(); e.stopPropagation();
+        openTrailerOverlay(m, p.x, e.currentTarget);
+      } } }, [
+        h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+        h('span', { class: 'tt', text: d.title }),
+        h('span', { class: 'note', text: [langOf(d), rel ? (isOtt(m) ? 'On ' + (d.platform || 'OTT') : 'Out now') : 'Releases ' + fmtDate(d.releaseDate)].filter(Boolean).join(' · ') })
+      ]),
+      h('a', { class: 'btn small tdet', href: movieUrl(m), 'aria-label': 'View details for ' + d.title, text: 'View details' })
     ]);
   }
   function showAll(href) { return h('span', { class: 'sub' }, [h('a', { href: href, text: 'Show all' })]); }
