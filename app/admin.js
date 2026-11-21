@@ -945,6 +945,50 @@ window.ReelAdmin = function (env) {
     ]);
   }
 
+  // Cities for ticket booking links. Popular ones are always listed; any other city can be added per title.
+  var POP_CITIES = ['Mumbai', 'Delhi-NCR', 'Bengaluru', 'Hyderabad', 'Chandigarh', 'Ahmedabad', 'Pune', 'Chennai', 'Kolkata', 'Kochi'];
+  // Booking links by city. Older titles have a single bookingUrl, which was added for Bengaluru.
+  function bookUrls(d) {
+    var o = {}, src = d.bookingUrls || {};
+    Object.keys(src).forEach(function (c) { var u = String(src[c] || '').trim(); if (u) o[c] = u; });
+    if (d.bookingUrl && !o.Bengaluru && !('Bengaluru' in src)) o.Bengaluru = String(d.bookingUrl).trim();
+    return o;
+  }
+  var OTHER_CITIES = ['Agra', 'Ajmer', 'Aligarh', 'Allahabad (Prayagraj)', 'Amravati', 'Amritsar', 'Anand', 'Asansol', 'Aurangabad', 'Bareilly', 'Belagavi', 'Bhavnagar', 'Bhilai', 'Bhopal', 'Bhubaneswar', 'Bikaner', 'Calicut (Kozhikode)', 'Coimbatore', 'Cuttack', 'Davanagere', 'Dehradun', 'Dhanbad', 'Durgapur', 'Erode', 'Gandhinagar', 'Goa', 'Gorakhpur', 'Guntur', 'Guwahati', 'Gwalior', 'Haridwar', 'Hubballi', 'Indore', 'Jabalpur', 'Jaipur', 'Jalandhar', 'Jammu', 'Jamnagar', 'Jamshedpur', 'Jodhpur', 'Kakinada', 'Kannur', 'Kanpur', 'Karimnagar', 'Kolhapur', 'Kollam', 'Kota', 'Kottayam', 'Kurnool', 'Lucknow', 'Ludhiana', 'Madurai', 'Mangaluru', 'Manipal', 'Meerut', 'Mohali', 'Moradabad', 'Mysuru', 'Nagpur', 'Nanded', 'Nashik', 'Nellore', 'Noida', 'Palakkad', 'Panipat', 'Patiala', 'Patna', 'Puducherry', 'Raipur', 'Rajahmundry', 'Rajkot', 'Ranchi', 'Rourkela', 'Salem', 'Sangli', 'Shillong', 'Shimla', 'Siliguri', 'Solapur', 'Srinagar', 'Surat', 'Thane', 'Thiruvananthapuram', 'Thrissur', 'Tiruchirappalli', 'Tirunelveli', 'Tirupati', 'Udaipur', 'Ujjain', 'Vadodara', 'Varanasi', 'Vellore', 'Vijayawada', 'Visakhapatnam', 'Warangal'];
+  // Ticket booking URLs, one per city. The 10 popular cities always have a box; “+ Add” takes any other city.
+  function bookingUrlsField() {
+    var urls = draft.bookingUrls = bookUrls(draft);
+    var sync = function () { draft.bookingUrl = urls.Bengaluru || ''; touch(); };
+    var rows = h('div', { class: 'cityurls' });
+    var idOf = function (c) { return 'f_bk_' + c.toLowerCase().replace(/[^a-z0-9]+/g, '-'); };
+    var row = function (city, removable) {
+      var inp = h('input', { id: idOf(city), class: 'in', type: 'url', placeholder: 'https://in.bookmyshow.com/…', disabled: !canWrite });
+      inp.value = urls[city] || '';
+      inp.addEventListener('input', function () { var v = inp.value.trim(); if (v) urls[city] = v; else delete urls[city]; sync(); });
+      var r = h('div', { class: 'cityrow' }, [h('label', { class: 'cl', for: idOf(city), text: city }), inp,
+        removable ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Remove', on: { click: function () { delete urls[city]; r.remove(); sync(); } } }) : h('span')]);
+      return r;
+    };
+    POP_CITIES.forEach(function (c) { rows.appendChild(row(c, false)); });
+    Object.keys(urls).filter(function (c) { return POP_CITIES.indexOf(c) === -1; }).sort().forEach(function (c) { rows.appendChild(row(c, true)); });
+    var known = {}; OTHER_CITIES.forEach(function (c) { known[c] = 1; });
+    movies.forEach(function (m) { Object.keys(m.data.bookingUrls || {}).forEach(function (c) { known[c] = 1; }); });
+    var dl = h('datalist', { id: 'cityList' }, Object.keys(known).filter(function (c) { return POP_CITIES.indexOf(c) === -1; }).sort().map(function (c) { return h('option', { value: c }); }));
+    var add = h('input', { class: 'in', type: 'text', list: 'cityList', placeholder: 'Another city, e.g. Jaipur', disabled: !canWrite });
+    var addIt = function () {
+      var name = add.value.trim().replace(/\s+/g, ' '); if (!name) return;
+      var all = POP_CITIES.concat(Object.keys(urls), Object.keys(known));
+      var hit = all.filter(function (c) { return c.toLowerCase() === name.toLowerCase(); })[0]; if (hit) name = hit;
+      var ex = $(idOf(name)); add.value = '';
+      if (ex) { ex.focus(); return; }
+      var r = row(name, true); rows.appendChild(r); r.querySelector('input').focus();
+    };
+    add.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addIt(); } });
+    return h('div', { class: 'field wide' }, [h('label', { class: 'l' }, ['Ticket booking URLs by city']),
+      h('span', { class: 'note', text: 'Visitors pick their city at the top of the site, and Book tickets opens that city’s link. Leave a city blank to hide the button there.' }),
+      rows, h('div', { class: 'cityrow' }, [h('span', { class: 'cl', text: '+ Add a city' }), add, h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Add', on: { click: addIt } })]), dl]);
+  }
+
   // Ticket booking platform: a list, with “+ Add a new platform…” for anything else (offered on every title after that).
   var BOOK_LIST = ['BookMyShow', 'District', 'PVR INOX', 'Cinépolis', 'Miraj Cinemas', 'Movietime Cinemas', 'Carnival Cinemas', 'Rajhans Cinemas', 'Mukta A2 Cinemas', 'Ticketnew'];
   function bookingField() {
@@ -1334,8 +1378,7 @@ window.ReelAdmin = function (env) {
       field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
         note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
       tvEd ? null : bookingField(),
-      tvEd ? null : field('Ticket booking URL', 'bookingUrl', { type: 'url', placeholder: 'https://in.bookmyshow.com/…',
-        note: 'Shown as a “Book tickets” button on the title page while the film is in theatres or coming soon. Leave blank to hide it.' })
+      tvEd ? null : bookingUrlsField()
     ]);
     main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [h('h2', { text: tvEd ? 'Where to watch' : 'Where to watch & tickets' }), gL]));
 
@@ -1406,7 +1449,12 @@ window.ReelAdmin = function (env) {
   function save() {
     if (!draft || saving || !db) return Promise.resolve(false);
     if (!draft.title.trim()) { setStatus('Add a title before saving.'); return Promise.resolve(false); }
-    var badUrl = [['platformUrl', 'Streaming platform URL'], ['bookingUrl', 'Ticket booking URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
+    if (draft.bookingUrls) {
+      var bu = draft.bookingUrls, badCity = Object.keys(bu).filter(function (c) { bu[c] = String(bu[c] || '').trim(); if (!bu[c]) delete bu[c]; return bu[c] && !/^https:\/\/[^\s]+\.[^\s]+/.test(bu[c]); })[0];
+      if (badCity) { setStatus('The ' + badCity + ' booking URL must be a full link starting with https://'); var bc = $('f_bk_' + badCity.toLowerCase().replace(/[^a-z0-9]+/g, '-')); if (bc) bc.focus(); return Promise.resolve(false); }
+      draft.bookingUrl = bu.Bengaluru || '';
+    }
+    var badUrl = [['platformUrl', 'Streaming platform URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
     if (badUrl) { setStatus(badUrl[1] + ' must be a full link starting with https://'); var bf = $('f_' + badUrl[0]); if (bf) bf.focus(); return Promise.resolve(false); }
     saving = true; setDirty(true);
     var isNew = !movies.some(function (m) { return m.id === currentId; });

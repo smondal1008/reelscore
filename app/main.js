@@ -17,6 +17,60 @@
     browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, yr: { year: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
   try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
+  try { S.city = localStorage.getItem('rs_city') || ''; } catch (e) { S.city = ''; }
+  // Cities for ticket booking links. Popular ones are always listed; any other city can be added per title.
+  var POP_CITIES = ['Mumbai', 'Delhi-NCR', 'Bengaluru', 'Hyderabad', 'Chandigarh', 'Ahmedabad', 'Pune', 'Chennai', 'Kolkata', 'Kochi'];
+  // Booking links by city. Older titles have a single bookingUrl, which was added for Bengaluru.
+  function bookUrls(d) {
+    var o = {}, src = d.bookingUrls || {};
+    Object.keys(src).forEach(function (c) { var u = String(src[c] || '').trim(); if (u) o[c] = u; });
+    if (d.bookingUrl && !o.Bengaluru && !('Bengaluru' in src)) o.Bengaluru = String(d.bookingUrl).trim();
+    return o;
+  }
+  function hasBooking(d) { return Object.keys(bookUrls(d)).some(function (c) { return !!safeUrl(bookUrls(d)[c]); }); }
+  function bookUrlFor(d) { return S.city ? safeUrl(bookUrls(d)[S.city]) : ''; }
+  function citiesFor(d) { var u = bookUrls(d); return POP_CITIES.filter(function (c) { return safeUrl(u[c]); }).concat(Object.keys(u).filter(function (c) { return POP_CITIES.indexOf(c) === -1 && safeUrl(u[c]); }).sort()); }
+  function setCity(v) {
+    S.city = v || '';
+    try { if (S.city) localStorage.setItem('rs_city', S.city); else localStorage.removeItem('rs_city'); } catch (e) {}
+    S.lastDrawn = null; render(true);
+  }
+  function fillNavCity() {
+    var sel = $('navCity'); if (!sel) return;
+    var other = {}; S.movies.forEach(function (m) { Object.keys(bookUrls(m.data)).forEach(function (c) { if (POP_CITIES.indexOf(c) === -1) other[c] = 1; }); });
+    if (S.city && POP_CITIES.indexOf(S.city) === -1) other[S.city] = 1;
+    var list = POP_CITIES.concat(Object.keys(other).sort()), want = list.join('|');
+    if (sel.getAttribute('data-k') !== want) {
+      sel.innerHTML = '';
+      sel.appendChild(h('option', { value: '', text: 'City' }));
+      list.forEach(function (c) { sel.appendChild(h('option', { value: c, text: c })); });
+      sel.setAttribute('data-k', want);
+    }
+    sel.value = S.city; sel.classList.toggle('on', !!S.city);
+  }
+  // Book tickets: opens the link for the visitor's city. With no city chosen yet, asks for one first.
+  function bookBtn(m, cls) {
+    var d = m.data; if (!hasBooking(d)) return null;
+    var say = 'Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '');
+    if (S.city) { var u = bookUrlFor(d); return u ? h('a', { class: cls, href: u, target: '_blank', rel: 'noopener', text: '🎟 Book tickets', 'aria-label': say + ' in ' + S.city }) : null; }
+    return h('button', { type: 'button', class: cls, text: '🎟 Book tickets', 'aria-label': say, on: { click: function (e) { e.preventDefault(); cityPicker(m); } } });
+  }
+  function cityPicker(m) {
+    var d = m.data, prev = document.activeElement;
+    var close = function () { ov.remove(); document.removeEventListener('keydown', esc); if (prev && prev.focus) prev.focus(); };
+    var esc = function (e) { if (e.key === 'Escape') close(); };
+    var box = h('div', { class: 'citybox', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Choose your city' }, [
+      h('h2', { text: 'Choose your city' }),
+      h('p', { class: 'note', text: 'Tickets for ' + d.title + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '') + '. We’ll remember your city; change it any time from City at the top.' }),
+      h('div', { class: 'citygrid' }, citiesFor(d).map(function (c) {
+        return h('a', { class: 'btn', href: bookUrls(d)[c], target: '_blank', rel: 'noopener', text: c, on: { click: function () { close(); setCity(c); } } });
+      })),
+      h('p', { class: 'note', text: 'Don’t see your city? Booking links for more cities are on the way.' }),
+      h('button', { type: 'button', class: 'btn small', text: 'Close', on: { click: close } })]);
+    var ov = h('div', { class: 'cityov', on: { click: function (e) { if (e.target === ov) close(); } } }, [box]);
+    document.body.appendChild(ov); document.addEventListener('keydown', esc);
+    var first = box.querySelector('.citygrid a'); if (first) first.focus();
+  }
   function inNavLang(m) { return !S.navLang || langsOf(m.data).indexOf(S.navLang) !== -1; }
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
   function fillNavLang() {
@@ -411,7 +465,7 @@
       if (a && a.closest && a.closest('.view') && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName)) { S.pending = true; return; }
     }
     if (raf) return;
-    raf = requestAnimationFrame(function () { raf = null; S.pending = false; fillNavLang(); draw(); fillNames(); });
+    raf = requestAnimationFrame(function () { raf = null; S.pending = false; fillNavLang(); fillNavCity(); draw(); fillNames(); });
   }
   function setNavLang(v) {
     S.navLang = v || '';
@@ -419,6 +473,7 @@
     S.lastDrawn = null; render(true);
   }
   (function () { var sel = $('navLang'); if (sel) sel.addEventListener('change', function () { setNavLang(sel.value); }); })();
+  (function () { var sel = $('navCity'); if (sel) sel.addEventListener('change', function () { setCity(sel.value); }); })();
   document.addEventListener('focusout', function () { setTimeout(function () { if (S.pending) render(); }, 0); });
 
   // Back on the home page after opening a title from one of its rows: return to that row, scrolled as it was.
@@ -534,10 +589,10 @@
       h('span', { class: 'mt', text: meta, title: meta })
     ];
     if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
-    if (opts.stream && safeUrl(d.platformUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]));
-    else if (opts.book && safeUrl(d.bookingUrl)) kids.push(h('a', { class: 'btn small primary cta', href: d.bookingUrl, target: '_blank', rel: 'noopener', text: '🎟 Book tickets', 'aria-label': 'Book tickets' + (d.bookingPlatform ? ' on ' + d.bookingPlatform : '') }));
+    var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small primary cta', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small primary cta') : null;
+    if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
-    if (opts.rate && !(opts.stream && safeUrl(d.platformUrl)) && !(opts.book && safeUrl(d.bookingUrl))) {
+    if (opts.rate && !cta) {
       var my = myVerdict(m.id);
       kids.push(h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + d.title }, vset(m).map(function (x) {
         return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
@@ -1161,7 +1216,7 @@
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
-    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : safeUrl(d.bookingUrl) ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) ? 'Where to watch' : null;
+    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : hasBooking(d) ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) ? 'Where to watch' : null;
     put(titleHero(m, tags, actLabel));
 
     // scores
@@ -1535,11 +1590,17 @@
         h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
       d.platform || safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
     // In theatres / coming soon: Book tickets, when a booking link has been added in Admin
-    var bk = safeUrl(d.bookingUrl), bp = d.bookingPlatform || '';
-    if (bk) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
-      h('div', { class: 'note', text: rel ? 'Showtimes, seats and prices are on ' + (bp || 'the booking site') + '.' : 'Bookings open on ' + (bp || 'the booking site') + ' closer to release.' }),
-      h('a', { class: 'btn primary', href: bk, target: '_blank', rel: 'noopener', text: bp ? 'Book on ' + bp : 'Book tickets' }),
+    var bk = bookUrlFor(d), bp = d.bookingPlatform || '';
+    if (hasBooking(d)) {
+      var cs = citiesFor(d); if (S.city && cs.indexOf(S.city) === -1) cs.push(S.city);
+      var csel = h('select', { class: 'in', id: 'bookCity', style: 'max-width:240px' }, [h('option', { value: '', text: 'Choose your city' })].concat(cs.map(function (c) { return h('option', { value: c, text: c, selected: c === S.city }); })));
+      csel.addEventListener('change', function () { csel.blur(); setCity(csel.value); });
+      return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
+      h('div', { class: 'field', style: 'margin-bottom:10px' }, [h('label', { class: 'l', for: 'bookCity', text: 'City' }), csel]),
+      h('div', { class: 'note', text: !S.city ? 'Pick your city to see the booking link.' : !bk ? 'No booking link for ' + S.city + ' yet.' : rel ? 'Showtimes, seats and prices are on ' + (bp || 'the booking site') + '.' : 'Bookings open on ' + (bp || 'the booking site') + ' closer to release.' }),
+      bk ? h('a', { class: 'btn primary', href: bk, target: '_blank', rel: 'noopener', text: bp ? 'Book on ' + bp : 'Book tickets' }) : null,
       safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
+    }
     if (safeUrl(d.platformUrl)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }), watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false)]);
     return null; // no booking or streaming link added for this film
     var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
