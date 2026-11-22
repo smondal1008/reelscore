@@ -712,7 +712,8 @@
       rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')),
       tvPromoSection(),
       yearSection(),
-      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
+      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])),
+      langSection()
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
   }
@@ -1096,7 +1097,8 @@
   }
   function yearSection() {
     var now = new Date().getFullYear(), tiles = [];
-    for (var k = now; k > now - 10; k--) { var n = yearMovies(String(k)).length; if (n) tiles.push([String(k), n]); }
+    var st = S.partial && !S.navLang && window.RS_STATS ? window.RS_STATS.year : null; // whole-catalogue counts until the older part loads
+    for (var k = now; k > now - 10; k--) { var n = st ? st[k] || 0 : yearMovies(String(k)).length; if (n) tiles.push([String(k), n]); }
     if (tiles.length < 3) return null;
     return h('section', { class: 'sect', 'aria-label': 'Years' }, [
       h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by year' }), h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Older releases' })])]),
@@ -1109,6 +1111,22 @@
     ]);
   }
 
+  // Language tiles on the home page; each opens that language's landing page (/hindi-movies etc.).
+  var LANG_TILES = [['English', 'English', '#2B4C7E', '#3F6BAE'], ['Hindi', 'हिन्दी', '#B4532A', '#D9773F'], ['Tamil', 'தமிழ்', '#7A1F3D', '#A8325A'], ['Telugu', 'తెలుగు', '#2F6B3A', '#4C8F45'],
+    ['Bengali', 'বাংলা', '#6A4A2E', '#8C6A48'], ['Kannada', 'ಕನ್ನಡ', '#8A6A12', '#B8901E'], ['Marathi', 'मराठी', '#5B2A86', '#7B3FB0'], ['Malayalam', 'മലയാളം', '#1F5F6B', '#2E8794']];
+  function langSection() {
+    var st = S.partial && window.RS_STATS ? window.RS_STATS.lang : null, cnt = {};
+    if (!st) S.movies.forEach(function (m) { if (!isTv(m)) { var l = langOf(m.data); cnt[l] = (cnt[l] || 0) + 1; } });
+    var tiles = LANG_TILES.map(function (x) { return x.concat([(st || cnt)[x[0]] || 0]); }).filter(function (x) { return x[4] >= 5; });
+    if (tiles.length < 3) return null;
+    return h('section', { class: 'sect', 'aria-label': 'Languages' }, [
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by language' }), h('span', { class: 'sub' }, [h('a', { href: '/browse', text: 'Browse all' })])]),
+      h('div', { class: 'rowx gtiles' }, tiles.map(function (x) {
+        return h('a', { class: 'gtile ltile', href: '/' + x[0].toLowerCase() + '-movies', style: '--g1:' + x[2] + ';--g2:' + x[3], 'aria-label': x[0] + ' movies, ' + x[4].toLocaleString('en-IN') },
+          [h('span', { class: 'gnat', 'aria-hidden': 'true', text: x[0] === 'English' ? 'Aa' : x[1] }), h('span', { class: 'gn', text: x[0] }), h('span', { class: 'gc', 'aria-hidden': 'true', text: x[4].toLocaleString('en-IN') + ' movies' })]);
+      }))
+    ]);
+  }
   // Genre tiles on the home page; each opens Browse filtered to that genre (and the nav language, if set).
   var GENRE_COL = { Action: ['#1F5F86', '#2E86AB'], Comedy: ['#5B2A86', '#7B3FB0'], Drama: ['#6A4A2E', '#8C6A48'], Thriller: ['#2B2F3D', '#4A5068'], Horror: ['#5A1A1F', '#8A2A30'], Romance: ['#8A2650', '#B3406E'], Family: ['#2F6B3A', '#4C8F45'], Animated: ['#1F6E6A', '#2E918B'], Biopic: ['#7A4A12', '#A8661E'], Mythological: ['#6B3A10', '#9A5A18'], War: ['#3D4A2A', '#5B6B3C'], 'Sci-fi': ['#22306E', '#3A4BA0'] };
   function genreSection() {

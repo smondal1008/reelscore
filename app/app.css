@@ -403,6 +403,7 @@
   .gtile:hover { transform: translateY(-3px); filter: brightness(1.08); color: #fff; }
   .gtile.ytile .gn { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 40px; letter-spacing: 1px; }
   .gtile .gn { position: relative; z-index: 1; font-size: 24px; font-weight: 600; text-shadow: 0 1px 6px rgba(0,0,0,.35); }
+  .gtile .gnat { position: absolute; right: 12px; bottom: 4px; z-index: 0; font-size: 44px; font-weight: 700; line-height: 1.1; color: rgba(255,255,255,.16); pointer-events: none; }
   .gtile .gc { position: relative; z-index: 1; font-size: 13px; font-weight: 600; color: rgba(255,255,255,.85); }
   @media (max-width: 760px) { .gtile { width: 200px; } .gtile .gn { font-size: 20px; } }
   .ghero { position: relative; overflow: hidden; margin: 8px 40px 0; padding: 28px 32px 34px; border-radius: 22px; color: #fff; background: radial-gradient(120% 90% at 0% 0%, rgba(0,0,0,.25), transparent 55%), radial-gradient(90% 120% at 100% 100%, rgba(255,255,255,.14), transparent 60%), linear-gradient(135deg, var(--g1), var(--g2)); }
