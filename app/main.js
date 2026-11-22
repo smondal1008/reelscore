@@ -125,9 +125,15 @@
     if (!m || /^[a-z]{1,3}_[^/]*\//.test(m[2])) return u;
     return m[1] + 'f_auto,q_auto,c_limit,w_' + (w || 800) + '/' + m[2];
   }
+  // Widths that fit this screen: posters at card size, banners at screen width (both times pixel density), in steps
+  // so neighbouring sizes share Cloudinary's cache.
+  var DPR = Math.min(window.devicePixelRatio || 1, 2), VW = Math.max(320, Math.min(window.innerWidth || 1280, 2560));
+  var POSTER_W = Math.min(400, Math.ceil((VW < 600 ? 150 : 200) * DPR / 50) * 50);
+  function bannerW(max) { return Math.min(max || 1920, Math.ceil(VW * DPR / 320) * 320); }
   function artUrl(m, kind, w) {
     var url = safeUrl(kind === 'banner' ? (m.data.bannerUrl || '') : (m.data.posterUrl || ''));
-    return url ? cld(url, w || (kind === 'banner' ? 1280 : 400)) : '';
+    if (kind === 'banner') w = bannerW(w || 1280); else if (!w || w === 400) w = POSTER_W;
+    return url ? cld(url, w) : '';
   }
   // Rows can hold hundreds of cards: their pictures load only as they come near the screen (see lazyBg below).
   function artLazy(m, kind, w) {
@@ -285,8 +291,12 @@
     var d = m.data, parts = [isTv(m) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (d.releaseDate || '').slice(0, 4)];
     if (dupTitles.map[titleKey(m)] > 1 && langOf(d)) parts.push(langOf(d));
     parts = parts.filter(Boolean);
-    var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : ''), full = base + ' – Verdicts & Reviews | Reelscore';
-    return full.length <= 60 ? full : base + ' | Reelscore';
+    var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : '');
+    // Same as scripts/build.mjs: "<title> (2026) Review, Verdict, Cast & OTT", shorter forms for long names.
+    var tails = isTv(m) ? [' Review, Cast & Where to Watch', ' Review & Where to Watch', ' Review & Cast']
+      : isUpcoming(m) ? [' Release Date, Cast & Trailer', ' Release Date & Cast', ' Release Date'] : [' Review, Verdict, Cast & OTT', ' Review, Verdict & Cast', ' Review & Verdict'];
+    for (var i = 0; i < tails.length; i++) if ((base + tails[i]).length <= 65) return base + tails[i];
+    return (base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base;
   }
   function personTitleTag(name) {
     var a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
@@ -488,7 +498,13 @@
   }
   // While only the core part of the catalogue is in (everything except Older releases), only the home page draws from
   // it; other pages wait for the rest so "not found" and counts are never decided on part of the data.
-  function syncLoaded() { S.loaded = !!S.hasCat && (!S.partial || S.route === 'home'); if (S.partial && S.route !== 'home' && S.kickOlder) S.kickOlder(); }
+  // A title page found in the core part draws at once too; the rest is fetched once the page is idle.
+  function syncLoaded() {
+    var early = S.route === 'home' || (S.route === 'title' && !!S.hasCat && !!findMovie(S.param));
+    S.loaded = !!S.hasCat && (!S.partial || early);
+    if (S.partial && S.kickOlder) { if (!early) S.kickOlder(); else if (S.route === 'title') idleKick(); }
+  }
+  function idleKick() { if (idleKick.on) return; idleKick.on = 1; var k = function () { if (S.kickOlder) S.kickOlder(); }; if (window.requestIdleCallback) requestIdleCallback(k, { timeout: 4000 }); else setTimeout(k, 3000); }
   function draw() {
     syncLoaded();
     // Keep each horizontal row's scroll position (and keyboard focus) across re-renders of the same page.
@@ -550,7 +566,7 @@
     }
     var label = hit ? hit[1] : (first.length > 9 ? first.split(/\s+/)[0] : first);
     var say = 'On ' + p + (hit && hit[4] && !/\bnow\b/i.test(p) ? ', ' + hit[4] : '');
-    if (hit && hit[3]) return h('span', { class: 'plat logo' + (hit[1] === 'miniTV' ? ' wide' : ''), title: say, role: 'img', 'aria-label': say }, [h('img', { src: hit[3], alt: '', loading: 'lazy', decoding: 'async' })]);
+    if (hit && hit[3]) return h('span', { class: 'plat logo' + (hit[1] === 'miniTV' ? ' wide' : ''), title: say, role: 'img', 'aria-label': say }, [h('img', { src: hit[3], alt: '', width: 32, height: 32, loading: 'lazy', decoding: 'async' })]);
     return h('span', { class: 'plat', title: 'On ' + p, 'aria-label': 'On ' + p, style: 'background:' + (hit ? hit[2] : 'rgba(11,10,15,.88)'), text: label });
   }
 
@@ -559,7 +575,7 @@
     if (!p) return null;
     var hit = null;
     String(p).split('/').some(function (part) { hit = PLAT.filter(function (x) { return x[3] && x[0].test(part.trim()); })[0] || null; return !!hit; });
-    return hit ? h('img', { class: 'ctalogo', src: hit[3], alt: '', loading: 'lazy', decoding: 'async' }) : null;
+    return hit ? h('img', { class: 'ctalogo', src: hit[3], alt: '', width: 18, height: 18, loading: 'lazy', decoding: 'async' }) : null;
   }
 
   function posterCard(m, opts) {
@@ -611,8 +627,11 @@
       text: hasReminder(m.id) ? 'Reminder set' : 'Remind me', on: { click: function () { toggleRemind(m.id); } } }));
     return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids);
   }
+  var HOME_MAX = 20;
+  function seeAll(href) { return h('span', { class: 'sub' }, [h('a', { href: href, text: 'See all' })]); }
   function rowSection(title, items, opts, link) {
     if (!items.length) return null;
+    if (opts && opts.max && items.length > opts.max) items = items.slice(0, opts.max);
     return h('section', { class: 'sect', 'aria-label': title }, [
       h('div', { class: 'sect-h' }, [h('h2', { text: title }), link || null]),
       h('div', { class: 'rowx' }, items.map(function (m) { return posterCard(m, opts); }))
@@ -655,20 +674,20 @@
     var langNote = S.navLang ? h('div', { class: 'sect-h', style: 'margin-top:18px' }, [h('span', { class: 'sub' }, ['Showing ' + S.navLang + ' titles · ', h('a', { href: '#', on: { click: function (e) { e.preventDefault(); setNavLang(''); } }, text: 'Show all languages' })])]) : null;
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
     [langNote, none,
-      mine.length ? rowSection('My List', mine, null, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
+      mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
       trailerSection(),
       rowSection('In theatres', homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), { book: true }, h('span', { class: 'sub', text: 'Now showing, plus this week’s releases' })),
+      }), { book: true, max: 24 }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true, book: true }),
+      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
       songSection(),
       genreSection(),
-      rowSection('New on OTT', homeSection('On OTT')),
-      rowSection('TV shows', homeSection('TV shows')),
+      rowSection('New on OTT', homeSection('On OTT'), { max: HOME_MAX }, seeAll('/browse/on-ott')),
+      rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')),
       tvPromoSection(),
       yearSection(),
       rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })]))
@@ -769,7 +788,7 @@
     var t = S.tov, shown = false, cancelled = false, done = false, left = null;
     var playNext = function () { if (done || S.tov !== t) return; done = true; openTrailerOverlay(nx.m, nx.x, opener, { list: queue.list, i: queue.i + 1 }); };
     var count = h('span', { class: 'un-c' });
-    var thumb = nx.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + nx.x.yt + '/mqdefault.jpg', alt: '' }) : h('span', { class: 'ph', style: artLazy(nx.m, 'banner', 320).style });
+    var thumb = nx.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + nx.x.yt + '/mqdefault.jpg', alt: '', width: 320, height: 180 }) : h('span', { class: 'ph', style: artLazy(nx.m, 'banner', 320).style });
     var card = h('div', { class: 'upnext', role: 'status', hidden: true }, [
       h('button', { type: 'button', class: 'un-th', 'aria-label': 'Play next: ' + nx.m.data.title, on: { click: playNext } }, [thumb, h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
       h('div', { class: 'un-b' }, [
@@ -873,7 +892,7 @@
   }
   function trailerCard(p, i, arr) {
     var m = p.m, d = m.data, rel = released(m);
-    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     // The thumbnail plays the trailer in the overlay; the button below goes to the title's page.
     return h('div', { class: 'tcard' }, [
       h('a', { class: 'tplay', href: movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
@@ -911,7 +930,7 @@
   }
   function songCard(p, i, arr) {
     var m = p.m, d = m.data;
-    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
@@ -979,7 +998,7 @@
   }
   function tvPromoCard(p, i, arr) {
     var m = p.m, d = m.data;
-    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
+    var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
@@ -1150,7 +1169,7 @@
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
             : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
             : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
-          h('a', { class: 'pill info', href: movieUrl(m), text: 'More Info' }),
+          h('a', { class: 'pill info', href: movieUrl(m), text: 'View details' }),
           playing && !yt ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
           playing ? null : h('button', { type: 'button', class: 'roundadd', 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist', title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
             on: { click: function () { toggleList(m.id); } } })
@@ -1427,7 +1446,7 @@
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) all.push({ uid: uid, it: it }); });
     var fol = all.filter(function (r) { return following(r.uid); });
     box.appendChild(h('div', { class: 'chips', role: 'tablist' }, [['all', 'All reviews (' + all.length + ')'], ['friends', 'People you follow (' + fol.length + ')']].map(function (t) {
-      return h('button', { type: 'button', role: 'tab', class: 'chip', 'aria-pressed': String(S.rtab === t[0]), 'aria-selected': String(S.rtab === t[0]), text: t[1], on: { click: function () { S.rtab = t[0]; render(true); } } });
+      return h('button', { type: 'button', role: 'tab', class: 'chip', 'aria-selected': String(S.rtab === t[0]), text: t[1], on: { click: function () { S.rtab = t[0]; render(true); } } });
     })));
     var show = (S.rtab === 'friends' ? fol : all).slice().sort(function (a, b) {
       var fa = following(a.uid) || a.uid === S.uid ? 1 : 0, fb = following(b.uid) || b.uid === S.uid ? 1 : 0;
@@ -1508,7 +1527,7 @@
     }
     // A YouTube video sits in the page as a real (lazy) embed even before it is played, so search engines can see it;
     // the section is then kept across re-renders so a video started in that player isn't interrupted.
-    var idle = !playing && !!x.yt;
+    var idle = false; // was: a lazy YouTube embed before play; now a thumbnail until tapped (faster pages)
     if (idle) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?rel=0&playsinline=1&modestbranding=1', loading: 'lazy',
       title: d.title + ' · ' + x.title, allow: 'encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/hqdefault.jpg")' : art(m, 'banner');
@@ -1536,7 +1555,7 @@
       h('div', { class: 'thx-lh' }, [h('b', { text: 'Playlist' }), h('span', { class: 'note', text: shown.length + ' of ' + n + (n === 1 ? ' video' : ' videos') })]),
       h('div', { class: 'thx-ls' }, shown.map(function (p) {
         var y = p[0], i = p[1], sel = i === cur, can = !!(y.yt || y.clip);
-        var th = y.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + y.yt + '/mqdefault.jpg', alt: '', loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
+        var th = y.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + y.yt + '/mqdefault.jpg', alt: '', width: 320, height: 180, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
         return h('button', { type: 'button', class: 'pli', 'aria-current': sel ? 'true' : 'false', disabled: !can, on: { click: function () { playVid(m.id, i); } } }, [
           h('span', { class: 'th' }, [th, h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tx' }, [
@@ -2238,7 +2257,12 @@
           });
         };
         S.kickOlder = function () { S.kickOlder = null; addOlder(); };
-        if (S.route === 'home') { var kick = function () { if (S.kickOlder) S.kickOlder(); }; if (window.requestIdleCallback) requestIdleCallback(kick, { timeout: 2500 }); else setTimeout(kick, 1200); }
+        // The home page has all it needs in the core part. The rest (older films, ~0.9 MB) is fetched on the first
+        // scroll, tap or key press, or when the visitor moves to another page or the search box.
+        if (S.route === 'home') {
+          var kick = function () { ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.removeEventListener(ev, kick, true); }); if (S.kickOlder) S.kickOlder(); };
+          ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, kick, { capture: true, passive: true }); });
+        } else if (S.route === 'title' && S.loaded) idleKick();
         else S.kickOlder();
       }
       db.collection('movies').where('updatedAt', '>', since).onSnapshot(track(dm, goneM), function () {});

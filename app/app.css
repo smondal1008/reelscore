@@ -75,7 +75,7 @@
   .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 14px; }
   .chips { display: flex; flex-wrap: wrap; gap: 8px; }
   .chip { height: 34px; padding: 0 12px; border-radius: 17px; border: 1px solid var(--line2); background: var(--panel2); font-size: 13px; font-weight: 600; cursor: pointer; }
-  .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+  .chip[aria-selected="true"], .chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
   .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 44px; padding: 0 18px; border-radius: 22px; border: 1px solid var(--line2); background: var(--panel2); font-size: 14px; font-weight: 600; cursor: pointer; }
   .btn:hover { border-color: var(--muted); }
   .btn.primary { background: var(--accent); border-color: var(--accent); color: #0B0A0F; font-weight: 700; }

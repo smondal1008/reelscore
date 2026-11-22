@@ -18,6 +18,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist');
@@ -146,6 +147,26 @@ async function previousCatalogue() {
   } catch (e) { return null; }
 }
 
+// Sitemap dates: each page's content hash and the day it last changed, carried from the live site's page-dates.json.
+// A page gets a date only once a change is seen after this was introduced (bulk edits had stamped every record with
+// the same updatedAt, which told search engines nothing).
+let PREV_DATES = {};
+const PAGE_DATES = {};
+async function previousPageDates() {
+  if (process.env.FIXTURE) return {};
+  try {
+    const ctl = new AbortController(), t = setTimeout(() => ctl.abort(), 20000);
+    const r = await fetch(SITE + '/page-dates.json', { signal: ctl.signal }); clearTimeout(t);
+    return r.ok ? (await r.json()) || {} : {};
+  } catch (e) { return {}; }
+}
+function pageDate(url, content) {
+  const h = createHash('sha1').update(content).digest('hex').slice(0, 12), p = PREV_DATES[url];
+  const d = p ? (p.h === h ? p.d || '' : TODAY) : '';
+  PAGE_DATES[url] = d ? { h, d } : { h };
+  return d;
+}
+
 // Returns { movies, people, verdicts, builtAt, fullAt, source }.
 async function loadData() {
   if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
@@ -215,6 +236,8 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
     '<meta property="og:image" content="' + esc(image) + '">',
     fallback ? '<meta property="og:image:width" content="1200"><meta property="og:image:height" content="630"><meta property="og:image:alt" content="Reelscore: verdicts on Indian movies and series">' : '',
     '<meta name="twitter:card" content="' + (wide ? 'summary_large_image' : 'summary') + '">',
+    '<meta name="twitter:title" content="' + esc(title) + '">',
+    '<meta name="twitter:description" content="' + esc(description) + '">',
     '<meta name="twitter:image" content="' + esc(image) + '">',
     ...(jsonld || []).map(ld)
   ].filter(Boolean).join('\n');
@@ -229,6 +252,7 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
 async function main() {
   const t0 = Date.now();
   const data = await loadData();
+  PREV_DATES = await previousPageDates();
   console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${data.source})`);
 
   // Editorial synopses from content/synopses.json fill titles whose database synopsis is empty.
@@ -346,8 +370,13 @@ async function main() {
     const d = m.data, parts = [isTv(d) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : year(d)];
     const lang = String(d.languages || '').split(/[,;]/)[0].trim();
     if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
-    const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : ''), full = base + ' – Verdicts & Reviews | Reelscore';
-    return full.length <= 60 ? full : (base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base.length <= 60 ? base : clip(base, 60);
+    const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : '');
+    // Words people search with: "<title> (2026) Review, Verdict, Cast & OTT"; shorter forms when the name is long.
+    const upcoming = d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon';
+    const tails = isTv(d) ? [' Review, Cast & Where to Watch', ' Review & Where to Watch', ' Review & Cast']
+      : upcoming ? [' Release Date, Cast & Trailer', ' Release Date & Cast', ' Release Date'] : [' Review, Verdict, Cast & OTT', ' Review, Verdict & Cast', ' Review & Verdict'];
+    const fit = tails.map(t => base + t).find(t => t.length <= 65);
+    return fit || ((base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base.length <= 65 ? base : clip(base, 65));
   }
   function personTitleTag(name) {
     const a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
@@ -376,7 +405,12 @@ async function main() {
       (d.genre ? String(d.genre).toLowerCase() + ' ' : '') + (tv ? 'series' : 'film') +
       (directors.length ? ' directed by ' + list(directors.slice(0, 2)) : '') +
       (actors.length ? ', starring ' + list(actors.slice(0, 3).map(c => c.name)) : '') + '.';
-    const description = clip((d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto + ' ' : '') : auto + ' ') + (sc.tot >= 3 ? sc.pct + '% positive from ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + ' on Reelscore.' : 'Verdicts and reviews on Reelscore.'), 158);
+    // Lead with the verdict and where to watch, then the story.
+    const upc = d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon';
+    const where = upc ? 'Releases ' + (d.releaseDate ? fmtDate(d.releaseDate) : 'soon') + (d.platform && (isOtt(d) || tv) ? ' on ' + d.platform : '') + '. '
+      : d.section === 'In theatres' ? 'In theatres now. ' : d.platform ? (tv ? 'Watch on ' : 'Streaming on ') + d.platform + '. ' : '';
+    const verdict = sc.tot >= 3 ? 'Verdict: ' + sc.pct + '% positive from ' + sc.tot + ' viewers. ' : '';
+    const description = clip(verdict + where + (d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto : '') : auto), 158);
 
     const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages ? '\u0000' : '', d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean)
       .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
@@ -447,7 +481,7 @@ async function main() {
       if (!alias || au === url || !/^[a-z0-9-]+$/.test(alias) || seen.has(au) || aliasSeen.has(au)) continue;
       aliasSeen.add(au); aliases.push([au, url]);
     }
-    if (!thinTitle) sitemap.push({ loc: url, lastmod: (d.updatedAt || m.updated || '').slice(0, 10), pri: '0.8' });
+    if (!thinTitle) sitemap.push({ loc: url, lastmod: pageDate(url, title + '\n' + description + '\n' + body), pri: '0.8' });
     else nThinTitles++;
     nTitles++;
   }
@@ -505,8 +539,7 @@ async function main() {
       birthDate: /^\d{4}-\d{2}-\d{2}$/.test(st.birthday || '') ? st.birthday : undefined,
       gender: /^(Male|Female)$/.test(st.gender || '') ? st.gender : undefined };
     write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: 'profile', image: photo, wide: false, jsonld: [node], route: 'person', body }));
-    const lm = titles.map(t => (t.m.data.updatedAt || t.m.updated || '').slice(0, 10)).sort().pop() || '';
-    sitemap.push({ loc: url, lastmod: lm, pri: '0.6' });
+    sitemap.push({ loc: url, lastmod: pageDate(url, title + '\n' + description + '\n' + body), pri: '0.6' });
     nPeople++;
   }
 
@@ -524,7 +557,7 @@ async function main() {
   write('catalogue.json', JSON.stringify(cat));
   // The app loads it in two parts: the core (every section but Older releases, plus people) first, Older releases after.
   // catalogue.json stays whole: the next build reads it, and the app falls back to it.
-  const isOlder = m => m.data.section === 'Older releases';
+  const isOlder = m => m.data.section === 'Older releases' && String(m.data.releaseDate || '') < '2025';
   write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => !isOlder(m)), people: cat.people }));
   write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(isOlder) }));
   console.log(`[seo] catalogue split: core ${(fs.statSync(path.join(OUT, 'catalogue-core.json')).size / 1024).toFixed(0)} KB, older ${(fs.statSync(path.join(OUT, 'catalogue-older.json')).size / 1024).toFixed(0)} KB`);
@@ -706,6 +739,7 @@ async function main() {
     sitemap.map(u => '<url><loc>' + esc(SITE + u.loc) + '</loc>' + (/^\d{4}-\d{2}-\d{2}$/.test(u.lastmod || '') ? '<lastmod>' + u.lastmod + '</lastmod>' : '') + '<priority>' + u.pri + '</priority></url>').join('\n') + '\n</urlset>\n';
   if (sitemap.length > 50000) throw new Error('Sitemap over 50,000 URLs: split it into a sitemap index');
   write('sitemap.xml', xml);
+  write('page-dates.json', JSON.stringify(PAGE_DATES));
 
   // /llms.txt: a short Markdown guide to the site for AI tools (llmstxt.org format).
   const sections = [['In theatres', '/browse/in-theatres'], ['Coming soon', '/browse/coming-soon'], ['On OTT', '/browse/on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-releases']];
