@@ -151,6 +151,7 @@ async function previousCatalogue() {
 // A page gets a date only once a change is seen after this was introduced (bulk edits had stamped every record with
 // the same updatedAt, which told search engines nothing).
 let PREV_DATES = {};
+const LANG_PAGES = [];
 const PAGE_DATES = {};
 async function previousPageDates() {
   if (process.env.FIXTURE) return {};
@@ -372,7 +373,12 @@ async function main() {
     }
     return out.sort((a, b) => b[0] - a[0] || String(a[1].data.title).localeCompare(String(b[1].data.title))).slice(0, 12).map(x => x[1]);
   }
-  const langLinks = v => String(v || '').split(/\s*[,;]\s*/).filter(Boolean).map(l => '<a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a>').join(', ');
+  // Languages with a /<language>-movies page (5+ films whose first language it is); others link to the Browse filter.
+  // (and at least 3 of them with substance, so the page is in Google)
+  const filmLang = {}, filmLangGood = {};
+  movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(); if (!/^[A-Za-z]+$/.test(l)) return; filmLang[l] = (filmLang[l] || 0) + 1; if (!thinT(Object.assign({ __id: m.id }, m.data))) filmLangGood[l] = (filmLangGood[l] || 0) + 1; });
+  const langHref = l => filmLang[l] >= 5 && filmLangGood[l] >= 3 ? '/' + l.toLowerCase() + '-movies' : '/browse?lang=' + encodeURIComponent(l);
+  const langLinks = v => String(v || '').split(/\s*[,;]\s*/).filter(Boolean).map(l => '<a href="' + langHref(l) + '">' + esc(l) + '</a>').join(', ');
 
   // Page titles, kept in step with app/main.js (movieTitleTag, personTitleTag) so they don't change once the app
   // loads: language added when a name and year repeat, the "Verdicts & Reviews" part dropped past 60 characters.
@@ -627,7 +633,7 @@ async function main() {
   homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-releases', 'All older releases →']);
   homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);
   homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
-    langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
+    langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
   homeBody += '<h2>Genres</h2><ul>' + genreLinks() + '</ul>';
   { const ny = new Date().getFullYear(), ys = []; for (let k = ny; k > ny - 10; k--) ys.push(k);
     homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
@@ -640,7 +646,7 @@ async function main() {
   let browseBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Browse</nav><h1>Browse Indian movies and series</h1><p>' + movies.length + ' titles in ' + langList.length + '+ languages.</p>';
   HUBS.forEach(h => { browseBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
   browseBody += '<h2>By genre</h2><ul>' + genreLinks() + '</ul>';
-  browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="/browse?lang=' + encodeURIComponent(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
+  browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
   writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', canonical: '/browse', ogPath: '/browse', route: 'browse', body: browseBody,
     jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse']), listLd('Browse sections', HUBS.map(h => '/browse/' + h[0]))] });
   for (const [slug, name, title, desc] of HUBS) {
@@ -679,6 +685,69 @@ async function main() {
     writeHub('year/' + y + '.html', { title: 'Indian Movies of ' + y + ' | Reelscore', description: clip(desc, 158), canonical: '/year/' + y, ogPath: '/year/' + y, route: 'year', body,
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'Browse', item: SITE + '/browse' }, { '@type': 'ListItem', position: 3, name: y, item: SITE + '/year/' + y }] }] });
     sitemap.push({ loc: '/year/' + y, pri: +y >= thisYear - 9 ? '0.7' : '0.5' });
+  }
+
+  // Language landing pages (same paths as app/main.js parseLanding):
+  //   /hindi-movies, /hindi-movies-2026, /hindi-movies-in-theatres, /new-hindi-movies-on-ott, /upcoming-hindi-movies, /hindi-web-series
+  // A language gets film pages once it has 5 films, a series page once it has 5 series, and a year page for each year with
+  // 5+ films. "In theatres", "on OTT" and "upcoming" pages exist for languages with 50+ titles so their addresses stay put;
+  // while one lists fewer than 3 titles it is kept out of Google.
+  let nLangNoindex = 0;
+  {
+    const MONTHS_L = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const now = new Date(), monYr = MONTHS_L[now.getMonth()] + ' ' + now.getFullYear();
+    const langOfM = m => String(m.data.languages || '').split(/[,;]/)[0].trim();
+    const lslug = l => l.toLowerCase().replace(/[^a-z]+/g, '');
+    const byLang = {};
+    movies.forEach(m => { const l = langOfM(m); if (!l || !/^[A-Za-z]+$/.test(l)) return; (byLang[l] = byLang[l] || []).push(m); });
+    const pagesFor = {}, allPages = [];
+    const add = (l, o) => { (pagesFor[l] = pagesFor[l] || []).push(o); allPages.push(o); };
+    Object.keys(byLang).sort((a, b) => byLang[b].length - byLang[a].length).forEach(l => {
+      const all = byLang[l], films = all.filter(m => !isTv(m.data)), series = all.filter(m => isTv(m.data)), s = lslug(l);
+      if (films.length >= 5) {
+        add(l, { path: '/' + s + '-movies', list: films.slice().sort(newest), h1: l + ' movies', title: l + ' Movies – Reviews, Verdicts & Where to Watch',
+          intro: films.length + ' ' + l + ' films on Reelscore, newest first: what is in theatres, what is streaming and what is coming, with a verdict on whether each is worth watching.' });
+        const ys = {}; films.forEach(m => { const y = String(m.data.releaseDate || '').slice(0, 4); if (/^\d{4}$/.test(y)) (ys[y] = ys[y] || []).push(m); });
+        Object.keys(ys).filter(y => ys[y].length >= 5).sort().reverse().forEach(y => {
+          const fut = +y > now.getFullYear();
+          add(l, { path: '/' + s + '-movies-' + y, list: ys[y].slice().sort(fut ? soonest : newest), h1: l + ' movies of ' + y, year: y,
+            title: l + ' Movies ' + y + (fut ? ' – Release Dates & Cast' : ' – Reviews, Verdicts & OTT'),
+            intro: ys[y].length + ' ' + l + ' films ' + (fut ? 'due in ' : 'released in ') + y + ', with cast, release dates, where to watch them and audience verdicts.' });
+        });
+      }
+      if (all.length >= 50) {
+        const th = films.filter(m => sectionOf(m) === 'In theatres').sort(newest), ott = films.filter(m => sectionOf(m) === 'On OTT').sort(newest), up = films.filter(m => sectionOf(m) === 'Coming soon').sort(soonest);
+        add(l, { path: '/' + s + '-movies-in-theatres', list: th, h1: l + ' movies in theatres', title: l + ' Movies in Theatres Now (' + monYr + ')', status: true,
+          intro: th.length ? th.length + ' ' + l + ' film' + (th.length === 1 ? ' is' : 's are') + ' showing in theatres this week. Check the verdict before you book.' : 'No ' + l + ' films are in theatres on Reelscore right now.' });
+        add(l, { path: '/new-' + s + '-movies-on-ott', list: ott, h1: 'New ' + l + ' movies on OTT', title: 'New ' + l + ' Movies on OTT (' + monYr + ')', status: true,
+          intro: ott.length ? ott.length + ' recent ' + l + ' film' + (ott.length === 1 ? '' : 's') + ' now streaming, with the platform each one is on and whether it is worth a watch.' : 'No new ' + l + ' films on OTT on Reelscore right now.' });
+        add(l, { path: '/upcoming-' + s + '-movies', list: up, h1: 'Upcoming ' + l + ' movies', title: 'Upcoming ' + l + ' Movies (' + now.getFullYear() + ') – Release Dates', status: true,
+          intro: up.length ? up.length + ' upcoming ' + l + ' film' + (up.length === 1 ? '' : 's') + ', soonest first, with release dates, cast and trailers.' : 'No upcoming ' + l + ' films on Reelscore right now.' });
+      }
+      if (series.length >= 5) add(l, { path: '/' + s + '-web-series', list: series.slice().sort(newest), h1: l + ' web series and TV shows', title: l + ' Web Series & TV Shows – Reviews & Where to Watch',
+        intro: series.length + ' ' + l + ' web series and TV shows, newest first, with where to watch them and audience verdicts.' });
+    });
+    // A page is kept out of Google while it links to fewer than 3 titles with substance (the rest are listed as plain
+    // text); pages only link to language pages that are in Google.
+    allPages.forEach(o => { o.lang = Object.keys(pagesFor).find(k => pagesFor[k].includes(o)); o.indexed = o.list.filter(m => !thinT(Object.assign({ __id: m.id }, m.data))).length >= 3; });
+    for (const o of allPages) {
+      const lang = o.lang, mine = pagesFor[lang].filter(x => x !== o && x.indexed);
+      const sibs = mine.filter(x => !x.year), years = mine.filter(x => x.year).slice(0, 12);
+      const same = allPages.filter(x => x !== o && x.indexed && x.path.replace(lslug(x.lang), '') === o.path.replace(lslug(lang), ''));
+      const desc = clip(o.intro, 158), robots = o.indexed ? '' : 'noindex,follow';
+      if (robots) nLangNoindex++;
+      let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(o.h1.charAt(0).toUpperCase() + o.h1.slice(1)) + '</nav><h1>' + esc(o.h1.charAt(0).toUpperCase() + o.h1.slice(1)) + '</h1><p>' + esc(o.intro) + '</p>';
+      body += o.list.length ? '<ul>' + o.list.map(titleLi).join('') + '</ul>' : '';
+      if (sibs.length) body += '<h2>More ' + esc(lang) + '</h2><ul>' + sibs.map(x => '<li><a href="' + x.path + '">' + esc(x.h1.charAt(0).toUpperCase() + x.h1.slice(1)) + '</a></li>').join('') + '</ul>';
+      if (years.length) body += '<h2>' + esc(lang) + ' movies by year</h2><ul>' + years.map(x => '<li><a href="' + x.path + '">' + x.year + '</a> <span class="note">' + x.list.length + '</span></li>').join('') + '</ul>';
+      if (same.length) body += '<h2>Other languages</h2><ul>' + same.map(x => '<li><a href="' + x.path + '">' + esc(x.h1.charAt(0).toUpperCase() + x.h1.slice(1)) + '</a></li>').join('') + '</ul>';
+      const title = o.title.length <= 60 && (o.title + ' | Reelscore').length > 60 ? o.title : o.title.length <= 48 ? o.title + ' | Reelscore' : o.title;
+      writeHub(o.path.slice(1) + '.html', { title, description: desc, canonical: o.path, ogPath: o.path, route: 'browse', body, robots,
+        jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse'], [o.h1, o.path]), listLd(o.h1, o.list.filter(m => !thinT(Object.assign({ __id: m.id }, m.data))).map(movieUrl))] });
+      if (!robots) sitemap.push({ loc: o.path, lastmod: pageDate(o.path, title + '\n' + desc + '\n' + body), pri: '0.8' });
+    }
+    LANG_PAGES.push(...allPages.map(o => o.path));
+    console.log('[seo] language pages: ' + allPages.length + ', in Google ' + (allPages.length - nLangNoindex) + ' (' + Object.keys(pagesFor).map(k => k + ' ' + pagesFor[k].length).join(', ') + ')');
   }
 
   // People

@@ -313,6 +313,24 @@
   // ?page=N on Browse and People, so every page of results has its own crawlable URL.
   function qPage() { var n = parseInt(new URLSearchParams(location.search).get('page'), 10); return n > 1 ? n : 1; }
   function sectionSlug(status) { for (var k in BROWSE_SECTIONS) if (BROWSE_SECTIONS[k] === status) return k; return ''; }
+  // Language landing pages (same paths as scripts/build.mjs): /hindi-movies, /hindi-movies-2026, /hindi-movies-in-theatres,
+  // /new-hindi-movies-on-ott, /upcoming-hindi-movies, /hindi-web-series. They open the Browse view with those filters.
+  function parseLanding(path) {
+    var m = path.match(/^\/(?:(upcoming|new)-)?([a-z]+)-(movies|web-series)(?:-(\d{4}|in-theatres|on-ott))?$/);
+    if (!m) return null;
+    var pre = m[1] || '', ls = m[2], kind = m[3], suf = m[4] || '';
+    if (kind === 'web-series' && (pre || suf)) return null;
+    if (pre === 'upcoming' && suf) return null;
+    if ((pre === 'new') !== (suf === 'on-ott')) return null;
+    var L = ls.charAt(0).toUpperCase() + ls.slice(1), year = /^\d{4}$/.test(suf) ? suf : '', mon = new Date().toLocaleString('en-US', { month: 'long', year: 'numeric' });
+    if (kind === 'web-series') return { path: path, lang: L, status: 'TV shows', kind: 'series', h1: L + ' web series & TV shows', title: L + ' Web Series & TV Shows – Reviews & Where to Watch' };
+    if (pre === 'upcoming') return { path: path, lang: L, status: 'Coming soon', kind: 'movies', h1: 'Upcoming ' + L + ' movies', title: 'Upcoming ' + L + ' Movies (' + new Date().getFullYear() + ') – Release Dates' };
+    if (suf === 'on-ott') return { path: path, lang: L, status: 'On OTT', kind: 'movies', h1: 'New ' + L + ' movies on OTT', title: 'New ' + L + ' Movies on OTT (' + mon + ')' };
+    if (suf === 'in-theatres') return { path: path, lang: L, status: 'In theatres', kind: 'movies', h1: L + ' movies in theatres', title: L + ' Movies in Theatres Now (' + mon + ')' };
+    if (year) return { path: path, lang: L, status: 'All', kind: 'movies', year: year, h1: L + ' movies of ' + year, title: L + ' Movies ' + year + (+year > new Date().getFullYear() ? ' – Release Dates & Cast' : ' – Reviews, Verdicts & OTT') };
+    return { path: path, lang: L, status: 'All', kind: 'movies', h1: L + ' movies', title: L + ' Movies – Reviews, Verdicts & Where to Watch' };
+  }
+  function bHref(B, page) { return B.landing ? B.landing.path + (page > 1 ? '?page=' + page : '') : browseHref(B, page); }
   function browseHref(o, page) {
     var q = [];
     if (o.lang) q.push('lang=' + encodeURIComponent(o.lang));
@@ -402,6 +420,10 @@
       S.route = 'year'; S.param = mm[1];
       S.yr.year = mm[1]; S.yr.lang = new URLSearchParams(location.search).get('lang') || ''; S.yr.page = qPage();
     }
+    else if ((mm = parseLanding(path)) && !(window.RS_404 || document.querySelector('meta[name="rs-404"]'))) {
+      S.route = 'browse'; S.param = null;
+      S.browse = { status: mm.status, lang: mm.lang, genre: '', year: mm.year || '', sort: (S.browse && S.browse.sort) || 'new', page: qPage(), landing: mm };
+    }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) {
       S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All';
       var qs = new URLSearchParams(location.search);
@@ -414,7 +436,7 @@
     if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
     document.body.className = 'r-' + S.route;
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
-    if (S.route === 'browse') document.title = BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All;
+    if (S.route === 'browse') document.title = S.browse.landing ? S.browse.landing.title : (BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All);
     else if (S.route === 'people') document.title = PEOPLE_TITLE;
     else if (S.route === 'genre') document.title = genreTitle(genreBySlug(S.param));
     else if (S.route === 'year') document.title = yearTitle(S.param);
@@ -1933,8 +1955,9 @@
     v.innerHTML = '';
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var B = S.browse;
-    w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'Browse' }));
-    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: 'Every film and series on Reelscore, from classics to what’s coming next.' }));
+    var LP = B.landing;
+    w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: LP ? LP.h1 : 'Browse' }));
+    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: LP ? 'Newest first, with where to watch and whether each is worth it. Change the filters below to see more.' : 'Every film and series on Reelscore, from classics to what’s coming next.' }));
     var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
     w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Status', style: 'margin-bottom:14px' }, statuses.map(function (st) {
       return h('a', { class: 'chip', href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year }, 1), 'aria-current': B.status === st ? 'page' : null, 'aria-pressed': String(B.status === st), text: st });
@@ -1943,7 +1966,7 @@
     S.movies.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; if (m.data.releaseDate) years[m.data.releaseDate.slice(0, 4)] = 1; });
     function sel(id, label, val, opts, onc) {
       var e = h('select', { class: 'in', id: id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === val }); }));
-      e.addEventListener('change', function () { onc(e.value); B.page = 1; e.blur(); render(true); });
+      e.addEventListener('change', function () { onc(e.value); B.page = 1; B.landing = null; e.blur(); render(true); });
       return h('div', { class: 'field', style: 'min-width:160px;flex:1 1 160px' }, [h('label', { class: 'l', for: id, text: label }), e]);
     }
     w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px' }, [
@@ -1952,10 +1975,17 @@
       sel('bYear', 'Year', B.year, [['', 'Any year']].concat(Object.keys(years).sort().reverse().map(function (y) { return [y, y]; })), function (x) { B.year = x; }),
       sel('bSort', 'Sort by', B.sort, [['new', 'Newest first'], ['old', 'Oldest first'], ['score', 'Highest score'], ['votes', 'Most verdicts'], ['az', 'A–Z']], function (x) { B.sort = x; })
     ]));
+    // Quick links to the language pages (languages with 5+ films)
+    var fl = {}; S.movies.forEach(function (m) { if (isTv(m)) return; var l = langOf(m.data); if (/^[A-Za-z]+$/.test(l)) fl[l] = (fl[l] || 0) + 1; });
+    var top = Object.keys(fl).filter(function (l) { return fl[l] >= 5; }).sort(function (a, b) { return fl[b] - fl[a]; }).slice(0, 10);
+    if (top.length && S.loaded) w.appendChild(h('div', { class: 'sub', style: 'margin:-10px 0 20px' }, [h('span', { text: 'By language: ' })].concat(top.map(function (l, i) {
+      return [i ? ' · ' : '', h('a', { href: '/' + l.toLowerCase() + '-movies', text: l, 'aria-current': LP && LP.lang === l && !LP.year && LP.status === 'All' ? 'page' : null })];
+    }).reduce(function (a, b) { return a.concat(b); }, []))));
     var list = S.movies.filter(function (m) {
       var d = m.data;
       if (B.status !== 'All' && d.section !== B.status) return false;
       if (B.lang && langOf(d) !== B.lang) return false;
+      if (LP && LP.kind === 'movies' && isTv(m)) return false;
       if (!inNavLang(m)) return false;
       if (B.genre && genreTags(d).indexOf(B.genre) === -1) return false;
       if (B.year && (d.releaseDate || '').slice(0, 4) !== B.year) return false;
@@ -1968,6 +1998,7 @@
       if (B.sort === 'score') return (sc[b.id].pct === null ? -1 : sc[b.id].pct) - (sc[a.id].pct === null ? -1 : sc[a.id].pct) || sc[b.id].tot - sc[a.id].tot;
       if (B.sort === 'votes') return sc[b.id].tot - sc[a.id].tot;
       if (B.sort === 'az') return (A.title || '').localeCompare(Bd.title || '');
+      if (LP && B.sort === 'new' && B.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999');
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
     var active = (B.status !== 'All') + !!B.lang + !!B.genre + !!B.year;
@@ -1978,10 +2009,10 @@
     if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
     if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'Nothing matches these filters.' })); return; }
     var PER = 60, pages = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages);
-    syncListUrl(browseHref(B, B.page));
+    syncListUrl(bHref(B, B.page));
     var from = (B.page - 1) * PER;
     w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
-    if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { return browseHref(B, n); }));
+    if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { return bHref(B, n); }));
   }
   // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
   function pagerNav(cur, pages, hrefFor, onPick) {
