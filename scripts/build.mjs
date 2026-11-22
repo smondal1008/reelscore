@@ -323,7 +323,19 @@ async function main() {
   const richTitle = d => !!(d.synopsis || safeUrl(d.posterUrl) || ytVideos(d).length);
   // A title page with no story, poster, video or verdict is kept out of the index; indexable pages don't link to it either
   // (its name is shown as plain text), so crawlers aren't sent to pages we've asked them not to index.
-  const thinT = d => !richTitle(d) && !score(d.__id || '').tot;
+  // SEO tiers (kept in step with app/admin.js seoTier): only "good" title pages are indexed.
+  //   kept   – no story, poster, video or verdict
+  //   thin   – a one-line story (under 80 characters) and nothing else
+  //   border – a short story (under 200 characters) and nothing else
+  //   good   – a poster, a video, where to watch (platform or booking link), a story of 200+ characters, or 3+ verdicts
+  const hasWhere = d => !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.values(d.bookingUrls || {}).some(u => safeUrl(u)));
+  const seoTier = (d, tot) => {
+    const syn = String(d.synopsis || '').trim().length;
+    if (!syn && !safeUrl(d.posterUrl) && !ytVideos(d).length && !tot) return 'kept';
+    if (safeUrl(d.posterUrl) || ytVideos(d).length || hasWhere(d) || syn >= 200 || tot >= 3) return 'good';
+    return syn < 80 ? 'thin' : 'border';
+  };
+  const thinT = d => seoTier(d, score(d.__id || '').tot) !== 'good';
   const tLink = m => thinT(Object.assign({ __id: m.id }, m.data)) ? esc(m.data.title) : '<a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a>';
   const richCount = slug => new Set((credits[slug] || []).filter(c => richTitle(c.m.data)).map(c => c.m.id)).size;
   const indexedPerson = slug => {
@@ -384,7 +396,7 @@ async function main() {
   }
 
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
-  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0;
+  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0; const tierCount = {};
 
   // ----- title pages -----
   for (const m of movies) {
@@ -472,8 +484,8 @@ async function main() {
       name: clip(d.title + ' – ' + x.title, 100), description: clip(x.kind + ' of ' + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + lang : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 300),
       thumbnailUrl: ytThumb(x.yt), uploadDate: x.publishedAt, embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
       inLanguage: lang || undefined }));
-    // A title with no story, no videos and no poster is only a list of facts: it stays out of the index until it has more.
-    const thinTitle = !d.synopsis && !vids.length && !poster && !sc.tot;
+    // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
+    const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
     write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs, ...videoLd], route: 'title', body, robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
@@ -779,7 +791,8 @@ async function main() {
     if (changed) fs.writeFileSync(f, html);
   }
 
-  console.log(`[seo] wrote ${nTitles} title pages (${nThinTitles} kept out of the index until they have a story; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[seo] SEO tiers: ${JSON.stringify(tierCount)}`);
+  console.log(`[seo] wrote ${nTitles} title pages (${nThinTitles} kept out of the index until they have more substance; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
 main().catch(e => { console.error('[seo] build failed:', e && e.stack || e); process.exit(1); });

@@ -14,7 +14,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', query = '', langF = '', yearF = '', sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
+  var filter = 'All', query = '', langF = '', yearF = '', seoF = '', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -623,12 +623,26 @@ window.ReelAdmin = function (env) {
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
   var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers' };
+  // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
+  var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
+  function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); })); }
+  function hasYt(d) { return (d.videos || []).some(function (v) { return /youtu\.?be/.test(v.url || ''); }); }
+  function seoTier(d, id) {
+    var syn = String(d.synopsis || '').trim().length, tot = (seoVotes && seoVotes[id]) || 0;
+    if (!syn && !safeUrl(d.posterUrl) && !hasYt(d) && !tot) return 'kept';
+    if (safeUrl(d.posterUrl) || hasYt(d) || hasWhere(d) || syn >= 200 || tot >= 3) return 'good';
+    return syn < 80 ? 'thin' : 'border';
+  }
+  function loadSeoVotes() {
+    if (seoVotes || !db) return; seoVotes = {};
+    db.collection('verdicts').get().then(function (snap) { var c = {}; snap.docs.forEach(function (x) { var v = (x.data() || {}).v || {}; Object.keys(v).forEach(function (k) { c[k] = (c[k] || 0) + 1; }); }); seoVotes = c; if (seoF) renderList(); }).catch(function () {});
+  }
   function yearOf(d) { var y = (d.releaseDate || '').slice(0, 4); return /^\d{4}$/.test(y) ? y : 'none'; }
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
   function readListState() {
     var q = new URLSearchParams(location.search);
     if (!location.search) return;
-    query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || '';
+    query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || ''; seoF = q.get('seo') || '';
     var sec = q.get('section'); filter = 'All';
     Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) filter = k; });
     sortKey = SORTS[q.get('sort')] ? q.get('sort') : 'release';
@@ -643,6 +657,7 @@ window.ReelAdmin = function (env) {
     if (filter !== 'All') q.set('section', SEC_SLUG[filter]);
     if (langF) q.set('lang', langF);
     if (yearF) q.set('year', yearF);
+    if (seoF) q.set('seo', seoF);
     if (sortKey !== 'release' || sortDir !== 'desc') { q.set('sort', sortKey); if (sortDir !== defaultDir(sortKey)) q.set('dir', sortDir); }
     if (pageNo > 1) q.set('page', String(pageNo));
     var url = '/admin/titles' + (q.toString() ? '?' + q.toString() : '');
@@ -651,7 +666,7 @@ window.ReelAdmin = function (env) {
   function setList(fn) { fn(); renderList(); }
   function renderFilters() {
     var box = $('filters'); box.innerHTML = '';
-    var base = movies.filter(function (m) { return passQL(m.data); });
+    var base = movies.filter(function (m) { return passQL(m.data, m.id); });
     FILTERS.forEach(function (f) {
       var n = f === 'All' ? base.length : base.filter(function (m) { return matchSection(m.data, f); }).length;
       box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(filter === f), text: f + ' · ' + n,
@@ -672,6 +687,11 @@ window.ReelAdmin = function (env) {
     ys.appendChild(h('option', { value: '', text: 'All years' }));
     years.forEach(function (y) { ys.appendChild(h('option', { value: y, text: y + ' (' + yc[y] + ')', selected: y === yearF })); });
     if (yc.none) ys.appendChild(h('option', { value: 'none', text: 'No release date (' + yc.none + ')', selected: yearF === 'none' }));
+    var es = $('seoSel'), ec = {};
+    movies.forEach(function (m) { if (matchSection(m.data, filter) && passQL(m.data, m.id, true)) { var t = seoTier(m.data, m.id); ec[t] = (ec[t] || 0) + 1; } });
+    es.innerHTML = '';
+    es.appendChild(h('option', { value: '', text: 'All SEO statuses' }));
+    SEO_TIERS.forEach(function (t) { es.appendChild(h('option', { value: t[0], text: t[1] + ' (' + (ec[t[0]] || 0) + ')', selected: t[0] === seoF })); });
     var ss = $('sortSel'); ss.innerHTML = '';
     [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section']].forEach(function (o) {
       ss.appendChild(h('option', { value: o[0] + ':' + o[1], text: o[2], selected: sortKey === o[0] && sortDir === o[1] }));
@@ -682,7 +702,8 @@ window.ReelAdmin = function (env) {
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
   function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : d.section === f); }
-  function passQL(d) {
+  function passQL(d, id, skipSeo) {
+    if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
     if (yearF && yearOf(d) !== yearF) return false;
     var q = query.trim().toLowerCase(); if (!q) return true;
@@ -691,7 +712,7 @@ window.ReelAdmin = function (env) {
   }
   function visible() {
     var secIdx = {}; SECTIONS.forEach(function (x, i) { secIdx[x] = i; });
-    var list = movies.filter(function (m) { return matchSection(m.data, filter) && passQL(m.data); });
+    var list = movies.filter(function (m) { return matchSection(m.data, filter) && passQL(m.data, m.id); });
     var dir = sortDir === 'asc' ? 1 : -1;
     function val(m) {
       var d = m.data;
@@ -716,6 +737,7 @@ window.ReelAdmin = function (env) {
     return fmtDate(iso.slice(0, 10));
   }
   function renderList() {
+    if (seoF) loadSeoVotes();
     var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
     if (page !== 'titles') return;
     var qi = $('q'); if (qi && document.activeElement !== qi) qi.value = query;
@@ -730,7 +752,7 @@ window.ReelAdmin = function (env) {
     $('list').parentNode.hidden = !total;
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
-      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; filter = 'All'; pageNo = 1; }); } } })]));
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; filter = 'All'; pageNo = 1; }); } } })]));
       return;
     }
     function th(key, label, cls) {
@@ -1514,6 +1536,7 @@ window.ReelAdmin = function (env) {
   $('q').addEventListener('input', function (e) { var v = e.target.value; clearTimeout(qTimer); qTimer = setTimeout(function () { setList(function () { query = v; pageNo = 1; }); }, 120); });
   $('langSel').addEventListener('change', function (e) { setList(function () { langF = e.target.value; pageNo = 1; }); });
   $('yearSel').addEventListener('change', function (e) { setList(function () { yearF = e.target.value; pageNo = 1; }); });
+  $('seoSel').addEventListener('change', function (e) { loadSeoVotes(); setList(function () { seoF = e.target.value; pageNo = 1; }); });
   $('sortSel').addEventListener('change', function (e) { var v = e.target.value.split(':'); setList(function () { sortKey = v[0]; sortDir = v[1]; pageNo = 1; }); });
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
