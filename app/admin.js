@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Unpublished'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
@@ -617,12 +617,12 @@ window.ReelAdmin = function (env) {
   function blank() {
     return { title: '', subtitle: '', section: 'Coming soon', platform: '', releaseDate: '', releaseNote: '', languages: '', genre: '',
       runtime: '', certificate: '', director: '', synopsis: '', cast: [], videos: [], formats: '', posterId: '', posterUrl: '',
-      bannerId: '', bannerUrl: '', order: movies.length ? Math.max.apply(null, movies.map(function (m) { return +m.data.order || 0; })) + 1 : 0, source: 'Added in admin' };
+      bannerId: '', bannerUrl: '', published: false, order: movies.length ? Math.max.apply(null, movies.map(function (m) { return +m.data.order || 0; })) + 1 : 0, source: 'Added in admin' };
   }
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Unpublished': 'unpublished' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); })); }
@@ -701,7 +701,7 @@ window.ReelAdmin = function (env) {
   function missingPhotos(d) { return !safeUrl(d.posterUrl) || !safeUrl(d.bannerUrl); }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
-  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : d.section === f); }
+  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Unpublished' ? d.published === false : d.section === f); }
   function passQL(d, id, skipSeo) {
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
@@ -772,6 +772,7 @@ window.ReelAdmin = function (env) {
         h('td', {}, [
           h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
+          d.published === false ? h('span', { class: 'unpub', title: 'Visitors can’t see this title', text: 'Not published' }) : null,
           h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m)].filter(Boolean).join(' · ') }),
           filter === 'Missing photos' ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
@@ -1337,7 +1338,25 @@ window.ReelAdmin = function (env) {
     var live = movies.find(function (m) { return m.id === currentId; });
     main.appendChild(h('div', { class: 'crumbs' }, [
       h('a', { href: '/admin/titles', text: '← All titles' }),
-      live ? h('a', { href: pathBase(live.data) + slugOf(live), target: '_blank', rel: 'noopener', text: 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not published yet' })
+      live ? h('a', { href: pathBase(live.data) + slugOf(live), target: '_blank', rel: 'noopener', text: live.data.published === false ? 'Preview page ↗ (admins only)' : 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not saved yet' })
+    ]));
+    // Publish / Unpublish. Titles without the field (all those from before it existed) count as published;
+    // a new title starts unpublished. Either button also saves any other changes.
+    var pubNow = live ? live.data.published !== false : false;
+    main.appendChild(h('section', { class: 'card pubcard' }, [
+      h('div', { class: 'pubrow' }, [
+        h('div', {}, [
+          h('span', { class: 'pubdot' + (pubNow ? ' on' : ''), 'aria-hidden': 'true' }),
+          h('b', { text: pubNow ? 'Published' : 'Not published' }),
+          h('span', { class: 'sub', text: pubNow ? ' · Visible on the site.' : live ? ' · Hidden from visitors: not in lists, search or Google. Admins can still preview it.' : ' · Save it, then publish when it’s ready.' })
+        ]),
+        h('button', { type: 'button', class: 'btn ' + (pubNow ? '' : 'primary'), disabled: !canWrite || saving || (!live && !draft.title),
+          text: pubNow ? 'Unpublish' : (dirty || !live ? 'Save and publish' : 'Publish'),
+          on: { click: function () {
+            var was = draft.published; draft.published = !pubNow;
+            save().then(function (ok) { if (!ok) { draft.published = was; renderEditor(); return; } setStatus((pubNow ? 'Unpublished ' : 'Published ') + (draft.title || 'title') + (pubNow ? '. It’s hidden from visitors.' : '. It’s live on the site.')); renderEditor(); });
+          } } })
+      ])
     ]));
     if (pendingSwitch) {
       var target = movies.find(function (m) { return m.id === pendingSwitch; });

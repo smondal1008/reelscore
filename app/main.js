@@ -364,6 +364,10 @@
     for (var i = 0; i < S.movies.length; i++) if (movieSlug(S.movies[i]) === key) return S.movies[i];
     for (var k = 0; k < S.movies.length; k++) if ((S.movies[k].data.slugHistory || []).indexOf(key) !== -1) return S.movies[k];
     for (var j = 0; j < S.movies.length; j++) if (slugify(S.movies[j].data.title) === key) return S.movies[j];
+    if (S.canEdit) {
+      var hid = Object.keys(S.hidden || {}).map(function (id) { return S.hidden[id]; }).concat(Object.keys(S.hiddenAdmin || {}).map(function (id) { return S.hiddenAdmin[id]; }));
+      for (var q = 0; q < hid.length; q++) if (hid[q].id === key || movieSlug(hid[q]) === key || slugify(hid[q].data.title) === key) return hid[q];
+    }
     return null;
   }
   // Hub page titles, the same as the pre-rendered hub pages (scripts/build.mjs HUBS).
@@ -1276,6 +1280,7 @@
     if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
+    if (d.published === false) tags.unshift(h('span', { class: 'tag', style: 'background:var(--danger);color:#0B0A0F', text: 'Not published · admins only' }));
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
     var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : hasBooking(d) ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) ? 'Where to watch' : null;
@@ -2239,8 +2244,12 @@
   // On top of it we subscribe only to records changed since that file was built, plus a short list of deletions,
   // so admin edits still show up live. If the file can't be loaded we fall back to reading everything from Firestore.
   function fixSection(d) { if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return d; }
+  // Unpublished titles (published === false) are left out of every list, search and page for visitors.
+  // Admins can still open their pages as a preview (findMovie looks in S.hidden for them).
   function setMovies(list) {
+    S.hidden = {};
     S.movies = list.map(function (m) { return { id: m.id, data: fixSection(m.data) }; })
+      .filter(function (m) { if (m.data.published === false) { S.hidden[m.id] = m; return false; } return true; })
       .sort(function (a, b) { return (+a.data.order || 0) - (+b.data.order || 0); });
     S.byId = {}; S.movies.forEach(function (m) { S.byId[m.id] = m; });
     S.hasCat = true; syncLoaded(); render();
@@ -2337,6 +2346,10 @@
   }).catch(function () {}).then(function () {
     return cl.use('assets').then(function (a) { S.assets = a; }).catch(function () {});
   }).then(function () { return cl.use('db'); }).then(function (db) {
+    // Admins: unpublished titles, which the public catalogue leaves out, so their pages can be previewed.
+    if (S.canEdit && db) db.collection('movies').where('published', '==', false).onSnapshot(function (snap) {
+      S.hiddenAdmin = {}; snap.docs.forEach(function (x) { S.hiddenAdmin[x.id] = { id: x.id, data: fixSection(x.data()) }; }); render();
+    }, function () {});
     S.db = db;
     if (!db) { clearTimeout(timer); S.loadMsg = 'Couldn’t connect to the catalogue. Check firebase-config.js.'; render(true); return; }
     if (S.route === 'admin') startAdmin();

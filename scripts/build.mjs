@@ -306,7 +306,10 @@ async function main() {
   const score = id => { const n = counts[id] || { a: 0, b: 0, c: 0 }, tot = n.a + n.b + n.c; return { n, tot, pct: tot ? Math.round(100 * (n.a + n.b) / tot) : null }; };
 
   const people = {}; data.people.forEach(p => { people[p.id] = p.data || {}; });
-  const movies = data.movies.filter(m => m.data && m.data.title);
+  // Unpublished titles (published === false, set in the admin panel) get no page and stay out of the catalogue.
+  const nUnpub = data.movies.filter(m => m.data && m.data.published === false).length;
+  const movies = data.movies.filter(m => m.data && m.data.title && m.data.published !== false);
+  if (nUnpub) console.log('[seo] unpublished titles left out: ' + nUnpub);
 
   // credits per person (cast entries, plus the director field when that person isn't already in the cast)
   const credits = {};

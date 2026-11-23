@@ -565,3 +565,10 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .kfor a { font-weight: 600; color: inherit; }
 .collab { display: flex; flex-wrap: wrap; gap: 8px; }
 .collab .tag { text-decoration: none; }
+
+  /* Admin: publish status */
+  .pubcard { padding: 14px 18px; }
+  .pubrow { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .pubdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 8px; vertical-align: 1px; }
+  .pubdot.on { background: var(--ok); }
+  .unpub { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line2); vertical-align: 2px; }
