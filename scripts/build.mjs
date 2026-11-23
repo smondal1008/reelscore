@@ -755,8 +755,20 @@ async function main() {
       canonical: '/movies', ogPath: '/movies', route: 'movies', body: mBody,
       jsonld: [crumbLd(['Home', '/'], ['Movies', '/movies']), listLd('Movie sections', MOVIE_HUBS.map(h => '/browse/' + h[0]))] });
     sitemap.push({ loc: '/movies', pri: '0.7' });
-    const tBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › TV Shows</nav><h1>Indian TV shows and web series</h1><p>' + shows.length + ' TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, newest first.</p>' +
-      (shows.length ? '<ul>' + shows.map(titleLi).join('') + '</ul>' : '<p>Nothing here right now.</p>');
+    // Same rows as the app's TV Shows page (app/main.js drawTvRows, OTTS); every show is listed on /browse/tv-shows.
+    const OTT_RE = { netflix: /netflix/i, 'prime-video': /prime video|amazon prime/i, jiohotstar: /hotstar|jiocinema|voot|star ?plus|star bharat|star vijay|colors|\bmtv\b|disney|asianet|nickelodeon/i, zee5: /zee|&\s*tv/i, sonyliv: /sony|\bsab\b/i };
+    const ottIs = (m, k) => { const p = String(m.data.platform || ''); if (!p) return false; for (const [kk, re] of Object.entries(OTT_RE)) if (re.test(p)) return kk === k; return false; };
+    const gIs = (m, g) => { const r = GENRE_RULES.find(x => x[0] === g); return !!r && r[1].test(String(m.data.genre || '').toLowerCase()); };
+    const yNow = String(new Date().getFullYear()), fresh = shows.filter(m => String(m.data.releaseDate || '').slice(0, 4) === yNow);
+    const tvRows = [fresh.length >= 6 ? ['New this year', fresh, '/browse/tv-shows?year=' + yNow] : ['New shows', shows, '/browse/tv-shows'],
+      ['New on Netflix', shows.filter(m => ottIs(m, 'netflix')), '/browse/tv-shows?ott=netflix'], ['New on Prime Video', shows.filter(m => ottIs(m, 'prime-video')), '/browse/tv-shows?ott=prime-video'],
+      ['New on JioHotstar', shows.filter(m => ottIs(m, 'jiohotstar')), '/browse/tv-shows?ott=jiohotstar'],
+      ...[['Thriller', 'Thriller & crime'], ['Comedy', 'Comedy'], ['Romance', 'Romance'], ['Action', 'Action'], ['Horror', 'Horror']].map(([g, t]) => [t, shows.filter(m => gIs(m, g)), '/browse/tv-shows?genre=' + encodeURIComponent(g)]),
+      ['On ZEE5', shows.filter(m => ottIs(m, 'zee5')), '/browse/tv-shows?ott=zee5'], ['On SonyLIV', shows.filter(m => ottIs(m, 'sonyliv')), '/browse/tv-shows?ott=sonyliv'],
+      ['Reality & game shows', shows.filter(m => /reality|talk|game|quiz|talent/i.test(String(m.data.genre || ''))), null]];
+    let tBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › TV Shows</nav><h1>Indian TV shows and web series</h1><p>' + shows.length + ' TV shows and web series by streaming service and genre, newest first.</p>';
+    tvRows.forEach(([t, list, href]) => { if (list.length >= 4) tBody += block(esc(t), list.slice(0, 20).map(titleLi), href ? [href, 'See all →'] : null); });
+    tBody += '<p><a href="/browse/tv-shows">Browse all ' + shows.length + ' TV shows →</a></p>';
     writeHub('tv-shows.html', { title: 'Indian TV Shows & Web Series | Reelscore', description: clip(shows.length + ' Indian TV shows and web series with cast, trailers, where to watch and verdicts on whether each is worth your time.', 158),
       canonical: '/tv-shows', ogPath: '/tv-shows', route: 'tvshows', body: tBody,
       jsonld: [crumbLd(['Home', '/'], ['TV Shows', '/tv-shows']), listLd('Indian TV shows and web series', shows.map(movieUrl))] });
