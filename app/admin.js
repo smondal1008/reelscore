@@ -1445,6 +1445,7 @@ window.ReelAdmin = function (env) {
       field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
         note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
+      field('OTT Release Date', 'ottReleaseDate', { type: 'date', note: 'When it starts streaming. Leave blank if not announced.' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
       tvEd ? field('Episodes', 'episodes', { placeholder: 'e.g. 240', note: 'Total across all seasons.' }) : null,
       tvEd ? field('Last aired (year)', 'endYear', { placeholder: 'e.g. 2019', note: 'Leave blank if the show is still running.' }) : null,
