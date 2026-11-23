@@ -223,6 +223,8 @@
   .fh.tvh .fb { gap: 14px; }
   .fh.tvh .meta { font-size: 16px; }
   .fh.tvh .syn { font-size: 17px; }
+  .fh .songl { font-size: 17px; font-weight: 600; color: #F3EBDD; text-shadow: 0 2px 10px rgba(0,0,0,.5); }
+  .fh.playing .songl { display: none; }
   .fh .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 18px; font-weight: 600; color: var(--text); }
   .fh .meta i { width: 5px; height: 5px; border-radius: 50%; background: #8E8899; display: inline-block; }
   .fh .meta .cert { font-weight: 500; color: #D9D5DF; }

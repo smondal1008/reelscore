@@ -1273,7 +1273,7 @@
     var box = $(S.heroBoxId || 'heroBox'); if (!box || !S.feat || !S.feat.length) return;
     var feat = S.feat; if (S.slide >= feat.length) S.slide = 0;
     var m = feat[S.slide], d = m.data, sc = score(m.id);
-    var clip = safeUrl(d.trailerFileUrl), yt = clip ? null : heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
+    var songs = S.heroCtx === 'movies', clip = songs ? null : safeUrl(d.trailerFileUrl), yt = clip ? null : songs ? heroSong(m) : heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
     if (playing && S.heroNode && S.heroNode._mid === m.id) {
       box.innerHTML = ''; box.appendChild(S.heroNode);
       if (!S.play.paused && S.heroVideo) safePlay(S.heroVideo);
@@ -1304,20 +1304,21 @@
       video.addEventListener('timeupdate', function () { var p = document.getElementById('vProg'); if (p && video.duration) p.style.width = (100 * video.currentTime / video.duration) + '%'; });
       video.addEventListener('error', function () { toast('This clip couldn’t play.'); stopTrailer(); });
     }
-    var hero = h('section', { class: 'fh' + (S.heroCtx === 'tvshows' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: art(m, 'banner', 1920), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
+    var hero = h('section', { class: 'fh' + (S.heroCtx && S.heroCtx !== 'home' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: art(m, 'banner', 1920), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
       on: { mouseenter: function () { S.heroPause = true; }, mouseleave: function () { S.heroPause = false; }, focusin: function () { S.heroPause = true; }, focusout: function () { S.heroPause = false; } } }, [
       video,
       h('div', { class: 'scrim' }),
       playing ? h('button', { type: 'button', class: 'vclose', 'aria-label': 'Close trailer', text: '×', on: { click: stopTrailer } }) : null,
       playing ? h('div', { class: 'vprog', 'aria-hidden': 'true' }, [h('span', { id: 'vProg' })]) : null,
       h('div', { class: 'fb' }, [
-        h(S.heroCtx === 'tvshows' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
+        h(S.heroCtx && S.heroCtx !== 'home' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
         meta,
+        songs && yt && !/^(official )?(video )?song$/i.test(String(yt.title || '').trim()) ? h('div', { class: 'songl' }, [h('span', { 'aria-hidden': 'true', text: '♪ ' }), yt.title]) : null,
         d.synopsis ? h('p', { class: 'syn', text: d.synopsis }) : null,
         h('div', { class: 'btns' }, [
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
-            : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), S.heroCtx === 'tvshows' ? heroVidLabel(yt) : 'Trailer'])
+            : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), S.heroCtx && S.heroCtx !== 'home' ? heroVidLabel(yt) : 'Trailer'])
             : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
           h('a', { class: 'pill info', href: movieUrl(m), text: 'View details' }),
           playing && !yt ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
@@ -1353,6 +1354,7 @@
   // What the TV Shows banner's play button says: the kind of video it plays.
   function heroVidLabel(x) {
     var k = String(x.kind || '').toLowerCase();
+    if (x.cat === 'songs') return 'Song';
     return /teaser/.test(k) ? 'Teaser' : /trailer/.test(k) ? 'Trailer' : /promo|precap|glimpse/.test(k) ? 'Promo' : /episode/.test(k) ? 'Episode' : /clip/.test(k) ? 'Clip' : x.cat === 'trailers' ? 'Trailer' : 'Play video';
   }
   // TV Shows banner: shows with a banner image and a video. Pinned TV promotionals (Admin > Home rows) first, then shows
@@ -1370,6 +1372,31 @@
       if (pa !== -1 || pb !== -1) return (pa === -1 ? 1e9 : pa) - (pb === -1 ? 1e9 : pb);
       var ra = !a.data.endYear || String(a.data.endYear) >= thisYear ? 1 : 0, rb = !b.data.endYear || String(b.data.endYear) >= thisYear ? 1 : 0;
       return rb - ra || nv[b.id].localeCompare(nv[a.id]) || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
+    });
+    return list.slice(0, 8);
+  }
+  // Movies banner: the movie's newest YouTube song (by publish date, else the one saved last).
+  function heroSong(m) {
+    var vs = m.data.videos || [], best = null, bt = '';
+    vidItems(m).forEach(function (x, i) {
+      if (!x.yt || x.cat !== 'songs') return;
+      var raw = vs.filter(function (v) { return safeUrl(v.url) === x.url; })[0] || {}, t = String(raw.publishedAt || raw.addedAt || '') + '|' + ('000' + i).slice(-4);
+      if (!best || t > bt) { best = x; bt = t; }
+    });
+    return best;
+  }
+  // Movies page banner: movies chosen in Admin > Movies banner, in that order; with none, movies with a banner image and
+  // a song: pinned New songs (Admin > Home rows) first, then the newest songs. At most 8.
+  function movieHeroPicks() {
+    var chosen = (S.movFeatured || []).map(function (id) { return S.byId[id]; }).filter(function (m) { return m && !isTv(m) && inNavLang(m); });
+    if (chosen.length) return chosen;
+    var pins = rowPins('songs'), when = {};
+    var list = S.movies.filter(function (m) { return !isTv(m) && inNavLang(m) && safeUrl(m.data.bannerUrl) && heroSong(m); });
+    list.forEach(function (m) { var s = heroSong(m), raw = (m.data.videos || []).filter(function (v) { return safeUrl(v.url) === s.url; })[0] || {}; when[m.id] = String(raw.publishedAt || raw.addedAt || ''); });
+    list.sort(function (a, b) {
+      var pa = pins.indexOf(a.id), pb = pins.indexOf(b.id);
+      if (pa !== -1 || pb !== -1) return (pa === -1 ? 1e9 : pa) - (pb === -1 ? 1e9 : pb);
+      return when[b.id].localeCompare(when[a.id]) || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
     });
     return list.slice(0, 8);
   }
@@ -2317,6 +2344,10 @@
       if (tfeat.length) { setHeroCtx('tvshows', tfeat, 'tvHeroBox'); if (S.slide >= tfeat.length) S.slide = 0; v.appendChild(h('div', { id: 'tvHeroBox', style: 'margin-bottom:28px' })); drawHero(); }
     }
     if (tv) { drawTvRows(v); return; }
+    if (S.loaded) {
+      var mfeat = movieHeroPicks();
+      if (mfeat.length) { setHeroCtx('movies', mfeat, 'movHeroBox'); if (S.slide >= mfeat.length) S.slide = 0; v.appendChild(h('div', { id: 'movHeroBox', style: 'margin-bottom:28px' })); drawHero(); }
+    }
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var C = S.cat[kind];
     document.title = tv ? TV_TITLE : C.status === 'All' ? MOVIES_TITLE : (BROWSE_TITLES[C.status] || MOVIES_TITLE);
@@ -2775,6 +2806,11 @@
       var d = snap.exists ? snap.data() : {};
       S.featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
       S.slide = 0; render();
+    }, function () {});
+    db.doc('settings/moviesbanner').onSnapshot(function (snap) {
+      var d = snap.exists ? snap.data() : {}, was = JSON.stringify(S.movFeatured || []);
+      S.movFeatured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+      if (was !== JSON.stringify(S.movFeatured) && S.route === 'movies') { if (S.play) leaveHero(); S.slide = 0; render(); }
     }, function () {});
     db.doc('settings/tvbanner').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, was = JSON.stringify(S.tvFeatured || []);
