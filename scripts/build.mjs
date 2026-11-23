@@ -189,8 +189,10 @@ function pageDate(url, content) {
   return d;
 }
 
-// Films the admin pins to the front of In theatres and Coming soon (settings/rows, set in Admin > Home rows).
-function cleanRows(d) { const ids = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : []; return { theatres: ids(d && d.theatres), coming: ids(d && d.coming) }; }
+// Titles the admin pins to the front of a homescreen row (settings/rows, set in Admin > Home rows):
+// In theatres, Coming soon, New on OTT, New trailers, New songs and New TV promotionals.
+const ROW_KEYS = ['theatres', 'coming', 'ott', 'trailers', 'songs', 'tvpromos'];
+function cleanRows(d) { const ids = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [], o = {}; ROW_KEYS.forEach(k => { o[k] = ids(d && d[k]); }); return o; }
 // Book tickets / Watch now switched per page in Admin > Buttons (settings/buttons); anything missing counts as shown.
 function cleanBtns(d) { const o = {}; ['home', 'browse', 'lang', 'mylist', 'title'].forEach(k => { const x = (d && d[k]) || {}; o[k] = { book: x.book !== false, watch: x.watch !== false }; }); return o; }
 // Pinned films first, in the admin's order; everything else keeps its own order after them.
@@ -646,6 +648,7 @@ async function main() {
   Object.keys(bySection).forEach(k => bySection[k].sort(k === 'Coming soon' ? soonest : newest));
   bySection['In theatres'] = pinFirst(bySection['In theatres'] || [], data.rows.theatres);
   bySection['Coming soon'] = pinFirst(bySection['Coming soon'] || [], data.rows.coming);
+  bySection['On OTT'] = pinFirst(bySection['On OTT'] || [], data.rows.ott);
   const titleLi = m => '<li>' + tLink(m) + ' <span class="note">' +
     esc([isTv(m.data) ? tvYears(m.data) : (/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate > today ? fmtDate(m.data.releaseDate) : year(m.data)), String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>';
   const hubPeople = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a) || personName(a).localeCompare(personName(b)));
@@ -759,7 +762,7 @@ async function main() {
         });
       }
       if (all.length >= 50) {
-        const th = pinFirst(films.filter(m => sectionOf(m) === 'In theatres').sort(newest), data.rows.theatres), ott = films.filter(m => sectionOf(m) === 'On OTT').sort(newest), up = pinFirst(films.filter(m => sectionOf(m) === 'Coming soon').sort(soonest), data.rows.coming);
+        const th = pinFirst(films.filter(m => sectionOf(m) === 'In theatres').sort(newest), data.rows.theatres), ott = pinFirst(films.filter(m => sectionOf(m) === 'On OTT').sort(newest), data.rows.ott), up = pinFirst(films.filter(m => sectionOf(m) === 'Coming soon').sort(soonest), data.rows.coming);
         add(l, { path: '/' + s + '-movies-in-theatres', list: th, h1: l + ' movies in theatres', title: l + ' Movies in Theatres Now (' + monYr + ')', status: true,
           intro: th.length ? th.length + ' ' + l + ' film' + (th.length === 1 ? ' is' : 's are') + ' showing in theatres this week. Check the verdict before you book.' : 'No ' + l + ' films are in theatres on Reelscore right now.' });
         add(l, { path: '/new-' + s + '-movies-on-ott', list: ott, h1: 'New ' + l + ' movies on OTT', title: 'New ' + l + ' Movies on OTT (' + monYr + ')', status: true,
@@ -847,9 +850,10 @@ async function main() {
     ['songs', 'All video songs', 'Latest Video Songs | Reelscore', 'Official video and lyric songs from new Bollywood and regional Indian movies, newest first.', m => !isTv(m.data), x => x.cat === 'songs', false],
     ['tv-promos', 'All TV promotionals', 'TV Show Trailers, Promos & Episodes | Reelscore', 'Official trailers, promos and full episodes of Indian TV shows and web series.', m => isTv(m.data), () => true, false]
   ];
+  const VID_PINS = { trailers: data.rows.trailers, songs: data.rows.songs, 'tv-promos': data.rows.tvpromos };
   for (const [slug, h1, title, desc, pickM, pickV, onePer] of vidHubs) {
     const items = [];
-    movies.filter(pickM).sort(newest).forEach(m => { const vs = ytVideos(m.data).filter(pickV); (onePer ? vs.slice(0, 1) : vs).forEach(x => items.push([m, x])); });
+    pinFirst(movies.filter(pickM).sort(newest), VID_PINS[slug]).forEach(m => { const vs = ytVideos(m.data).filter(pickV); (onePer ? vs.slice(0, 1) : vs).forEach(x => items.push([m, x])); });
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + esc(h1) + '</nav><h1>' + esc(h1) + '</h1><p>' + items.length + ' videos. ' + esc(desc) + '</p>' +
       '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
       '<h2>More videos</h2><ul>' + vidHubs.filter(v => v[0] !== slug).map(v => '<li><a href="/' + v[0] + '">' + esc(v[1]) + '</a></li>').join('') + '</ul>';

@@ -732,10 +732,19 @@
   }
   function sectionOf(name) { return S.movies.filter(function (m) { return m.data.section === name; }); }
   function homeSection(name) { return sectionOf(name).filter(inNavLang); }
-  // Films the admin pins to the front of In theatres and Coming soon (Admin > Home rows); the rest keep their usual order after them.
+  // Titles the admin pins to the front of a homescreen row (Admin > Home rows); the rest keep their usual order after them.
+  // Keys: theatres, coming, ott (by section name too), trailers, songs, tvpromos.
+  var ROW_KEYS = ['theatres', 'coming', 'ott', 'trailers', 'songs', 'tvpromos'], ROW_KEY = { 'In theatres': 'theatres', 'Coming soon': 'coming', 'On OTT': 'ott' };
   function rowPins(sec) {
-    var r = S.rowPins || window.RS_ROWS || {};
-    return sec === 'In theatres' ? r.theatres || [] : sec === 'Coming soon' ? r.coming || [] : [];
+    var r = S.rowPins || window.RS_ROWS || {}, k = ROW_KEY[sec] || sec;
+    return ROW_KEYS.indexOf(k) !== -1 && Array.isArray(r[k]) ? r[k] : [];
+  }
+  // Same for the video rows: cards of pinned titles first (in pin order), the rest keep their order.
+  function pinPicks(picks, ids) {
+    if (!ids || !ids.length) return picks;
+    var pos = Object.create(null); ids.forEach(function (id, i) { if (!(id in pos)) pos[id] = i; });
+    var a = [], b = []; picks.forEach(function (p) { (p.m.id in pos ? a : b).push(p); });
+    return a.sort(function (x, y) { return pos[x.m.id] - pos[y.m.id]; }).concat(b);
   }
   function pinFirst(list, ids) {
     if (!ids || !ids.length) return list;
@@ -790,7 +799,7 @@
       rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
       songSection(),
       genreSection(),
-      rowSection('New on OTT', homeSection('On OTT'), { max: HOME_MAX }, seeAll('/browse/on-ott')),
+      rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')),
       rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')),
       tvPromoSection(),
       yearSection(),
@@ -985,15 +994,15 @@
   // ---------- New trailers row: latest titles with a playable trailer; a card opens the title and plays it ----------
   function trailerPicks(all) {
     var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
-    var picks = [];
+    var picks = [], pins = rowPins('trailers'); // pinned films show even when older than the 6-month window
     S.movies.forEach(function (m) {
-      if (!inNavLang(m) || isTv(m) || (!all && (m.data.releaseDate || '') < cut)) return;
+      if (!inNavLang(m) || isTv(m) || (!all && pins.indexOf(m.id) === -1 && (m.data.releaseDate || '') < cut)) return;
       var it = vidItems(m), k = -1;
       it.some(function (x, i) { if (x.cat === 'trailers' && (x.yt || x.clip)) { k = i; return true; } });
       if (k >= 0) picks.push({ m: m, i: k, x: it[k] });
     });
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
-    return picks;
+    return pinPicks(picks, pins);
   }
   function trailerCard(p, i, arr) {
     var m = p.m, d = m.data, rel = released(m);
@@ -1024,14 +1033,14 @@
 
   // ---------- New songs row: songs from recent and upcoming titles, played in the full-screen overlay ----------
   function songPicks(all) {
-    var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10), picks = [];
+    var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10), picks = [], pins = rowPins('songs');
     S.movies.forEach(function (m) {
-      if (!inNavLang(m) || isTv(m) || (!all && (m.data.releaseDate || '') < cut)) return;
+      if (!inNavLang(m) || isTv(m) || (!all && pins.indexOf(m.id) === -1 && (m.data.releaseDate || '') < cut)) return;
       var ss = vidItems(m).filter(function (x) { return x.cat === 'songs' && (x.yt || x.clip); });
       (all ? ss : ss.slice(0, 3)).forEach(function (x) { picks.push({ m: m, x: x }); });
     });
     picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
-    return picks;
+    return pinPicks(picks, pins);
   }
   function songCard(p, i, arr) {
     var m = p.m, d = m.data;
@@ -1099,7 +1108,7 @@
       return bb - aa || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
     });
     shows.forEach(function (m) { var vs = vidItems(m).filter(function (x) { return x.yt || x.clip; }); (all ? vs : vs.slice(0, 2)).forEach(function (x) { picks.push({ m: m, x: x }); }); });
-    return picks;
+    return pinPicks(picks, rowPins('tvpromos'));
   }
   function tvPromoCard(p, i, arr) {
     var m = p.m, d = m.data;
@@ -2481,9 +2490,10 @@
     }, function () {});
     db.doc('settings/rows').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, ids = function (a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }) : []; };
-      var next = { theatres: ids(d.theatres), coming: ids(d.coming) }, prev = S.rowPins || window.RS_ROWS || { theatres: [], coming: [] };
+      var next = {}, prev = S.rowPins || window.RS_ROWS || {}, was = {};
+      ROW_KEYS.forEach(function (k) { next[k] = ids(d[k]); was[k] = ids(prev[k]); });
       S.rowPins = next;
-      if (JSON.stringify(next) !== JSON.stringify({ theatres: prev.theatres || [], coming: prev.coming || [] }) && /^(home|browse|title)$/.test(S.route)) render();
+      if (JSON.stringify(next) !== JSON.stringify(was) && /^(home|browse|title|vids)$/.test(S.route)) render();
     }, function () {});
     db.doc('settings/popular').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {};
