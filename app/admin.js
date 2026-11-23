@@ -797,6 +797,28 @@ window.ReelAdmin = function (env) {
       img.src = 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg';
     });
   }
+  // Larger preview of a video's thumbnail: the HD one when YouTube has it, else the small one, with its size.
+  function thumbPreview(id, item) {
+    if (!id) { setStatus('Add the YouTube link first.'); return; }
+    var old = document.getElementById('thumbPrev'); if (old) old.remove();
+    var cap = h('div', { class: 'tp-cap', text: 'Checking the thumbnail…' });
+    var img = h('img', { alt: 'Thumbnail of ' + (item.title || 'this video'), src: 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg' });
+    var close = function () { box.remove(); document.removeEventListener('keydown', onKey); };
+    var onKey = function (e) { if (e.key === 'Escape') close(); };
+    img.addEventListener('load', function () {
+      if (img.naturalWidth <= 200 && img.src.indexOf('maxres') !== -1) { img.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; return; }
+      var hd = img.src.indexOf('maxres') !== -1;
+      cap.textContent = (item.title || 'Video') + ' · ' + (hd ? 'HD thumbnail, ' : 'Small thumbnail only, ') + img.naturalWidth + '×' + img.naturalHeight + (hd ? '' : ' (the banner uses the banner image instead)');
+    });
+    img.addEventListener('error', function () { if (img.src.indexOf('maxres') !== -1) img.src = 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg'; else cap.textContent = 'Couldn’t load this thumbnail. Check the YouTube link.'; });
+    var box = h('div', { id: 'thumbPrev', class: 'tp-ov', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Thumbnail preview', on: { click: function (e) { if (e.target === box) close(); } } }, [
+      h('div', { class: 'tp-in' }, [img, h('div', { class: 'tp-bar' }, [cap,
+        h('a', { class: 'btn small', href: 'https://www.youtube.com/watch?v=' + id, target: '_blank', rel: 'noopener', text: 'Open on YouTube' }),
+        h('button', { type: 'button', class: 'btn small', text: 'Close', on: { click: close } })])])
+    ]);
+    document.body.appendChild(box); document.addEventListener('keydown', onKey);
+    box.querySelector('button').focus();
+  }
   function fillThumbs(videos) {
     return Promise.all((videos || []).map(function (x) {
       var id = x && ytIdOf(x.url); if (!id) { if (x) { delete x.thumbUrl; delete x.thumbHd; } return null; }
@@ -1748,7 +1770,9 @@ window.ReelAdmin = function (env) {
           on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
         if (key === 'videos') {
-          var vid0 = ytIdOf(item.url), prev = h('span', { class: 'vthumb' + (item.thumbHd ? ' hd' : ''), title: item.thumbUrl ? (item.thumbHd ? 'HD thumbnail' : 'Small thumbnail only') : '', style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '', 'aria-hidden': 'true' });
+          var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
+            title: 'Click for a larger preview' + (item.thumbUrl ? (item.thumbHd ? ' (HD)' : ' (small only)') : ''), style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '',
+            on: { click: function () { var u = rows.querySelector('#videos' + i + 'url'); thumbPreview(ytIdOf(u ? u.value : item.url), item); } } });
           cells.unshift(prev);
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
