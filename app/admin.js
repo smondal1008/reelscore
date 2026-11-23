@@ -1156,7 +1156,7 @@ window.ReelAdmin = function (env) {
     var errEl = h('span', { class: 'err', hidden: true });
     var fileIn = h('input', { type: 'file', accept: 'video/mp4,video/webm', class: 'sr', id: 'file_trailer', tabindex: '-1' });
     var url = safeUrl(draft.trailerFileUrl);
-    var box = h('div', { class: 'drop banner' + (url ? ' has' : ''), style: 'padding:0;overflow:hidden' });
+    var box = h('div', { class: 'drop banner clip' + (url ? ' has' : ''), style: 'padding:0;overflow:hidden' });
     if (url) {
       var vid = h('video', { src: url, controls: true, playsinline: true, preload: 'metadata', style: 'width:100%;height:100%;object-fit:cover;background:#000' });
       vid.setAttribute('aria-label', 'Trailer clip preview');
@@ -1190,7 +1190,6 @@ window.ReelAdmin = function (env) {
       box.addEventListener('drop', function (e) { e.preventDefault(); box.classList.remove('over'); handle(e.dataTransfer.files[0]); });
     }
     return h('div', { class: 'field' }, [
-      h('span', { class: 'l' }, ['Trailer clip for the home banner', h('span', { class: 'note', text: '(optional)' })]),
       box, h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [pick, remove]), fileIn, errEl,
       h('span', { class: 'note', text: 'YouTube links can’t play inside the page, so upload the clip here to have ▶ Trailer play in the banner. Without a clip, ▶ Trailer opens the YouTube link instead.' })
     ]);
@@ -1426,14 +1425,15 @@ window.ReelAdmin = function (env) {
 
     // images
     main.appendChild(h('section', { class: 'card' }, [
-      h('h2', { text: 'Images & trailer clip' }),
+      h('h2', { text: 'Images' }),
       h('div', { class: 'images' }, [imageSlot('poster'), imageSlot('banner')]),
-      videoSlot(),
       h('div', { class: 'grid', style: 'margin-top:12px' }, [
         field('Poster source & permission', 'posterSource', { placeholder: 'e.g. Press kit from Yash Raj Films, OK by email 21 Nov 2026', note: 'Who supplied the image and how you have permission. Kept private, never shown on the site.' })
       ]),
       h('div', { class: 'note', text: 'Only upload images you have the rights to use: press-kit art sent or approved by the producer or distributor, or an image under a licence that allows it (TVmaze CC BY-SA images are credited automatically). Do not copy posters from Wikipedia, IMDb or TMDB.' })
     ]));
+
+    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
 
     // basics
     var tvEd = draft.section === 'TV shows';
@@ -1480,7 +1480,9 @@ window.ReelAdmin = function (env) {
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
-    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+
+    // home banner clip: optional, so it comes last
+    main.appendChild(h('section', { class: 'card' }, [h('h2', {}, ['Trailer clip for the home banner ', h('span', { class: 'note', text: '(optional)' })]), videoSlot()]));
 
     // danger zone
     var del = h('section', { class: 'card' }, [
