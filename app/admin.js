@@ -10,6 +10,8 @@ window.ReelAdmin = function (env) {
 
   var db = null, assets = null, canWrite = true, canUpload = false;
   var movies = [];          // [{id, data}]
+  var bkRefresh = null; // relabels the partner switcher as names and links are edited
+  var bkTab = { id: null, i: 0 }; // which booking partner the Buy tickets switcher shows
   var linksOpenFor = null;  // the title whose folded Buy tickets card was opened
   var currentId = null;
   var draft = null;         // working copy of current movie
@@ -1253,7 +1255,7 @@ window.ReelAdmin = function (env) {
     var mp = pi ? morePartners()[pi - 1] : null, urls;
     if (pi) { var src = mp.urls || {}; urls = {}; Object.keys(src).forEach(function (c) { var u = String(src[c] || '').trim(); if (u) urls[c] = u; }); mp.urls = urls; }
     else urls = draft.bookingUrls = bookUrls(draft);
-    var sync = function () { if (!pi) draft.bookingUrl = urls.Bengaluru || ''; touch(); };
+    var sync = function () { if (!pi) draft.bookingUrl = urls.Bengaluru || ''; touch(); if (bkRefresh) bkRefresh(); };
     var rows = h('div', { class: 'cityurls' });
     var idOf = function (c) { return bkId(pi, c); };
     var row = function (city, removable) {
@@ -1301,9 +1303,9 @@ window.ReelAdmin = function (env) {
     var box = h('input', { class: 'in', type: 'text', placeholder: 'Type the booking platform’s name', hidden: true, disabled: !canWrite });
     sel.addEventListener('change', function () {
       if (sel.value === '__new__') { box.hidden = false; box.value = ''; box.focus(); return; }
-      box.hidden = true; set(sel.value); touch();
+      box.hidden = true; set(sel.value); touch(); if (bkRefresh) bkRefresh();
     });
-    box.addEventListener('input', function () { set(box.value.trim()); touch(); });
+    box.addEventListener('input', function () { set(box.value.trim()); touch(); if (bkRefresh) bkRefresh(); });
     return h('div', { class: 'field' }, [h('label', { class: 'l', for: fid }, ['Ticket booking platform']), sel, box,
       h('span', { class: 'note', text: 'Names the Book tickets button, e.g. “Book on BookMyShow”.' })]);
   }
@@ -1707,29 +1709,40 @@ window.ReelAdmin = function (env) {
 
     // Buy tickets (films only): booking partner and a link per city. Folded for Older releases and On OTT; a tap opens it.
     if (!tvEd) {
-      var mps = morePartners(), multi = mps.length > 0;
-      var partnerBlock = function (pi) {
-        var mp = pi ? mps[pi - 1] : null, nm = (pi ? mp.platform : draft.bookingPlatform) || '';
-        var tools = [];
-        if (multi && pi) {
-          tools.push(h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Make partner 1', title: 'Show this partner first', on: { click: function () {
-            var first = { platform: draft.bookingPlatform || '', urls: bookUrls(draft) };
-            var cur = morePartners()[pi - 1] || {};
-            draft.bookingPlatform = cur.platform || ''; draft.bookingUrls = cur.urls || {}; draft.bookingUrl = draft.bookingUrls.Bengaluru || '';
-            morePartners()[pi - 1] = first; touch(); renderEditor();
-          } } }));
-          tools.push(h('button', { type: 'button', class: 'btn small danger', disabled: !canWrite, text: 'Remove partner', on: { click: function () {
-            morePartners().splice(pi - 1, 1); touch(); renderEditor();
-          } } }));
-        }
-        return h('div', { class: 'bkpartner' }, [
-          multi ? h('div', { class: 'bkpartner-h' }, [h('h3', { text: 'Booking partner ' + (pi + 1) + (nm ? ' · ' + nm : '') })].concat(tools)) : null,
-          h('div', { class: 'grid' }, [bookingField(pi), bookingUrlsField(pi)])]);
-      };
-      var gL = h('div', {}, [partnerBlock(0)].concat(mps.map(function (x, i) { return partnerBlock(i + 1); }), [
-        mps.length + 1 < MAX_PARTNERS ? h('button', { type: 'button', class: 'btn', style: 'margin-top:14px', disabled: !canWrite, text: '+ Add another booking partner',
-          on: { click: function () { var all = morePartners(); all.push({ platform: '', urls: {} }); touch(); linksOpenFor = currentId; renderEditor(); setTimeout(function () { var f = $('f_bookingPlatform_' + all.length); if (f) f.focus(); }, 0); } } })
-          : h('div', { class: 'note', style: 'margin-top:12px', text: 'Up to ' + MAX_PARTNERS + ' booking partners per title.' })]));
+      var mps = morePartners(), total = mps.length + 1;
+      if (bkTab.id !== currentId || bkTab.i >= total) bkTab = { id: currentId, i: 0 };
+      var pi = bkTab.i, mp = pi ? mps[pi - 1] : null;
+      var pname = function (i) { return (i ? (mps[i - 1] || {}).platform : draft.bookingPlatform) || 'Partner ' + (i + 1); };
+      var pcount = function (i) { var u = i ? ((mps[i - 1] || {}).urls || {}) : bookUrls(draft); return Object.keys(u).filter(function (c) { return String(u[c] || '').trim(); }).length; };
+      // Switcher: one chip per partner (with how many cities it has links for), then + Add partner.
+      var sw = h('div', { class: 'chips bkswitch', role: 'tablist', 'aria-label': 'Booking partners' });
+      var plabel = function (i) { var n = pcount(i); return pname(i) + (n ? ' · ' + n + (n === 1 ? ' city' : ' cities') : ' · no links'); };
+      bkRefresh = function () { sw.querySelectorAll('[role=tab]').forEach(function (b, i) { b.textContent = plabel(i); }); };
+      for (var ti = 0; ti < total; ti++) (function (i) {
+        sw.appendChild(h('button', { type: 'button', class: 'chip', role: 'tab', 'aria-selected': String(i === pi), 'aria-controls': 'bkPanel',
+          text: plabel(i),
+          on: { click: function () { bkTab = { id: currentId, i: i }; linksOpenFor = currentId; renderEditor(); } } }));
+      })(ti);
+      if (total < MAX_PARTNERS) sw.appendChild(h('button', { type: 'button', class: 'chip bkadd', disabled: !canWrite, text: '+ Add partner',
+        on: { click: function () { var all = morePartners(); all.push({ platform: '', urls: {} }); touch(); bkTab = { id: currentId, i: all.length }; linksOpenFor = currentId; renderEditor(); setTimeout(function () { var f = $('f_bookingPlatform_' + all.length); if (f) f.focus(); }, 0); } } }));
+      var tools = [];
+      if (pi) {
+        tools.push(h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Make partner 1', title: 'Show this partner first on the site', on: { click: function () {
+          var first = { platform: draft.bookingPlatform || '', urls: bookUrls(draft) };
+          var cur = morePartners()[pi - 1] || {};
+          draft.bookingPlatform = cur.platform || ''; draft.bookingUrls = cur.urls || {}; draft.bookingUrl = draft.bookingUrls.Bengaluru || '';
+          morePartners()[pi - 1] = first; touch(); bkTab = { id: currentId, i: 0 }; renderEditor();
+        } } }));
+        tools.push(h('button', { type: 'button', class: 'btn small danger', disabled: !canWrite, text: 'Remove partner', on: { click: function () {
+          morePartners().splice(pi - 1, 1); touch(); bkTab = { id: currentId, i: 0 }; renderEditor();
+        } } }));
+      }
+      var gL = h('div', {}, [
+        sw,
+        h('div', { class: 'bkpartner', id: 'bkPanel', role: 'tabpanel' }, [
+          total > 1 || tools.length ? h('div', { class: 'bkpartner-h' }, [h('h3', { text: 'Booking partner ' + (pi + 1) + (pi === 0 && total > 1 ? ' · shown first' : '') })].concat(tools)) : null,
+          h('div', { class: 'grid' }, [bookingField(pi), bookingUrlsField(pi)])]),
+        total >= MAX_PARTNERS ? h('div', { class: 'note', style: 'margin-top:12px', text: 'Up to ' + MAX_PARTNERS + ' booking partners per title.' }) : null]);
       var foldable = draft.section === 'Older releases' || draft.section === 'On OTT';
       var fold = foldable && linksOpenFor !== currentId;
       gL.hidden = fold;
@@ -1814,7 +1827,7 @@ window.ReelAdmin = function (env) {
     if (!draft.title.trim()) { setStatus('Add a title before saving.'); return Promise.resolve(false); }
     if (draft.bookingUrls) {
       var bu = draft.bookingUrls, badCity = Object.keys(bu).filter(function (c) { bu[c] = String(bu[c] || '').trim(); if (!bu[c]) delete bu[c]; return bu[c] && !/^https:\/\/[^\s]+\.[^\s]+/.test(bu[c]); })[0];
-      if (badCity) { setStatus('The ' + badCity + ' booking URL must be a full link starting with https://'); var bc = $('f_bk_' + badCity.toLowerCase().replace(/[^a-z0-9]+/g, '-')); if (bc) bc.focus(); return Promise.resolve(false); }
+      if (badCity) { setStatus('The ' + badCity + ' booking URL must be a full link starting with https://'); if (bkTab.i !== 0) { bkTab = { id: currentId, i: 0 }; linksOpenFor = currentId; renderEditor(); } var bc = $('f_bk_' + badCity.toLowerCase().replace(/[^a-z0-9]+/g, '-')); if (bc) bc.focus(); return Promise.resolve(false); }
       draft.bookingUrl = bu.Bengaluru || '';
     }
     if (Array.isArray(draft.moreBooking)) {
@@ -1825,7 +1838,7 @@ window.ReelAdmin = function (env) {
         Object.keys(p.urls).forEach(function (c) { var v = String(p.urls[c] || '').trim(); if (v) p.urls[c] = v; else delete p.urls[c]; });
       });
       draft.moreBooking.forEach(function (p, i) { if (!p) return; if (badP) return; Object.keys(p.urls).forEach(function (c) { if (!badP && !/^https:\/\/[^\s]+\.[^\s]+/.test(p.urls[c])) badP = [i + 1, c, p.platform]; }); });
-      if (badP) { setStatus('The ' + badP[1] + ' booking URL' + (badP[2] ? ' for ' + badP[2] : '') + ' must be a full link starting with https://'); var bp2 = $(bkId(badP[0], badP[1])); if (bp2) bp2.focus(); return Promise.resolve(false); }
+      if (badP) { setStatus('The ' + badP[1] + ' booking URL' + (badP[2] ? ' for ' + badP[2] : '') + ' must be a full link starting with https://'); if (bkTab.i !== badP[0]) { bkTab = { id: currentId, i: badP[0] }; linksOpenFor = currentId; renderEditor(); } var bp2 = $(bkId(badP[0], badP[1])); if (bp2) bp2.focus(); return Promise.resolve(false); }
       draft.moreBooking = draft.moreBooking.filter(function (p) { return p && (p.platform || Object.keys(p.urls).length); });
     }
     var badUrl = [['platformUrl', 'Streaming platform URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];

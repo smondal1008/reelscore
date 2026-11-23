@@ -199,6 +199,8 @@
   .citygrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 14px 0; }
   .citygrid .btn { justify-content: center; text-decoration: none; }
   .citygrid.partners { grid-template-columns: 1fr; }
+  .bkswitch { margin: 4px 0 16px; }
+  .bkswitch .bkadd { border-style: dashed; }
   .bkpartner + .bkpartner { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
   .bkpartner-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
   .bkpartner-h h3 { margin: 0; font-size: 15px; flex: 1; }
