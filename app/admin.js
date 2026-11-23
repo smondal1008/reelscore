@@ -15,7 +15,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', query = '', langF = '', yearF = '', seoF = '', statusF = 'published', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
+  var filter = 'All', missF = [], query = '', langF = '', yearF = '', seoF = '', statusF = 'published', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -685,9 +685,10 @@ window.ReelAdmin = function (env) {
     if (!location.search) return;
     query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || ''; seoF = q.get('seo') || '';
     statusF = STATUS_OPTS[q.get('status')] ? q.get('status') : 'published';
-    var sec = q.get('section'); filter = 'All';
+    var sec = q.get('section'); filter = 'All'; missF = [];
+    (q.get('missing') || '').split(',').forEach(function (x) { Object.keys(MISS_SLUG).forEach(function (k) { if (MISS_SLUG[k] === x && missF.indexOf(k) === -1) missF.push(k); }); });
     if (sec === 'unpublished') statusF = 'unpublished'; // old link to the removed Unpublished chip
-    Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) filter = k; });
+    Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) { if (isMiss(k)) { if (missF.indexOf(k) === -1) missF.push(k); } else filter = k; } }); // old ?section=missing-… links
     sortKey = SORTS[q.get('sort')] ? q.get('sort') : 'release';
     sortDir = q.get('dir') === 'asc' ? 'asc' : (q.get('dir') === 'desc' ? 'desc' : defaultDir(sortKey));
     pageNo = Math.max(1, parseInt(q.get('page'), 10) || 1);
@@ -698,6 +699,7 @@ window.ReelAdmin = function (env) {
     var q = new URLSearchParams();
     if (query.trim()) q.set('q', query.trim());
     if (filter !== 'All') q.set('section', SEC_SLUG[filter]);
+    if (missF.length) q.set('missing', FILTERS.filter(function (f) { return missF.indexOf(f) !== -1; }).map(function (f) { return MISS_SLUG[f]; }).join(','));
     if (langF) q.set('lang', langF);
     if (yearF) q.set('year', yearF);
     if (seoF) q.set('seo', seoF);
@@ -707,14 +709,32 @@ window.ReelAdmin = function (env) {
     var url = '/admin/titles' + (q.toString() ? '?' + q.toString() : '');
     if (location.pathname + location.search !== url) history.replaceState(null, '', url);
   }
+  // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
+  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing synopsis': 'synopsis' };
+  function isMiss(f) { return !!MISS_SLUG[f]; }
+  function chipOk(d, id, sec, miss) { sec = sec || filter; miss = miss || missF; return matchSection(d, sec, id) && miss.every(function (g) { return matchSection(d, g, id); }); }
   function setList(fn) { fn(); renderList(); }
   function renderFilters() {
     var box = $('filters'); box.innerHTML = '';
     var base = movies.filter(function (m) { return passQL(m.data, m.id); });
-    FILTERS.forEach(function (f) {
-      var n = f === 'All' ? base.length : base.filter(function (m) { return matchSection(m.data, f, m.id); }).length;
-      box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(filter === f), text: f + ' · ' + n,
-        on: { click: function () { setList(function () { filter = f; pageNo = 1; }); } } }));
+    FILTERS.forEach(function (f, i) {
+      var on, n, click;
+      if (f === 'All') {
+        on = filter === 'All' && !missF.length; n = base.length;
+        click = function () { filter = 'All'; missF = []; };
+      } else if (isMiss(f)) {
+        on = missF.indexOf(f) !== -1;
+        n = base.filter(function (m) { return chipOk(m.data, m.id, filter, on ? missF : missF.concat(f)); }).length;
+        click = function () { missF = on ? missF.filter(function (x) { return x !== f; }) : missF.concat(f); };
+      } else {
+        on = filter === f;
+        n = base.filter(function (m) { return chipOk(m.data, m.id, f); }).length;
+        click = function () { filter = on ? 'All' : f; };
+      }
+      if (isMiss(f) && !isMiss(FILTERS[i - 1])) box.appendChild(h('span', { class: 'chipsep', 'aria-hidden': 'true' }));
+      box.appendChild(h('button', { type: 'button', class: 'chip' + (isMiss(f) ? ' gap' : ''), 'aria-pressed': String(on), text: (isMiss(f) && on ? '✓ ' : '') + f + ' · ' + n,
+        title: isMiss(f) ? 'Combine with a section and other Missing filters' : null,
+        on: { click: function () { setList(function () { click(); pageNo = 1; }); } } }));
     });
     var ls = $('langSel'), counts = {};
     movies.forEach(function (m) { if (pubOk(m.data, statusF)) langsOf(m.data).forEach(function (l) { counts[l] = (counts[l] || 0) + 1; }); });
@@ -732,12 +752,12 @@ window.ReelAdmin = function (env) {
     years.forEach(function (y) { ys.appendChild(h('option', { value: y, text: y + ' (' + yc[y] + ')', selected: y === yearF })); });
     if (yc.none) ys.appendChild(h('option', { value: 'none', text: 'No release date (' + yc.none + ')', selected: yearF === 'none' }));
     var es = $('seoSel'), ec = {};
-    movies.forEach(function (m) { if (matchSection(m.data, filter, m.id) && passQL(m.data, m.id, true)) { var t = seoTier(m.data, m.id); ec[t] = (ec[t] || 0) + 1; } });
+    movies.forEach(function (m) { if (chipOk(m.data, m.id) && passQL(m.data, m.id, true)) { var t = seoTier(m.data, m.id); ec[t] = (ec[t] || 0) + 1; } });
     es.innerHTML = '';
     es.appendChild(h('option', { value: '', text: 'All SEO statuses' }));
     SEO_TIERS.forEach(function (t) { es.appendChild(h('option', { value: t[0], text: t[1] + ' (' + (ec[t[0]] || 0) + ')', selected: t[0] === seoF })); });
     var st = $('statusSel'), sc = { published: 0, unpublished: 0, all: 0 };
-    movies.forEach(function (m) { if (matchSection(m.data, filter, m.id) && passQL(m.data, m.id, false, true)) { sc.all++; sc[m.data.published === false ? 'unpublished' : 'published']++; } });
+    movies.forEach(function (m) { if (chipOk(m.data, m.id) && passQL(m.data, m.id, false, true)) { sc.all++; sc[m.data.published === false ? 'unpublished' : 'published']++; } });
     st.innerHTML = '';
     Object.keys(STATUS_OPTS).forEach(function (k) { st.appendChild(h('option', { value: k, text: STATUS_OPTS[k] + ' (' + sc[k] + ')', selected: k === statusF })); });
     var ss = $('sortSel'); ss.innerHTML = '';
@@ -768,7 +788,7 @@ window.ReelAdmin = function (env) {
   }
   function visible() {
     var secIdx = {}; SECTIONS.forEach(function (x, i) { secIdx[x] = i; });
-    var list = movies.filter(function (m) { return matchSection(m.data, filter, m.id) && passQL(m.data, m.id); });
+    var list = movies.filter(function (m) { return chipOk(m.data, m.id) && passQL(m.data, m.id); });
     var dir = sortDir === 'asc' ? 1 : -1;
     function val(m) {
       var d = m.data;
@@ -800,7 +820,7 @@ window.ReelAdmin = function (env) {
       return [m.data.title || '', /^\d{4}$/.test(y) ? y : '', m.id];
     }));
     var csv = '\ufeff' + rows.map(function (r) { return r.map(q).join(','); }).join('\r\n') + '\r\n';
-    var parts = [filter !== 'All' ? SEC_SLUG[filter] : 'all-titles', statusF !== 'published' ? statusF : '', langF, yearF, seoF, query ? 'search' : ''].filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
+    var parts = [filter !== 'All' ? SEC_SLUG[filter] : (missF.length ? '' : 'all-titles')].concat(missF.map(function (f) { return SEC_SLUG[f]; }), [statusF !== 'published' ? statusF : '', langF, yearF, seoF, query ? 'search' : '']).filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
     var a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: 'reelscore-' + parts.join('-') + '-' + new Date().toISOString().slice(0, 10) + '.csv' });
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     setStatus('Downloaded ' + list.length + ' title' + (list.length === 1 ? '' : 's') + '.');
@@ -820,7 +840,7 @@ window.ReelAdmin = function (env) {
     sum.textContent = !movies.length ? '' : total ? 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + total + (total !== movies.length ? ' (filtered from ' + movies.length + ' titles)' : '') : '';
     $('list').parentNode.hidden = !total;
     if (statusF === 'published' && query.trim()) {
-      var hid = movies.filter(function (m) { return m.data.published === false && matchSection(m.data, filter, m.id) && passQL(m.data, m.id, false, true); }).length;
+      var hid = movies.filter(function (m) { return m.data.published === false && chipOk(m.data, m.id) && passQL(m.data, m.id, false, true); }).length;
       if (hid) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', text: hid + ' unpublished match' + (hid === 1 ? '' : 'es') + ' — show them',
         on: { click: function () { setList(function () { statusF = 'all'; pageNo = 1; }); } } }));
     }
@@ -828,7 +848,7 @@ window.ReelAdmin = function (env) {
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
-      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; pageNo = 1; }); } } })]));
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; pageNo = 1; }); } } })]));
       return;
     }
     function th(key, label, cls) {
@@ -850,7 +870,7 @@ window.ReelAdmin = function (env) {
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
           d.published === false ? h('span', { class: 'unpub', title: 'Visitors can’t see this title', text: 'Not published' }) : null,
           h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m)].filter(Boolean).join(' · ') }),
-          filter === 'Missing photos' ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
+          missF.indexOf('Missing photos') !== -1 ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
         h('td', { class: 'c-sec' }, [h('span', { class: 'sec', text: d.section || '—' })]),
         h('td', { class: 'nw', text: fmtDate(d.releaseDate) }),
