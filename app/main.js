@@ -439,7 +439,7 @@
       case 'year': return 'Back to ' + f.param + ' movies';
       case 'vids': return 'Back to ' + (VID_PAGES[f.param] ? VID_PAGES[f.param].h : 'videos');
       case 'about': return 'Back to About';
-      case 'title': case 'person': return nm() ? 'Back to ' + nm() : 'Back';
+      case 'title': case 'person': case 'video': return nm() ? 'Back to ' + nm() : 'Back';
       default: return 'Back';
     }
   }
@@ -452,6 +452,7 @@
     var path = decodeURIComponent(location.pathname).replace(/\/+$/, '') || '/';
     var mm;
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
+    else if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)(\/(?:trailer|song|episode|video)(?:\/[a-z0-9-]+)?)$/i))) { S.route = 'video'; S.param = mm[1].toLowerCase(); S.vpath = mm[2].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
@@ -488,7 +489,7 @@
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
     else if (S.route === 'about') document.title = 'About Reelscore & How Scores Work';
-    else if (S.route !== 'title' && S.route !== 'person') document.title = 'Reelscore — Reviews for Indian movies and series';
+    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
     S.prevRoute = S.route;
@@ -496,7 +497,7 @@
     else if (S.route === 'title' && !from) S.titleFrom = null;
     S.lastPath = location.pathname; S.lastSearch = location.search;
     if (S.route === 'notfound') setNoindex(true);
-    else if (S.route !== 'title' && S.route !== 'person') setNoindex(false);
+    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin') setCanonical(null);
     else if (S.route === 'browse' || S.route === 'people' || S.route === 'genre' || S.route === 'year') setCanonical(listCanonical());
     else if (S.route === 'notfound') setCanonical(null);
@@ -596,6 +597,7 @@
     else if (S.route === 'genre') drawGenre();
     else if (S.route === 'year') drawYear();
     else if (S.route === 'vids') drawVids();
+    else if (S.route === 'video') drawVideo();
     else if (S.route === 'notfound') drawNotFound();
     else if (S.route === 'about') drawAbout();
     if (Object.keys(keep).length) {
@@ -880,10 +882,12 @@
       go(href);
     };
     var more = h('a', { class: 'btn small tov-go', href: movieUrl(m), text: isTv(m) ? 'Go to show page' : 'Go to movie page', on: { click: toPage } });
+    var vu = videoUrl(m, x.yt), vp = vu && videoPaths(m.data).filter(function (p) { return p.yt === x.yt; })[0];
+    var shareB = vu ? h('button', { type: 'button', class: 'btn small tov-go', text: 'Share', on: { click: function () { shareVideo(m, vp, vu); } } }) : null;
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [
         h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
-        h('div', { class: 'tov-acts' }, [more, close])
+        h('div', { class: 'tov-acts' }, [shareB, more, close])
       ]),
       h('div', { class: 'tov-v' }, [media])
     ]);
@@ -1009,7 +1013,7 @@
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
     // The thumbnail plays the trailer in the overlay; the button below goes to the title's page.
     return h('div', { class: 'tcard' }, [
-      h('a', { class: 'tplay', href: movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
+      h('a', { class: 'tplay', href: videoUrl(m, p.x.yt) || movieUrl(m), 'aria-label': 'Play the ' + d.title + ' ' + p.x.kind.toLowerCase(), on: { click: function (e) {
         if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
         e.preventDefault(); e.stopPropagation();
         openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
@@ -1045,7 +1049,7 @@
   function songCard(p, i, arr) {
     var m = p.m, d = m.data;
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
-    return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
+    return h('a', { class: 'tcard', href: videoUrl(m, p.x.yt) || movieUrl(m), 'aria-label': 'Play ' + p.x.title + ' from ' + d.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
       openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
@@ -1113,7 +1117,7 @@
   function tvPromoCard(p, i, arr) {
     var m = p.m, d = m.data;
     var th = p.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + p.x.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
-    return h('a', { class: 'tcard', href: movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
+    return h('a', { class: 'tcard', href: videoUrl(m, p.x.yt) || movieUrl(m), 'aria-label': 'Play ' + d.title + ': ' + p.x.title, on: { click: function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
       e.preventDefault(); e.stopPropagation();
       openTrailerOverlay(m, p.x, e.currentTarget, arr ? { list: arr, i: i } : null);
@@ -1621,6 +1625,89 @@
     });
     return out;
   }
+  // ---------- shareable video pages: /movie/<slug>/trailer, /trailer/<name>, /song/<name>, /episode…, /video… ----------
+  // One address per YouTube video, in the order saved. The first trailer (or episode, or other video) is just /trailer;
+  // songs always carry their name. Same rule as scripts/build.mjs videoPaths, which pre-renders each page.
+  var VSEG = { trailers: 'trailer', songs: 'song', episodes: 'episode', more: 'video' };
+  function videoPaths(d) {
+    var out = [], used = {};
+    (d.videos || []).forEach(function (x, i) {
+      var id = ytId(safeUrl(x.url)); if (!id) return;
+      var seg = VSEG[vidCat(x.kind)], first = !used[seg];
+      var p = '/' + seg + (seg === 'song' || !first ? '/' + (slugify(x.title || '').slice(0, 60).replace(/-+$/, '') || seg) : '');
+      if (used[p]) { var n = 2; while (used[p + '-' + n]) n++; p += '-' + n; }
+      used[seg] = 1; used[p] = 1; out.push({ i: i, yt: id, seg: seg, path: p, x: x });
+    });
+    return out;
+  }
+  function videoUrl(m, yt) { if (!yt) return ''; var v = videoPaths(m.data).filter(function (p) { return p.yt === yt; })[0]; return v ? movieUrl(m) + v.path : ''; }
+  function videoName(m, v) { return v.seg === 'song' ? (v.x.title || 'Song') : m.data.title + ' – ' + (v.x.title || v.x.kind || 'Video'); }
+  // Same as the pre-rendered page's <title> (scripts/build.mjs videoTitleTag).
+  function videoTitleTag(m, v) {
+    var d = m.data, y = String(d.releaseDate || '').slice(0, 4), yy = y && !isTv(m) ? ' (' + y + ')' : '';
+    var a = v.seg === 'song' ? (v.x.title || 'Song') + ' – ' + d.title + yy + ' Song | Reelscore' : d.title + yy + ' – ' + (v.x.title || v.x.kind || 'Video') + ' | Reelscore';
+    return a.length <= 60 ? a : a.replace(/ \| Reelscore$/, '');
+  }
+  function shareVideo(m, v, url) {
+    var full = location.origin + url, text = videoName(m, v) + (v.seg === 'song' ? ' · ' + m.data.title : '') + ' on Reelscore';
+    if (navigator.share) { try { navigator.share({ title: text, text: text, url: full }).catch(function () {}); return; } catch (e) {} }
+    copyText(full, 'Link copied');
+  }
+  function drawVideo() {
+    var v = $('view-video');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    var key = S.param + S.vpath;
+    if (S.vpKey === key && v.querySelector('.vstage iframe')) return; // don't interrupt a playing video on a data refresh
+    S.vpKey = key; v.innerHTML = '';
+    var w = h('section', { class: 'wrapx vpage', style: 'padding-top:24px', 'aria-label': 'Video' }); v.appendChild(w);
+    if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+    var m = findMovie(S.param), all = m ? videoPaths(m.data) : [], cur = all.filter(function (p) { return p.path === S.vpath; })[0];
+    if (!m || !cur) {
+      document.title = 'Video not found | Reelscore'; setCanonical(null); setNoindex(true);
+      w.appendChild(h('div', { class: 'empty' }, ['This video isn’t on Reelscore any more. ', m ? h('a', { href: movieUrl(m), text: 'See ' + m.data.title }) : h('a', { href: '/trailers', text: 'See the latest trailers' })]));
+      return;
+    }
+    var d = m.data, here = movieUrl(m) + cur.path, x = cur.x, tv = isTv(m);
+    if (location.pathname !== here) history.replaceState(null, '', here);
+    document.title = videoTitleTag(m, cur); setCanonical(here); setNoindex(false);
+    var kindName = cur.seg === 'song' ? 'Song' : (x.kind || 'Video');
+    w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb', style: 'margin-bottom:12px' }, [h('a', { href: '/', text: 'Home' }), ' › ',
+      h('a', { href: tv ? '/browse/tv-shows' : '/browse', text: tv ? 'TV shows' : 'Movies' }), ' › ', h('a', { href: movieUrl(m), text: d.title }), ' › ', kindName]));
+    var stage = h('div', { class: 'vstage', style: 'background-image:url("https://i.ytimg.com/vi/' + cur.yt + '/hqdefault.jpg")' });
+    var play = function () {
+      stage.innerHTML = ''; stage.classList.add('on');
+      stage.appendChild(h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + cur.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: videoName(m, cur),
+        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' }));
+    };
+    stage.appendChild(h('span', { class: 'kb', text: kindName.toUpperCase() }));
+    stage.appendChild(h('button', { type: 'button', class: 'vplay', 'aria-label': 'Play ' + videoName(m, cur), on: { click: play } }, [h('span', { 'aria-hidden': 'true', text: '▶' })]));
+    w.appendChild(stage);
+    var y = String(d.releaseDate || '').slice(0, 4);
+    w.appendChild(h('div', { class: 'vhead' }, [
+      h('div', { style: 'min-width:0' }, [
+        h('h1', { class: 'display', text: videoName(m, cur) }),
+        h('p', { class: 'note', text: [cur.seg === 'song' ? 'Song from ' + d.title : kindName, langOf(d), tv ? (d.platform || 'TV series') : (released(m) ? y : d.releaseDate ? 'Releases ' + fmtDate(d.releaseDate) : y)].filter(Boolean).join(' · ') })
+      ]),
+      h('div', { class: 'vacts' }, [
+        h('button', { type: 'button', class: 'btn primary', text: navigator.share ? 'Share' : 'Copy link', on: { click: function () { shareVideo(m, cur, here); } } }),
+        h('a', { class: 'btn', href: 'https://wa.me/?text=' + encodeURIComponent(videoName(m, cur) + (cur.seg === 'song' ? ' · ' + d.title : '') + ' ' + location.origin + here), target: '_blank', rel: 'noopener', text: 'WhatsApp' }),
+        h('a', { class: 'btn ghost', href: movieUrl(m), text: tv ? 'About the show' : 'About the film' })
+      ])
+    ]));
+    var others = all.filter(function (p) { return p !== cur; });
+    if (others.length) {
+      w.appendChild(h('h2', { style: 'margin:32px 0 14px', text: 'More from ' + d.title }));
+      w.appendChild(h('div', { class: 'vgrid' }, others.map(function (p) {
+        return h('a', { class: 'tcard', href: movieUrl(m) + p.path }, [
+          h('span', { class: 'th' }, [h('img', { src: 'https://i.ytimg.com/vi/' + p.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }),
+            h('span', { class: 'kb', text: (p.seg === 'song' ? 'Song' : p.x.kind || 'Video').toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: p.x.title || p.x.kind }),
+          h('span', { class: 'note', text: d.title })
+        ]);
+      })));
+    }
+    w.appendChild(h('p', { class: 'note', style: 'margin-top:28px' }, ['More videos: ', h('a', { href: tv ? '/tv-promos' : '/trailers', text: tv ? 'TV promotionals' : 'Latest trailers' }), tv ? null : ' · ', tv ? null : h('a', { href: '/songs', text: 'Video songs' })]));
+  }
   function playVid(mid, i, scroll) {
     S.vsel = S.vsel || {}; S.vsel[mid] = i;
     S.vplay = { mid: mid, i: i }; S.vKeep = null; S.vIdle = null;
@@ -1680,6 +1767,7 @@
         h('div', { class: 'note', text: nextI >= 0 ? 'Next: ' + items[nextI].title + ' · ' + items[nextI].kind : x.kind })
       ]),
       h('div', { class: 'thx-c' }, [
+        videoUrl(m, x.yt) ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Share ' + x.title, text: 'Share', on: { click: function () { var u = videoUrl(m, x.yt); shareVideo(m, videoPaths(m.data).filter(function (p) { return p.yt === x.yt; })[0], u); } } }) : null,
         n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Previous video', text: '‹', on: { click: function () { stepVid(m, -1, playing); } } }) : null,
         n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Next video', text: '›', on: { click: function () { stepVid(m, 1, playing); } } }) : null,
       ])

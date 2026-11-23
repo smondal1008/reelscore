@@ -80,7 +80,8 @@ function main() {
       imgs: [...(pr || '').matchAll(/<img\b[^>]*>/gi)].map(m => m[0])
     });
   }
-  const kind = u => u === '/' ? 'home' : u.split('/')[1];
+  // /movie/<slug>/trailer, /tv/<slug>/song/<name>… are video pages, not title pages.
+  const kind = u => u === '/' ? 'home' : /^\/(movie|tv)\/[^/]+\/./.test(u) ? 'video' : u.split('/')[1];
   const content = [...pages.values()].filter(p => /^(movie|tv|person)$/.test(kind(p.url)));
   const sample = (list, n = 5) => list.slice(0, n).map(p => p.url || p);
 

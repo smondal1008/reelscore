@@ -89,6 +89,27 @@ function cld(u, w) {
   return m[1] + 'f_auto,q_auto,c_limit,w_' + (w || 800) + '/' + m[2];
 }
 const ytThumb = id => 'https://i.ytimg.com/vi/' + id + '/hqdefault.jpg';
+// Shareable video pages, one per YouTube video: /movie/<slug>/trailer, /trailer/<name>, /song/<name>, /episode…, /video…
+// The first trailer (or episode, or other video) is just /trailer; songs always carry their name. Same rule as app/main.js videoPaths.
+const VSEG = { trailers: 'trailer', songs: 'song', episodes: 'episode', more: 'video' };
+function videoPaths(d) {
+  const out = [], used = {};
+  (d.videos || []).forEach((x, i) => {
+    const id = ytId(safeUrl(x.url)); if (!id) return;
+    const seg = VSEG[vidCat(x.kind)], first = !used[seg];
+    let p = '/' + seg + (seg === 'song' || !first ? '/' + (slugify(x.title || '').slice(0, 60).replace(/-+$/, '') || seg) : '');
+    if (used[p]) { let n = 2; while (used[p + '-' + n]) n++; p += '-' + n; }
+    used[seg] = 1; used[p] = 1;
+    out.push({ i, yt: id, seg, path: p, title: x.title || x.kind || 'Video', kind: x.kind || 'Video', publishedAt: /^\d{4}-\d{2}-\d{2}/.test(x.publishedAt || '') ? x.publishedAt.slice(0, 10) : '' });
+  });
+  return out;
+}
+// Same as app/main.js videoTitleTag.
+function videoTitleTag(d, v, tv) {
+  const y = /^\d{4}/.test(d.releaseDate || '') ? String(d.releaseDate).slice(0, 4) : '', yy = y && !tv ? ' (' + y + ')' : '';
+  const a = v.seg === 'song' ? v.title + ' – ' + d.title + yy + ' Song | Reelscore' : d.title + yy + ' – ' + v.title + ' | Reelscore';
+  return a.length <= 60 ? a : a.replace(/ \| Reelscore$/, '');
+}
 function isoDuration(rt) {
   const s = String(rt || '').toLowerCase(); let h = 0, m = 0, x;
   if ((x = s.match(/(\d+)\s*h/))) h = +x[1];
@@ -441,7 +462,7 @@ async function main() {
   }
 
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
-  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0; const tierCount = {};
+  const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0, nVideoPages = 0; const tierCount = {};
 
   // ----- title pages -----
   for (const m of movies) {
@@ -486,8 +507,8 @@ async function main() {
       platform: d.platform, director: d.director, cast, verdicts: { pct: sc.pct, tot: sc.tot } })) + '</p>';
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
-    const vids = ytVideos(d);
-    if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vids.map(x => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + ' <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
+    const vids = ytVideos(d), vpaths = videoPaths(d);
+    if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vpaths.map(x => '<li><a href="' + url + x.path + '"><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + '</a> <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
     if (d.srcTvmaze) body += '<p class="note">Show details and image from <a href="' + esc(safeUrl(d.srcTvmaze) || 'https://www.tvmaze.com/') + '" rel="noopener">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>).</p>';
     else if (d.wikidata) body += '<p class="note">Film facts from <a href="https://www.wikidata.org/wiki/' + esc(d.wikidata) + '" rel="noopener">Wikidata</a> (CC0).</p>';
     // Same rule as the app's "More from Cast & Crew" row: titles sharing people with this one, top-billed cast weighing more.
@@ -523,15 +544,9 @@ async function main() {
       { '@type': 'ListItem', position: 2, name: section[0], item: SITE + section[1] },
       { '@type': 'ListItem', position: 3, name: d.title, item: SITE + url }] };
 
-    // VideoObject per YouTube video so trailers and songs can show in video results. uploadDate must be YouTube's own
-    // publish date (stored as publishedAt); a video without one gets no VideoObject rather than a made-up date.
-    const videoLd = vids.filter(x => x.publishedAt).slice(0, 20).map(x => ({ '@context': 'https://schema.org', '@type': 'VideoObject',
-      name: clip(d.title + ' – ' + x.title, 100), description: clip(x.kind + ' of ' + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + lang : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 300),
-      thumbnailUrl: ytThumb(x.yt), uploadDate: x.publishedAt, embedUrl: 'https://www.youtube.com/embed/' + x.yt, url: SITE + url,
-      inLanguage: lang || undefined }));
     // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
     const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs, ...videoLd], route: 'title', body, robots: thinTitle ? 'noindex,follow' : undefined }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
       const au = (tv ? '/tv/' : '/movie/') + alias;
@@ -541,6 +556,29 @@ async function main() {
     if (!thinTitle) sitemap.push({ loc: url, lastmod: pageDate(url, title + '\n' + description + '\n' + body), pri: '0.8' });
     else nThinTitles++;
     nTitles++;
+
+    // ----- one page per video, for sharing and video search: /movie/<slug>/trailer, /song/<name>… -----
+    // The VideoObject's uploadDate must be YouTube's own publish date (stored as publishedAt); without one, no VideoObject.
+    for (const v of vpaths) {
+      const vurl = url + v.path, song = v.seg === 'song', kindName = song ? 'Song' : v.kind;
+      const vname = song ? v.title : d.title + ' – ' + v.title, vtitle = videoTitleTag(d, v, tv);
+      const vdesc = clip((song ? v.title + ', a song from ' : (v.title.toLowerCase() === v.kind.toLowerCase() ? v.kind : v.title + ', ' + v.kind.toLowerCase()) + ' of ') + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + (/^[aeiou]/i.test(lang) ? 'an ' : 'a ') + lang + (tv ? ' series' : ' film') : '') + '. Watch it on Reelscore' + (sc.tot >= 3 ? ', where ' + sc.pct + '% of ' + sc.tot + ' viewers rate it positively' : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 158);
+      const others = vpaths.filter(o => o !== v);
+      let vb = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="' + section[1] + '">' + section[0] + '</a> › <a href="' + url + '">' + esc(d.title) + '</a> › ' + esc(kindName) + '</nav>';
+      vb += '<iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + v.yt + '?rel=0" title="' + esc(vname) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
+      vb += '<h1>' + esc(vname) + '</h1><p>' + esc(vdesc) + '</p><p><a href="' + url + '">About ' + esc(d.title) + '</a></p>';
+      if (others.length) vb += '<h2>More from ' + esc(d.title) + '</h2><ul class="pr-vids">' + others.map(o => '<li><a href="' + url + o.path + '"><img src="' + ytThumb(o.yt) + '" alt="' + esc(d.title + ' · ' + o.title) + '" width="160" height="90" loading="lazy"> ' + esc(o.title) + '</a> <span class="note">' + esc(o.seg === 'song' ? 'Song' : o.kind) + '</span></li>').join('') + '</ul>';
+      const vld = [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [
+        { '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' },
+        { '@type': 'ListItem', position: 2, name: section[0], item: SITE + section[1] },
+        { '@type': 'ListItem', position: 3, name: d.title, item: SITE + url },
+        { '@type': 'ListItem', position: 4, name: clip(vname, 100), item: SITE + vurl }] }];
+      if (v.publishedAt) vld.push({ '@context': 'https://schema.org', '@type': 'VideoObject', name: clip(vname, 100), description: vdesc,
+        thumbnailUrl: ytThumb(v.yt), uploadDate: v.publishedAt, embedUrl: 'https://www.youtube.com/embed/' + v.yt, url: SITE + vurl, inLanguage: lang || undefined });
+      write(vurl.slice(1) + '.html', page(shell, { title: vtitle, description: vdesc, canonical: vurl, ogType: 'video.other', image: 'https://i.ytimg.com/vi/' + v.yt + '/hqdefault.jpg', wide: true, jsonld: vld, route: 'video', body: vb, robots: thinTitle ? 'noindex,follow' : undefined }));
+      if (!thinTitle) sitemap.push({ loc: vurl, lastmod: pageDate(vurl, vtitle + '\n' + vdesc + '\n' + vb), pri: '0.5' });
+      nVideoPages++;
+    }
   }
 
   // ----- person pages -----
@@ -855,7 +893,7 @@ async function main() {
     const items = [];
     pinFirst(movies.filter(pickM).sort(newest), VID_PINS[slug]).forEach(m => { const vs = ytVideos(m.data).filter(pickV); (onePer ? vs.slice(0, 1) : vs).forEach(x => items.push([m, x])); });
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + esc(h1) + '</nav><h1>' + esc(h1) + '</h1><p>' + items.length + ' videos. ' + esc(desc) + '</p>' +
-      '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
+      '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + ((videoPaths(m.data).find(p => p.yt === x.yt) || {}).path || '') + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
       '<h2>More videos</h2><ul>' + vidHubs.filter(v => v[0] !== slug).map(v => '<li><a href="/' + v[0] + '">' + esc(v[1]) + '</a></li>').join('') + '</ul>';
     writeHub(slug + '.html', { title, description: desc, canonical: '/' + slug, ogPath: '/' + slug, route: 'vids', body,
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: h1, item: SITE + '/' + slug }] }] });
@@ -912,7 +950,7 @@ async function main() {
   }
 
   console.log(`[seo] SEO tiers: ${JSON.stringify(tierCount)}`);
-  console.log(`[seo] wrote ${nTitles} title pages (${nThinTitles} kept out of the index until they have more substance; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[seo] wrote ${nTitles} title pages and ${nVideoPages} video pages (${nThinTitles} kept out of the index until they have more substance; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
 main().catch(e => { console.error('[seo] build failed:', e && e.stack || e); process.exit(1); });
