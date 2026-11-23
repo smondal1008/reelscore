@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis', 'Unpublished'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
@@ -15,7 +15,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', query = '', langF = '', yearF = '', seoF = '', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
+  var filter = 'All', query = '', langF = '', yearF = '', seoF = '', statusF = 'published', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -660,9 +660,12 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing synopsis': 'missing-synopsis', 'Unpublished': 'unpublished' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing synopsis': 'missing-synopsis' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
+  // Published = what visitors can see on the site; the list starts there so its counts match the live site.
+  var STATUS_OPTS = { published: 'Published', unpublished: 'Unpublished', all: 'All' };
+  function pubOk(d, st) { return st === 'all' || (st === 'unpublished' ? d.published === false : d.published !== false); }
   function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); })); }
   function hasYt(d) { return (d.videos || []).some(function (v) { return /youtu\.?be/.test(v.url || ''); }); }
   function seoTier(d, id) {
@@ -681,7 +684,9 @@ window.ReelAdmin = function (env) {
     var q = new URLSearchParams(location.search);
     if (!location.search) return;
     query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || ''; seoF = q.get('seo') || '';
+    statusF = STATUS_OPTS[q.get('status')] ? q.get('status') : 'published';
     var sec = q.get('section'); filter = 'All';
+    if (sec === 'unpublished') statusF = 'unpublished'; // old link to the removed Unpublished chip
     Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) filter = k; });
     sortKey = SORTS[q.get('sort')] ? q.get('sort') : 'release';
     sortDir = q.get('dir') === 'asc' ? 'asc' : (q.get('dir') === 'desc' ? 'desc' : defaultDir(sortKey));
@@ -696,6 +701,7 @@ window.ReelAdmin = function (env) {
     if (langF) q.set('lang', langF);
     if (yearF) q.set('year', yearF);
     if (seoF) q.set('seo', seoF);
+    if (statusF !== 'published') q.set('status', statusF);
     if (sortKey !== 'release' || sortDir !== 'desc') { q.set('sort', sortKey); if (sortDir !== defaultDir(sortKey)) q.set('dir', sortDir); }
     if (pageNo > 1) q.set('page', String(pageNo));
     var url = '/admin/titles' + (q.toString() ? '?' + q.toString() : '');
@@ -711,14 +717,14 @@ window.ReelAdmin = function (env) {
         on: { click: function () { setList(function () { filter = f; pageNo = 1; }); } } }));
     });
     var ls = $('langSel'), counts = {};
-    movies.forEach(function (m) { langsOf(m.data).forEach(function (l) { counts[l] = (counts[l] || 0) + 1; }); });
+    movies.forEach(function (m) { if (pubOk(m.data, statusF)) langsOf(m.data).forEach(function (l) { counts[l] = (counts[l] || 0) + 1; }); });
     var langs = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); });
     if (langF && langs.indexOf(langF) === -1) langs.unshift(langF);
     ls.innerHTML = '';
     ls.appendChild(h('option', { value: '', text: 'All languages' }));
     langs.forEach(function (l) { ls.appendChild(h('option', { value: l, text: l + ' (' + (counts[l] || 0) + ')', selected: l === langF })); });
     var ys = $('yearSel'), yc = {};
-    movies.forEach(function (m) { var y = yearOf(m.data); yc[y] = (yc[y] || 0) + 1; });
+    movies.forEach(function (m) { if (!pubOk(m.data, statusF)) return; var y = yearOf(m.data); yc[y] = (yc[y] || 0) + 1; });
     var years = Object.keys(yc).filter(function (y) { return y !== 'none'; }).sort().reverse();
     if (yearF && !yc[yearF]) yc[yearF] = 0;
     ys.innerHTML = '';
@@ -730,6 +736,10 @@ window.ReelAdmin = function (env) {
     es.innerHTML = '';
     es.appendChild(h('option', { value: '', text: 'All SEO statuses' }));
     SEO_TIERS.forEach(function (t) { es.appendChild(h('option', { value: t[0], text: t[1] + ' (' + (ec[t[0]] || 0) + ')', selected: t[0] === seoF })); });
+    var st = $('statusSel'), sc = { published: 0, unpublished: 0, all: 0 };
+    movies.forEach(function (m) { if (matchSection(m.data, filter, m.id) && passQL(m.data, m.id, false, true)) { sc.all++; sc[m.data.published === false ? 'unpublished' : 'published']++; } });
+    st.innerHTML = '';
+    Object.keys(STATUS_OPTS).forEach(function (k) { st.appendChild(h('option', { value: k, text: STATUS_OPTS[k] + ' (' + sc[k] + ')', selected: k === statusF })); });
     var ss = $('sortSel'); ss.innerHTML = '';
     [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section']].forEach(function (o) {
       ss.appendChild(h('option', { value: o[0] + ':' + o[1], text: o[2], selected: sortKey === o[0] && sortDir === o[1] }));
@@ -746,8 +756,9 @@ window.ReelAdmin = function (env) {
   function missingSynopsis(d, id) { return !String(d.synopsis || '').trim() && !synFile[id]; }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'Unpublished' ? d.published === false : d.section === f); }
-  function passQL(d, id, skipSeo) {
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
+  function passQL(d, id, skipSeo, skipStatus) {
+    if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
     if (yearF && yearOf(d) !== yearF) return false;
@@ -789,7 +800,7 @@ window.ReelAdmin = function (env) {
       return [m.data.title || '', /^\d{4}$/.test(y) ? y : '', m.id];
     }));
     var csv = '\ufeff' + rows.map(function (r) { return r.map(q).join(','); }).join('\r\n') + '\r\n';
-    var parts = [filter !== 'All' ? SEC_SLUG[filter] : 'all-titles', langF, yearF, seoF, query ? 'search' : ''].filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
+    var parts = [filter !== 'All' ? SEC_SLUG[filter] : 'all-titles', statusF !== 'published' ? statusF : '', langF, yearF, seoF, query ? 'search' : ''].filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
     var a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: 'reelscore-' + parts.join('-') + '-' + new Date().toISOString().slice(0, 10) + '.csv' });
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     setStatus('Downloaded ' + list.length + ' title' + (list.length === 1 ? '' : 's') + '.');
@@ -806,13 +817,18 @@ window.ReelAdmin = function (env) {
     if (pageNo > pages) pageNo = pages;
     writeListState();
     var from = (pageNo - 1) * PAGE, slice = vis.slice(from, from + PAGE);
-    sum.textContent = !movies.length ? '' : total ? 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + total + (total !== movies.length ? ' (filtered from ' + movies.length + ')' : '') : '';
+    sum.textContent = !movies.length ? '' : total ? 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + total + (total !== movies.length ? ' (filtered from ' + movies.length + ' titles)' : '') : '';
     $('list').parentNode.hidden = !total;
+    if (statusF === 'published' && query.trim()) {
+      var hid = movies.filter(function (m) { return m.data.published === false && matchSection(m.data, filter, m.id) && passQL(m.data, m.id, false, true); }).length;
+      if (hid) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', text: hid + ' unpublished match' + (hid === 1 ? '' : 'es') + ' — show them',
+        on: { click: function () { setList(function () { statusF = 'all'; pageNo = 1; }); } } }));
+    }
     if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
-      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; filter = 'All'; pageNo = 1; }); } } })]));
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; pageNo = 1; }); } } })]));
       return;
     }
     function th(key, label, cls) {
@@ -827,7 +843,7 @@ window.ReelAdmin = function (env) {
     var tb = h('tbody');
     slice.forEach(function (m) {
       var d = m.data, p = pct(d), href = titleHref(m), poster = safeUrl(d.posterUrl), miss = missing(d);
-      var tr = h('tr', {}, [
+      var tr = h('tr', { class: d.published === false ? 'unpubrow' : '' }, [
         h('td', { class: 'pc' }, [poster ? h('img', { src: poster, alt: '', loading: 'lazy', decoding: 'async' }) : h('span')]),
         h('td', {}, [
           h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
@@ -1638,6 +1654,7 @@ window.ReelAdmin = function (env) {
   $('langSel').addEventListener('change', function (e) { setList(function () { langF = e.target.value; pageNo = 1; }); });
   $('yearSel').addEventListener('change', function (e) { setList(function () { yearF = e.target.value; pageNo = 1; }); });
   $('seoSel').addEventListener('change', function (e) { loadSeoVotes(); setList(function () { seoF = e.target.value; pageNo = 1; }); });
+  $('statusSel').addEventListener('change', function (e) { setList(function () { statusF = e.target.value; pageNo = 1; }); });
   $('sortSel').addEventListener('change', function (e) { var v = e.target.value.split(':'); setList(function () { sortKey = v[0]; sortDir = v[1]; pageNo = 1; }); });
   window.addEventListener('beforeunload', function (e) { if (dirty) { e.preventDefault(); e.returnValue = ''; } });
 
@@ -1671,7 +1688,8 @@ window.ReelAdmin = function (env) {
   db.collection('movies').orderBy('order').onSnapshot(function (snap) {
       if (!snap.metadata.fromCache) { clearTimeout(timer); }
       movies = snap.docs.map(function (s) { var d = s.data(); if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return { id: s.id, data: d }; });
-      setStatus(movies.length + ' titles' + (snap.metadata.fromCache ? ' · syncing…' : ''));
+      var nHid = movies.filter(function (m) { return m.data.published === false; }).length;
+      setStatus((movies.length - nHid).toLocaleString('en-IN') + ' published · ' + nHid.toLocaleString('en-IN') + ' hidden' + (snap.metadata.fromCache ? ' · syncing…' : ''));
       var cur = movies.find(function (m) { return m.id === currentId; });
       if (currentId && currentId !== '__new__' && !cur) { currentId = null; draft = null; setDirty(false); }
       else if (cur && !dirty && !saving) { draft = clone(cur.data); }
