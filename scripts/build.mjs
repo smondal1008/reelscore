@@ -581,8 +581,10 @@ async function main() {
   // The app loads it in two parts: the core (every section but Older releases, plus people) first, Older releases after.
   // catalogue.json stays whole: the next build reads it, and the app falls back to it.
   const isOlder = m => m.data.section === 'Older releases' && String(m.data.releaseDate || '') < '2025';
-  write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => !isOlder(m)), people: cat.people }));
-  write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(isOlder) }));
+  // Visitors' parts leave out unpublished titles (catalogue.json keeps them for the next build).
+  const pub = m => m.data.published !== false;
+  write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => pub(m) && !isOlder(m)), people: cat.people }));
+  write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(m => pub(m) && isOlder(m)) }));
   console.log(`[seo] catalogue split: core ${(fs.statSync(path.join(OUT, 'catalogue-core.json')).size / 1024).toFixed(0)} KB, older ${(fs.statSync(path.join(OUT, 'catalogue-older.json')).size / 1024).toFixed(0)} KB`);
   console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
   // Home page (also the app shell other routes fall back to): share image and WebSite / Organization data.
