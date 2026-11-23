@@ -25,6 +25,27 @@ const OUT = path.join(ROOT, 'dist');
 // The "About" text for titles and people comes from the same file the app runs (app/about.js), so both say the same thing.
 const ABOUT = (() => { const w = {}; new Function('window', fs.readFileSync(path.join(ROOT, 'app', 'about.js'), 'utf8'))(w); return w.RS_ABOUT; })();
 const TODAY = new Date().toISOString().slice(0, 10);
+// Now playing (set in the admin panel): theatres | out | ott | direct. It decides a film's home page section, and
+// a film marked theatres or out moves to ott once its OTT Release Date has passed. Same rule in scripts/build.mjs
+// and app/admin.js. TV shows keep their section; for them it is a label only.
+const NP_LABEL = { theatres: 'Theatres only', out: 'Out of theatres', ott: 'Now on OTT', direct: 'Direct to OTT' };
+function npToday() { const t = new Date(); return t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2); }
+function nowPlayingOf(d, today) {
+  let np = d.nowPlaying || ''; today = today || npToday();
+  if ((np === 'theatres' || np === 'out') && d.ottReleaseDate && d.ottReleaseDate <= today) np = 'ott';
+  return NP_LABEL[np] ? np : '';
+}
+function npSection(d, today) {
+  const np = nowPlayingOf(d, today); today = today || npToday();
+  if (!np || d.section === 'TV shows') return d.section;
+  if (d.releaseDate && d.releaseDate > today) return 'Coming soon';
+  if (np === 'theatres') return 'In theatres';
+  if (np === 'out') return 'Older releases';
+  // On OTT while recent (streaming for under a year); after that it is an older release that streams.
+  const from = d.ottReleaseDate || d.releaseDate || ''; const ago = new Date(); ago.setFullYear(ago.getFullYear() - 1);
+  return !from || from >= ago.toISOString().slice(0, 10) ? 'On OTT' : 'Older releases';
+}
+
 const SITE = (process.env.SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'https://reelscore-xi.vercel.app')).replace(/\/+$/, '');
 const MIN_VERDICTS = Math.max(1, parseInt(process.env.SEO_MIN_VERDICTS, 10) || 10);
@@ -308,7 +329,9 @@ async function main() {
   const people = {}; data.people.forEach(p => { people[p.id] = p.data || {}; });
   // Unpublished titles (published === false, set in the admin panel) get no page and stay out of the catalogue.
   const nUnpub = data.movies.filter(m => m.data && m.data.published === false).length;
-  const movies = data.movies.filter(m => m.data && m.data.title && m.data.published !== false);
+  // Now playing decides a film's section (see npSection).
+  const movies = data.movies.filter(m => m.data && m.data.title && m.data.published !== false)
+    .map(m => m.data.nowPlaying && m.data.section !== 'TV shows' && npSection(m.data, TODAY) !== m.data.section ? { ...m, data: { ...m.data, section: npSection(m.data, TODAY) } } : m);
   if (nUnpub) console.log('[seo] unpublished titles left out: ' + nUnpub);
 
   // credits per person (cast entries, plus the director field when that person isn't already in the cast)

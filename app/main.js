@@ -597,6 +597,15 @@
   }
 
   // Small inline logo for a button; null if the platform has no logo on file.
+  // What visitors see for Now playing, e.g. "Theatres only", "On Netflix", "Direct to OTT"
+  function npLabel(m) {
+    var d = m.data, np = nowPlayingOf(d), up = d.releaseDate && d.releaseDate > npToday();
+    if (!np) return '';
+    if (np === 'theatres') return up ? 'Theatrical release' : 'Theatres only';
+    if (np === 'out') return 'Out of theatres';
+    if (np === 'direct') return 'Direct to OTT';
+    return up ? '' : d.platform ? 'On ' + d.platform : 'Now on OTT';
+  }
   function platLogo(p) {
     if (!p) return null;
     var hit = null;
@@ -622,7 +631,9 @@
       h('div', { class: 'pw' }, [
         h('a', { class: 'pa art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, [
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
-          d.platform && (isOtt(m) || isTv(m)) ? platBadge(d.platform, isTv(m)) : null
+          d.platform && (isOtt(m) || isTv(m)) ? platBadge(d.platform, isTv(m)) : null,
+          // Now playing pill (left out for "Now on OTT" when the platform logo already says it)
+          npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) ? h('span', { class: 'nppill', text: npLabel(m) }) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
           'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
@@ -716,7 +727,7 @@
       rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')),
       tvPromoSection(),
       yearSection(),
-      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])),
+      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])),
       langSection()
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
@@ -1280,6 +1291,7 @@
     if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
     var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
+    var npl = npLabel(m); if (npl) tags.splice(1, 0, h('span', { class: 'tag np', text: npl }));
     if (d.published === false) tags.unshift(h('span', { class: 'tag', style: 'background:var(--danger);color:#0B0A0F', text: 'Not published · admins only' }));
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
@@ -2243,7 +2255,31 @@
   // Titles and people come from /catalogue.json, written at each deploy and served from the CDN (no database reads).
   // On top of it we subscribe only to records changed since that file was built, plus a short list of deletions,
   // so admin edits still show up live. If the file can't be loaded we fall back to reading everything from Firestore.
-  function fixSection(d) { if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return d; }
+  // Now playing (set in the admin panel): theatres | out | ott | direct. It decides a film's home page section, and
+  // a film marked theatres or out moves to ott once its OTT Release Date has passed. Same rule in scripts/build.mjs
+  // and app/admin.js. TV shows keep their section; for them it is a label only.
+  var NP_LABEL = { theatres: 'Theatres only', out: 'Out of theatres', ott: 'Now on OTT', direct: 'Direct to OTT' };
+  function npToday() { var t = new Date(); return t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2); }
+  function nowPlayingOf(d, today) {
+    var np = d.nowPlaying || ''; today = today || npToday();
+    if ((np === 'theatres' || np === 'out') && d.ottReleaseDate && d.ottReleaseDate <= today) np = 'ott';
+    return NP_LABEL[np] ? np : '';
+  }
+  function npSection(d, today) {
+    var np = nowPlayingOf(d, today); today = today || npToday();
+    if (!np || d.section === 'TV shows') return d.section;
+    if (d.releaseDate && d.releaseDate > today) return 'Coming soon';
+    if (np === 'theatres') return 'In theatres';
+    if (np === 'out') return 'Older releases';
+    // On OTT while recent (streaming for under a year); after that it is an older release that streams.
+    var from = d.ottReleaseDate || d.releaseDate || '', ago = new Date(); ago.setFullYear(ago.getFullYear() - 1);
+    return !from || from >= ago.toISOString().slice(0, 10) ? 'On OTT' : 'Older releases';
+  }
+  function fixSection(d) {
+    if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; }
+    if (d.nowPlaying) { var s2 = npSection(d); if (s2 !== d.section) { d = clone(d); d.section = s2; } }
+    return d;
+  }
   // Unpublished titles (published === false) are left out of every list, search and page for visitors.
   // Admins can still open their pages as a preview (findMovie looks in S.hidden for them).
   function setMovies(list) {

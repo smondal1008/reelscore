@@ -607,6 +607,43 @@ window.ReelAdmin = function (env) {
   function setStatus(t) { $('status').textContent = t; }
   function safeUrl(u) { return (typeof u === 'string' && (/^\/_blob\//.test(u) || /^https:\/\//.test(u))) ? u : ''; }
   function bgUrl(u) { u = safeUrl(u); return u ? 'background-image:url("' + u.replace(/"/g, '%22') + '")' : ''; }
+  // Now playing (set in the admin panel): theatres | out | ott | direct. It decides a film's home page section, and
+  // a film marked theatres or out moves to ott once its OTT Release Date has passed. Same rule in scripts/build.mjs
+  // and app/admin.js. TV shows keep their section; for them it is a label only.
+  var NP_LABEL = { theatres: 'Theatres only', out: 'Out of theatres', ott: 'Now on OTT', direct: 'Direct to OTT' };
+  function npToday() { var t = new Date(); return t.getFullYear() + '-' + ('0' + (t.getMonth() + 1)).slice(-2) + '-' + ('0' + t.getDate()).slice(-2); }
+  function nowPlayingOf(d, today) {
+    var np = d.nowPlaying || ''; today = today || npToday();
+    if ((np === 'theatres' || np === 'out') && d.ottReleaseDate && d.ottReleaseDate <= today) np = 'ott';
+    return NP_LABEL[np] ? np : '';
+  }
+  function npSection(d, today) {
+    var np = nowPlayingOf(d, today); today = today || npToday();
+    if (!np || d.section === 'TV shows') return d.section;
+    if (d.releaseDate && d.releaseDate > today) return 'Coming soon';
+    if (np === 'theatres') return 'In theatres';
+    if (np === 'out') return 'Older releases';
+    // On OTT while recent (streaming for under a year); after that it is an older release that streams.
+    var from = d.ottReleaseDate || d.releaseDate || '', ago = new Date(); ago.setFullYear(ago.getFullYear() - 1);
+    return !from || from >= ago.toISOString().slice(0, 10) ? 'On OTT' : 'Older releases';
+  }
+  // Now playing select. For films it sets the Home page section (which is then locked); TV shows only get the
+  // two OTT choices, as a label.
+  function nowPlayingField(tvEd) {
+    var opts = tvEd ? [['', 'Not set'], ['ott', 'Now on OTT'], ['direct', 'Direct to OTT']]
+      : [['', 'Not set'], ['theatres', 'Theatres only'], ['out', 'Out of theatres'], ['ott', 'Now on OTT'], ['direct', 'Direct to OTT']];
+    var cur = draft.nowPlaying || '';
+    var sel = h('select', { id: 'f_nowPlaying', class: 'in', disabled: !canWrite }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === cur }); }));
+    sel.addEventListener('change', function () {
+      if (sel.value) draft.nowPlaying = sel.value; else delete draft.nowPlaying;
+      if (!tvEd && draft.nowPlaying) draft.section = npSection(draft);
+      touch(); renderEditor();
+    });
+    var eff = nowPlayingOf(draft), note = !cur ? 'Sets the home page section for you. Leave as “Not set” to choose the section yourself.'
+      : eff !== cur ? 'Now on OTT since ' + draft.ottReleaseDate + ' (its OTT Release Date), so it shows as streaming.'
+      : tvEd ? 'Shown as a label on the show’s page and cards.' : 'Shown to visitors on the film’s page and cards. Moves to OTT on its own once the OTT Release Date passes.';
+    return h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_nowPlaying', text: 'Now playing' }), sel, h('span', { class: 'note', text: note })]);
+  }
   function missing(d) { return REQUIRED.filter(function (r) { return !d[r[0]]; }); }
   function pct(d) { return Math.round(100 * (REQUIRED.length - missing(d).length) / REQUIRED.length); }
   function fmtDate(iso) {
@@ -1432,7 +1469,10 @@ window.ReelAdmin = function (env) {
     var g1 = h('div', { class: 'grid' }, [
       field('Title', 'title', { placeholder: 'e.g. Ramayana' }),
       field('Subtitle', 'subtitle', { placeholder: 'e.g. Rise of a Legend · Part One' }),
-      field('Home page section', 'section', { type: 'select', options: SECTIONS }),
+      (function () { var f = field('Home page section', 'section', { type: 'select', options: SECTIONS });
+        if (!tvEd && draft.nowPlaying) { var se = f.querySelector('select'); se.disabled = true; f.appendChild(h('span', { class: 'note', text: 'Set by Now playing.' })); }
+        return f; })(),
+      nowPlayingField(tvEd),
       draft.section === 'On OTT' ? platformField('Streaming platform', false) : draft.section === 'Older releases' ? platformField('Now streaming on', false, 'Leave as “Not known” if you are not sure.') : tvEd ? platformField('Channel or platform', true) : null,
       field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
         note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
@@ -1557,6 +1597,7 @@ window.ReelAdmin = function (env) {
     if (clash) { saving = false; setDirty(true); setStatus('The page URL ' + pathBase(draft) + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
     if (isNew) currentId = slugify(draft.title) + '-' + Math.random().toString(36).slice(2, 6);
     var body = clone(draft); body.updatedAt = new Date().toISOString();
+    if (body.nowPlaying && body.section !== 'TV shows') body.section = npSection(body); // dates may have changed since it was picked
     body.slug = slug;
     var prev = movies.find(function (m) { return m.id === currentId; });
     var prevSlug = prev ? slugOf(prev) : '';
