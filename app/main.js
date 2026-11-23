@@ -633,7 +633,7 @@
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
           d.platform && (isOtt(m) || isTv(m)) ? platBadge(d.platform, isTv(m)) : null,
           // Now playing pill (left out for "Now on OTT" when the platform logo already says it)
-          npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) ? h('span', { class: 'nppill', text: npLabel(m) }) : null
+          npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) && !(opts.inTheatresList && nowPlayingOf(d) === 'theatres') ? h('span', { class: 'nppill', text: npLabel(m) }) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
           'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
@@ -717,7 +717,7 @@
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), { book: true, max: 24 }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
+      }), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
       rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
@@ -1980,9 +1980,9 @@
 
   // Card actions by status: Book tickets for theatre titles, Watch now for released titles with a streaming link, reminders for upcoming ones.
   function actOpts(m) {
-    var sec = m.data.section;
+    var sec = m.data.section, inTh = S.route === 'browse' && S.browse && S.browse.status === 'In theatres';
     if (!released(m)) return { dateBadge: true, remind: true, book: sec === 'Coming soon' || sec === 'In theatres' };
-    return sec === 'In theatres' ? { book: true } : { stream: true };
+    return sec === 'In theatres' ? { book: true, inTheatresList: inTh } : { stream: true };
   }
   function drawBrowse() {
     var v = $('view-browse');
