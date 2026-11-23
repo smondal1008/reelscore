@@ -743,6 +743,26 @@ async function main() {
     sitemap.push({ loc: '/browse/' + slug, pri: '0.7' });
   }
 
+  // Movies (/movies) and TV Shows (/tv-shows): Browse split by kind. Titles match app/main.js MOVIES_TITLE / TV_TITLE.
+  // /movies/<section> is app-only (vercel.json rewrite) and points its canonical at /browse/<section>.
+  {
+    const MOVIE_HUBS = HUBS.filter(h => h[1] !== 'TV shows');
+    const films = movies.filter(m => !isTv(m.data)), shows = movies.filter(m => isTv(m.data)).sort(newest);
+    let mBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Movies</nav><h1>Indian movies</h1><p>' + films.length + ' Bollywood and regional Indian films, with verdicts on whether each is worth the theatre, OTT or a skip.</p>';
+    MOVIE_HUBS.forEach(h => { mBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
+    mBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a></li>').join('') + '</ul>';
+    writeHub('movies.html', { title: 'Indian Movies – Reviews, Verdicts & OTT | Reelscore', description: clip('Browse ' + films.length + ' Bollywood and regional Indian movies: in theatres, coming soon, on OTT and older releases, with verdicts on each.', 158),
+      canonical: '/movies', ogPath: '/movies', route: 'movies', body: mBody,
+      jsonld: [crumbLd(['Home', '/'], ['Movies', '/movies']), listLd('Movie sections', MOVIE_HUBS.map(h => '/browse/' + h[0]))] });
+    sitemap.push({ loc: '/movies', pri: '0.7' });
+    const tBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › TV Shows</nav><h1>Indian TV shows and web series</h1><p>' + shows.length + ' TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, newest first.</p>' +
+      (shows.length ? '<ul>' + shows.map(titleLi).join('') + '</ul>' : '<p>Nothing here right now.</p>');
+    writeHub('tv-shows.html', { title: 'Indian TV Shows & Web Series | Reelscore', description: clip(shows.length + ' Indian TV shows and web series with cast, trailers, where to watch and verdicts on whether each is worth your time.', 158),
+      canonical: '/tv-shows', ogPath: '/tv-shows', route: 'tvshows', body: tBody,
+      jsonld: [crumbLd(['Home', '/'], ['TV Shows', '/tv-shows']), listLd('Indian TV shows and web series', shows.map(movieUrl))] });
+    sitemap.push({ loc: '/tv-shows', pri: '0.7' });
+  }
+
   // Genre landing pages: /genre/<slug>. Genres and matching rules are the same as app/main.js GENRES / genreTags.
   for (const g of genreList) {
     const list = byGenre[g].slice().sort(newest), lc = g.toLowerCase(), slug = genreSlug(g);

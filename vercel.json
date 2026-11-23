@@ -81,6 +81,18 @@
       "destination": "/"
     },
     {
+      "source": "/movies",
+      "destination": "/"
+    },
+    {
+      "source": "/movies/:section",
+      "destination": "/"
+    },
+    {
+      "source": "/tv-shows",
+      "destination": "/"
+    },
+    {
       "source": "/browse/:section",
       "destination": "/"
     },
