@@ -613,8 +613,23 @@
     return hit ? h('img', { class: 'ctalogo', src: hit[3], alt: '', width: 18, height: 18, loading: 'lazy', decoding: 'async' }) : null;
   }
 
+  // Book tickets / Watch now, switched on or off per page in Admin > Buttons (settings/buttons). Missing = shown.
+  function btnPlace() {
+    return S.route === 'home' ? 'home' : S.route === 'browse' ? (S.browse && S.browse.landing ? 'lang' : 'browse') : S.route === 'list' ? 'mylist' : S.route === 'title' ? 'title' : '';
+  }
+  function btnOn(place, kind) {
+    var b = S.buttons || window.RS_BTNS || {}, p = place && b[place];
+    return !(p && p[kind] === false);
+  }
   function posterCard(m, opts) {
     opts = opts || {};
+    var bpl = btnPlace();
+    if ((opts.book && !btnOn(bpl, 'book')) || (opts.stream && !btnOn(bpl, 'watch'))) {
+      var o2 = {}; Object.keys(opts).forEach(function (k) { o2[k] = opts[k]; });
+      if (!btnOn(bpl, 'book')) o2.book = false;
+      if (!btnOn(bpl, 'watch')) o2.stream = false;
+      opts = o2;
+    }
     var d = m.data, sc = score(m.id), img = !!safeUrl(d.posterUrl);
     var top;
     if (opts.dateBadge && !d.releaseDate && !released(m)) {
@@ -1306,7 +1321,8 @@
     if (d.published === false) tags.unshift(h('span', { class: 'tag', style: 'background:var(--danger);color:#0B0A0F', text: 'Not published · admins only' }));
     [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
-    var actLabel = ott ? (rel ? 'Watch on ' + (d.platform || 'OTT') : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : hasBooking(d) ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) ? 'Where to watch' : null;
+    var bOn = btnOn('title', 'book'), wOn = btnOn('title', 'watch');
+    var actLabel = ott ? (rel ? (wOn ? 'Watch on ' + (d.platform || 'OTT') : null) : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : hasBooking(d) && bOn ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) && wOn ? 'Where to watch' : null;
     put(titleHero(m, tags, actLabel));
 
     // scores
@@ -1665,6 +1681,7 @@
   }
   // "Watch on …": a real link once a streaming URL is added in Admin, otherwise a disabled button.
   function watchBtn(d, label, off) {
+    if (!btnOn('title', 'watch')) return null;
     var u = safeUrl(d.platformUrl);
     return u && !off ? h('a', { class: 'btn primary', href: u, target: '_blank', rel: 'noopener', text: label + ' ↗' }) : h('button', { type: 'button', class: 'btn primary', disabled: true, text: label });
   }
@@ -1681,7 +1698,7 @@
       d.platform || safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
     // In theatres / coming soon: Book tickets, when a booking link has been added in Admin
     var bk = bookUrlFor(d), bp = d.bookingPlatform || '';
-    if (hasBooking(d)) {
+    if (hasBooking(d) && btnOn('title', 'book')) {
       var cs = citiesFor(d); if (S.city && cs.indexOf(S.city) === -1) cs.push(S.city);
       var csel = h('select', { class: 'in', id: 'bookCity', style: 'max-width:240px' }, [h('option', { value: '', text: 'Choose your city' })].concat(cs.map(function (c) { return h('option', { value: c, text: c, selected: c === S.city }); })));
       csel.addEventListener('change', function () { csel.blur(); setCity(csel.value); });
@@ -1691,7 +1708,7 @@
       bk ? h('a', { class: 'btn primary', href: bk, target: '_blank', rel: 'noopener', text: bp ? 'Book on ' + bp : 'Book tickets' }) : null,
       safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
     }
-    if (safeUrl(d.platformUrl)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }), watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false)]);
+    if (safeUrl(d.platformUrl) && btnOn('title', 'watch')) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }), watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false)]);
     return null; // no booking or streaming link added for this film
     var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
     return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
@@ -2414,6 +2431,12 @@
       var d = snap.exists ? snap.data() : {};
       S.featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
       S.slide = 0; render();
+    }, function () {});
+    db.doc('settings/buttons').onSnapshot(function (snap) {
+      var d = snap.exists ? snap.data() : {}, next = {};
+      ['home', 'browse', 'lang', 'mylist', 'title'].forEach(function (k) { var x = d[k] || {}; next[k] = { book: x.book !== false, watch: x.watch !== false }; });
+      var was = JSON.stringify(S.buttons || null); S.buttons = next;
+      if (was !== JSON.stringify(next) && /^(home|browse|list|title)$/.test(S.route)) render();
     }, function () {});
     db.doc('settings/rows').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, ids = function (a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }) : []; };

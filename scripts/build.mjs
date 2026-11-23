@@ -191,6 +191,8 @@ function pageDate(url, content) {
 
 // Films the admin pins to the front of In theatres and Coming soon (settings/rows, set in Admin > Home rows).
 function cleanRows(d) { const ids = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : []; return { theatres: ids(d && d.theatres), coming: ids(d && d.coming) }; }
+// Book tickets / Watch now switched per page in Admin > Buttons (settings/buttons); anything missing counts as shown.
+function cleanBtns(d) { const o = {}; ['home', 'browse', 'lang', 'mylist', 'title'].forEach(k => { const x = (d && d[k]) || {}; o[k] = { book: x.book !== false, watch: x.watch !== false }; }); return o; }
 // Pinned films first, in the admin's order; everything else keeps its own order after them.
 function pinFirst(list, ids) {
   if (!ids || !ids.length) return list;
@@ -200,7 +202,7 @@ function pinFirst(list, ids) {
 
 // Returns { movies, people, verdicts, rows, builtAt, fullAt, source }.
 async function loadData() {
-  if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, rows: cleanRows(f.rows), builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
+  if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, rows: cleanRows(f.rows), buttons: cleanBtns(f.buttons), builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
   // scripts/catalogue-seed.json (if present) stands in for the live file on the very first deploy.
   let prev = await previousCatalogue();
   const seedFile = path.join(ROOT, 'scripts', 'catalogue-seed.json');
@@ -211,7 +213,7 @@ async function loadData() {
   try {
     if (fresh) {
       const since = new Date(Date.parse(prev.builtAt) - 3600 * 1000).toISOString();
-      const [dm, dp, del, verdicts, rows] = await Promise.all([db.changedSince('movies', since), db.changedSince('people', since), db.get('settings/deleted'), db.list('verdicts'), db.get('settings/rows').catch(() => null)]);
+      const [dm, dp, del, verdicts, rows, btns] = await Promise.all([db.changedSince('movies', since), db.changedSince('people', since), db.get('settings/deleted'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null)]);
       const tomb = { movies: {}, people: {} }; ((del && del.data) || {}).movies?.forEach(x => x && x.id && (tomb.movies[x.id] = x.at || ''));
       ((del && del.data) || {}).people?.forEach(x => x && x.id && (tomb.people[x.id] = x.at || ''));
       const merge = (baseList, delta, t) => {
@@ -220,23 +222,23 @@ async function loadData() {
       };
       const p = fromPrev();
       console.log(`[seo] incremental: ${dm.length} titles and ${dp.length} people changed since ${since}; ${db.reads} reads`);
-      return { movies: merge(p.movies, dm, tomb.movies), people: merge(p.people, dp, tomb.people), verdicts, rows: cleanRows(rows && rows.data), builtAt: started, fullAt: prev.fullAt, source: 'incremental' };
+      return { movies: merge(p.movies, dm, tomb.movies), people: merge(p.people, dp, tomb.people), verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), builtAt: started, fullAt: prev.fullAt, source: 'incremental' };
     }
-    const [movies, people, verdicts, rows] = await Promise.all([db.list('movies'), db.list('people'), db.list('verdicts'), db.get('settings/rows').catch(() => null)]);
+    const [movies, people, verdicts, rows, btns] = await Promise.all([db.list('movies'), db.list('people'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null)]);
     console.log(`[seo] full read: ${db.reads} reads`);
-    return { movies, people, verdicts, rows: cleanRows(rows && rows.data), builtAt: started, fullAt: started, source: 'full' };
+    return { movies, people, verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), builtAt: started, fullAt: started, source: 'full' };
   } catch (e) {
     if (!prev) throw e;
     // Keep builtAt from the previous file so the app still asks for every change made since then.
     console.warn('[seo] Firestore unavailable (' + e.message + '); reusing the live catalogue.json from ' + prev.builtAt);
-    return { ...fromPrev(), verdicts: [], rows: cleanRows(prev.rows), builtAt: prev.builtAt, fullAt: prev.fullAt, source: 'previous' };
+    return { ...fromPrev(), verdicts: [], rows: cleanRows(prev.rows), buttons: cleanBtns(prev.buttons), builtAt: prev.builtAt, fullAt: prev.fullAt, source: 'previous' };
   }
 }
 
 function loadFixture(file) {
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
   const wrap = (arr) => (arr || []).map(x => x.data ? x : { id: x.id, data: Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'id')), updated: x.updated || '' });
-  return { movies: wrap(j.movies), people: wrap(j.people), verdicts: wrap(j.verdicts), rows: j.rows };
+  return { movies: wrap(j.movies), people: wrap(j.people), verdicts: wrap(j.verdicts), rows: j.rows, buttons: j.buttons };
 }
 
 // ---------- output helpers ----------
@@ -604,7 +606,7 @@ async function main() {
     if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
     if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
     return o; };
-  const cat = { builtAt: data.builtAt, fullAt: data.fullAt, rows: data.rows,
+  const cat = { builtAt: data.builtAt, fullAt: data.fullAt, rows: data.rows, buttons: data.buttons,
     movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: slim(m.data) })),
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
@@ -894,7 +896,7 @@ async function main() {
   const stats = { lang: {}, year: {} };
   movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(), y = String(m.data.releaseDate || '').slice(0, 4);
     if (/^[A-Za-z]+$/.test(l)) stats.lang[l] = (stats.lang[l] || 0) + 1; if (/^\d{4}$/.test(y)) stats.year[y] = (stats.year[y] || 0) + 1; });
-  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';\n';
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
   const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);

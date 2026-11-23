@@ -622,6 +622,53 @@ window.ReelAdmin = function (env) {
       main.appendChild(card);
     });
   }
+  // ---------- Buttons: Book tickets / Watch now on or off, page by page (settings/buttons) ----------
+  var btnMode = false, btnCfg = {}, btnLoaded = false, btnWriting = false;
+  var BTN_PLACES = [
+    ['home', 'Homescreen', 'The In theatres and Coming soon rows', { watch: 'The homescreen rows don’t show Watch now' }],
+    ['browse', 'Browse', 'Browse › All, In theatres, Coming soon, On OTT, TV shows…', {}],
+    ['lang', 'Language pages', '/hindi-movies, /tamil-movies-in-theatres, /upcoming-telugu-movies…', {}],
+    ['mylist', 'My List', 'Watchlist and What to watch this weekend', {}],
+    ['title', 'Title pages', 'The Book tickets and Watch on … buttons on each film or show', {}]
+  ];
+  function btnIsOn(place, kind) { var p = btnCfg[place]; return !(p && p[kind] === false); }
+  function renderBtnCount() { var el = $('btnCount'); if (!el) return; var off = 0; BTN_PLACES.forEach(function (p) { ['book', 'watch'].forEach(function (k) { if (!p[3][k] && !btnIsOn(p[0], k)) off++; }); }); el.textContent = btnLoaded && off ? off + ' off' : ''; }
+  function writeBtn(place, kind, on) {
+    if (btnWriting) { setStatus('Still saving, try again in a moment.'); return; }
+    var next = {}; BTN_PLACES.forEach(function (p) { next[p[0]] = { book: btnIsOn(p[0], 'book'), watch: btnIsOn(p[0], 'watch') }; });
+    next[place][kind] = on;
+    btnWriting = true; btnCfg = next; renderBtnCount(); if (btnMode) renderButtons();
+    var body = JSON.parse(JSON.stringify(next)); body.updatedAt = new Date().toISOString();
+    db.doc('settings/buttons').set(body).then(function () {
+      btnWriting = false;
+      var nm = BTN_PLACES.filter(function (p) { return p[0] === place; })[0][1];
+      setStatus((kind === 'book' ? 'Book tickets' : 'Watch now') + (on ? ' shown on ' : ' hidden on ') + nm);
+    }).catch(function (e) { btnWriting = false; setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
+  function renderButtons() {
+    var main = $('main'); main.innerHTML = '';
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Site buttons' }), h('h1', { text: 'Buttons' })])]),
+      h('div', { class: 'note', text: 'Show or hide the Book tickets and Watch now buttons page by page. Changes reach visitors straight away. With Book tickets hidden, Coming soon films show Remind me instead. A button only ever appears when the film has a booking or streaming link.' })
+    ]));
+    var tb = h('tbody');
+    BTN_PLACES.forEach(function (p) {
+      function cell(kind, label) {
+        if (p[3][kind]) return h('td', { class: 'note', text: '—', title: p[3][kind] });
+        var id = 'btn-' + p[0] + '-' + kind, on = btnIsOn(p[0], kind);
+        var cb = h('input', { type: 'checkbox', id: id, checked: on, disabled: !canWrite || !btnLoaded, style: 'width:20px;height:20px;accent-color:var(--accent);cursor:pointer' });
+        cb.addEventListener('change', function () { writeBtn(p[0], kind, cb.checked); });
+        return h('td', {}, [h('label', { for: id, style: 'display:inline-flex;align-items:center;gap:8px;cursor:pointer' }, [cb, h('span', { text: on ? 'Shown' : 'Hidden', style: on ? '' : 'color:var(--muted)' })]), h('span', { class: 'sr', text: ' ' + label + ' on ' + p[1] })]);
+      }
+      tb.appendChild(h('tr', {}, [
+        h('th', { scope: 'row', style: 'text-align:left;padding:12px 10px' }, [h('div', { style: 'font-weight:600', text: p[1] }), h('div', { class: 'note', text: p[2] })]),
+        cell('book', 'Book tickets'), cell('watch', 'Watch now')
+      ]));
+    });
+    main.appendChild(h('section', { class: 'card' }, [h('table', { class: 'btntable', style: 'width:100%;border-collapse:collapse' }, [
+      h('thead', {}, [h('tr', {}, [h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: 'Page' }), h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: '🎟 Book tickets' }), h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: '▶ Watch now' })])]),
+      tb])]));
+  }
   var MAX_FEAT = 8;
   function isFeatured(id) { return featured.indexOf(id) !== -1; }
   function writeFeatured(next, msg) {
@@ -1019,7 +1066,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', rows: 'Home rows' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', rows: 'Home rows', buttons: 'Buttons' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1033,11 +1080,12 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; peopleMode = false; popularMode = false; rowsMode = false; wantSlug = null;
+    featuredMode = false; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
+    else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
@@ -1537,6 +1585,7 @@ window.ReelAdmin = function (env) {
     if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
     if (rowsMode) { renderRows(); return; }
+    if (btnMode) { renderButtons(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
       main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/titles', text: '← All titles' })]));
@@ -1798,6 +1847,11 @@ window.ReelAdmin = function (env) {
     featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
     featLoaded = true; renderFeatCount();
     if (featuredMode) renderFeatured(); else if (page === 'title' && !dirty) renderEditor();
+  }, function () {});
+  db.doc('settings/buttons').onSnapshot(function (snap) {
+    if (btnWriting) return;
+    btnCfg = snap.exists ? snap.data() : {}; btnLoaded = true; renderBtnCount();
+    if (btnMode) renderButtons();
   }, function () {});
   db.doc('settings/rows').onSnapshot(function (snap) {
     if (rowsWriting) return;
