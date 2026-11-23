@@ -1499,16 +1499,17 @@ window.ReelAdmin = function (env) {
     main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
 
 
-    // Buy tickets (films only): booking partner and a link per city. Folded for Older releases; a tap opens it.
+    // Buy tickets (films only): booking partner and a link per city. Folded for Older releases and On OTT; a tap opens it.
     if (!tvEd) {
       var gL = h('div', { class: 'grid' }, [bookingField(), bookingUrlsField()]);
-      var fold = draft.section === 'Older releases' && linksOpenFor !== currentId;
+      var foldable = draft.section === 'Older releases' || draft.section === 'On OTT';
+      var fold = foldable && linksOpenFor !== currentId;
       gL.hidden = fold;
-      var head = draft.section === 'Older releases'
+      var head = foldable
         ? h('button', { type: 'button', class: 'cardtoggle', 'aria-expanded': String(!fold), 'aria-controls': 'linksBody', on: { click: function () {
             var open = gL.hidden; gL.hidden = !open; linksOpenFor = open ? currentId : null;
             head.setAttribute('aria-expanded', String(open)); head.querySelector('.chev').textContent = open ? '▾' : '▸';
-          } } }, [h('h2', { text: 'Buy tickets' }), h('span', { class: 'sub', text: 'Usually not needed for older releases' }), h('span', { class: 'chev', 'aria-hidden': 'true', text: fold ? '▸' : '▾' })])
+          } } }, [h('h2', { text: 'Buy tickets' }), h('span', { class: 'sub', text: draft.section === 'On OTT' ? 'Usually not needed once a film is streaming' : 'Usually not needed for older releases' }), h('span', { class: 'chev', 'aria-hidden': 'true', text: fold ? '▸' : '▾' })])
         : h('h2', { text: 'Buy tickets' });
       gL.id = 'linksBody';
       main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [head, gL]));
