@@ -676,6 +676,17 @@
   }
   function sectionOf(name) { return S.movies.filter(function (m) { return m.data.section === name; }); }
   function homeSection(name) { return sectionOf(name).filter(inNavLang); }
+  // Films the admin pins to the front of In theatres and Coming soon (Admin > Home rows); the rest keep their usual order after them.
+  function rowPins(sec) {
+    var r = S.rowPins || window.RS_ROWS || {};
+    return sec === 'In theatres' ? r.theatres || [] : sec === 'Coming soon' ? r.coming || [] : [];
+  }
+  function pinFirst(list, ids) {
+    if (!ids || !ids.length) return list;
+    var pos = Object.create(null); ids.forEach(function (id, i) { if (!(id in pos)) pos[id] = i; });
+    return list.filter(function (m) { return m.id in pos; }).sort(function (a, b) { return pos[a.id] - pos[b.id]; })
+      .concat(list.filter(function (m) { return !(m.id in pos); }));
+  }
   function firstVideo(m) { return (m.data.videos || []).filter(function (v) { return safeUrl(v.url); })[0]; }
   function trailerBtn(m, cls) {
     var v = firstVideo(m);
@@ -713,14 +724,14 @@
     [langNote, none,
       mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
       trailerSection(),
-      rowSection('In theatres', homeSection('In theatres').slice().sort(function (a, b) {
+      rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
+      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
       rateSection(),
       friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      rowSection('Coming soon', homeSection('Coming soon'), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
+      rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
       songSection(),
       genreSection(),
       rowSection('New on OTT', homeSection('On OTT'), { max: HOME_MAX }, seeAll('/browse/on-ott')),
@@ -1337,7 +1348,7 @@
     var theatre = keep && keep._mid === m.id ? keep : videosBlock(m);
     var main = h('div', { class: 'colm' }, [act, aboutBlock(m), castBlock(m), rel ? reviewsBlock(m, rel) : null]); // no Reviews before release
     var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
-    var more = S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 24);
+    var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
     if (r) r.id = 'more';
     // Titles sharing cast or crew with this one: more shared people (top-billed weigh more) first, then newest.
@@ -2036,6 +2047,7 @@
       if (LP && B.sort === 'new' && B.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999');
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
+    if (B.sort === 'new') list = pinFirst(list, rowPins(B.status));
     var active = (B.status !== 'All') + !!B.lang + !!B.genre + !!B.year;
     w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px' }, [
       h('span', { class: 'sub', text: list.length > 60 ? 'Showing ' + ((Math.min(B.page || 1, Math.ceil(list.length / 60)) - 1) * 60 + 1) + '–' + Math.min(Math.min(B.page || 1, Math.ceil(list.length / 60)) * 60, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }),
@@ -2402,6 +2414,12 @@
       var d = snap.exists ? snap.data() : {};
       S.featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
       S.slide = 0; render();
+    }, function () {});
+    db.doc('settings/rows').onSnapshot(function (snap) {
+      var d = snap.exists ? snap.data() : {}, ids = function (a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }) : []; };
+      var next = { theatres: ids(d.theatres), coming: ids(d.coming) }, prev = S.rowPins || window.RS_ROWS || { theatres: [], coming: [] };
+      S.rowPins = next;
+      if (JSON.stringify(next) !== JSON.stringify({ theatres: prev.theatres || [], coming: prev.coming || [] }) && /^(home|browse|title)$/.test(S.route)) render();
     }, function () {});
     db.doc('settings/popular').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {};

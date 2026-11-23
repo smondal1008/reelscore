@@ -515,6 +515,113 @@ window.ReelAdmin = function (env) {
         .catch(function (e) { setStatus('Couldn’t merge' + (e && e.message ? ': ' + e.message : '') + '.'); });
     });
   }
+  // ---------- Home rows: films pinned to the front of In theatres and Coming soon ----------
+  // settings/rows { theatres: [ids], coming: [ids] }. The site shows pinned films first, in this order, on the homescreen,
+  // Browse and the language pages; the rest follow in their usual order. A pin only counts while the film is in that
+  // section: when a Coming soon film releases its pin is dropped (cleared from the list on the next save here).
+  var rowsMode = false, rowPins = { theatres: [], coming: [] }, rowsLoaded = false, rowsWriting = false, rowsDragging = false, rowsShowAll = {};
+  var ROWS = [['theatres', 'In theatres', 'Newest release first, then this week’s releases'], ['coming', 'Coming soon', 'In the usual Coming soon order']];
+  function rowFilms(sec) { return movies.filter(function (m) { return m.data.section === sec && m.data.published !== false; }); }
+  function livePins(key, sec) { var ok = {}; rowFilms(sec).forEach(function (m) { ok[m.id] = 1; }); return rowPins[key].filter(function (id, i, a) { return ok[id] && a.indexOf(id) === i; }); }
+  function rowAuto(key, sec) {
+    var list = rowFilms(sec);
+    if (key !== 'theatres') return list; // movies arrive in the site's own order (by the order field)
+    var td = new Date(), today = td.getFullYear() + '-' + String(td.getMonth() + 1).padStart(2, '0') + '-' + String(td.getDate()).padStart(2, '0');
+    function rel(m) { return !!m.data.releaseDate && m.data.releaseDate <= today; }
+    return list.slice().sort(function (a, b) {
+      var ra = rel(a), rb = rel(b); if (ra !== rb) return ra ? -1 : 1;
+      return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
+    });
+  }
+  function renderRowsCount() { var el = $('rowsCount'); if (el) el.textContent = rowsLoaded ? String(livePins('theatres', 'In theatres').length + livePins('coming', 'Coming soon').length) : ''; }
+  function writeRows(key, ids, msg) {
+    if (rowsWriting) { setStatus('Still saving, try again in a moment.'); return; }
+    var next = { theatres: livePins('theatres', 'In theatres'), coming: livePins('coming', 'Coming soon') };
+    next[key] = ids;
+    rowsWriting = true; rowPins = next; renderRowsCount(); if (rowsMode) renderRows();
+    db.doc('settings/rows').set({ theatres: next.theatres, coming: next.coming, updatedAt: new Date().toISOString() }).then(function () {
+      rowsWriting = false; setStatus(msg || 'Order saved');
+    }).catch(function (e) { rowsWriting = false; setStatus('Couldn’t save the order' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
+  function filmMeta(d) { return [fmtDate(d.releaseDate), langsOf(d).slice(0, 2).join(', ')].filter(Boolean).join(' · '); }
+  function renderRows() {
+    var main = $('main'); main.innerHTML = '';
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Homescreen rows' }), h('h1', { text: 'Home rows' })])]),
+      h('div', { class: 'note', text: 'Pin films to the front of In theatres and Coming soon. They show first, in this order, on the homescreen, on Browse and on the language pages; every other film follows in the usual order, so new releases still appear without you doing anything. When a film leaves the section (a Coming soon film releases, or a film leaves theatres) its pin is dropped. Visitors who pick a language see your pins for that language first.' })
+    ]));
+    ROWS.forEach(function (r) {
+      var key = r[0], sec = r[1], pins = livePins(key, sec), byId = {};
+      rowFilms(sec).forEach(function (m) { byId[m.id] = m; });
+      var auto = rowAuto(key, sec).filter(function (m) { return pins.indexOf(m.id) === -1; });
+      var card = h('section', { class: 'card', id: 'rows-' + key }, [h('div', { class: 'head' }, [
+        h('h2', { text: sec }), h('span', { class: 'sub', text: pins.length + ' pinned · ' + rowFilms(sec).length + ' films in total' })])]);
+      // add by title
+      var dlId = 'rowsDl-' + key, labels = {};
+      var dl = h('datalist', { id: dlId }, auto.map(function (m) { var y = (m.data.releaseDate || '').slice(0, 4), t = (m.data.title || 'Untitled') + (y ? ' (' + y + ')' : ''); labels[t.toLowerCase()] = m.id; return h('option', { value: t }); }));
+      var addIn = h('input', { class: 'in', id: 'rowsAdd-' + key, list: dlId, placeholder: 'Type a film in ' + sec + '…', autocomplete: 'off', disabled: !canWrite });
+      var msg = h('div', { class: 'err', hidden: true });
+      function doAdd() {
+        var v = addIn.value.trim().toLowerCase(), id = labels[v];
+        if (!id) { var hit = auto.filter(function (m) { return (m.data.title || '').toLowerCase() === v; }); if (hit.length === 1) id = hit[0].id; }
+        msg.hidden = true;
+        if (!v) { msg.hidden = false; msg.textContent = 'Type a title first.'; return; }
+        if (!id) { msg.hidden = false; msg.textContent = 'No published film called “' + addIn.value.trim() + '” in ' + sec + '. Pick one from the list.'; return; }
+        addIn.value = ''; writeRows(key, pins.concat([id]), 'Pinned to ' + sec);
+      }
+      addIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); doAdd(); } });
+      card.appendChild(h('div', { class: 'field' }, [h('label', { class: 'l', for: 'rowsAdd-' + key, text: 'Pin a film to the front' }),
+        h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [h('span', { style: 'flex:1;min-width:220px' }, [addIn, dl]), h('button', { type: 'button', class: 'btn primary', text: 'Pin', disabled: !canWrite, on: { click: doAdd } })]), msg]));
+      // pinned, draggable
+      var rowStyle = 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:8px 10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)';
+      var list = h('div', { class: 'rows' });
+      if (!pins.length) list.appendChild(h('div', { class: 'empty', style: 'padding:16px', text: 'Nothing pinned. The row uses the automatic order below.' }));
+      function move(from, to) { if (to < 0 || to >= pins.length || from === to) return; var n = pins.slice(), x = n.splice(from, 1)[0]; n.splice(to, 0, x); writeRows(key, n); }
+      var dragFrom = null;
+      pins.forEach(function (id, i) {
+        var m = byId[id], d = m.data, poster = safeUrl(d.posterUrl);
+        var row = h('div', { class: 'rowpin', draggable: canWrite ? 'true' : 'false', style: rowStyle + ';cursor:' + (canWrite ? 'grab' : 'default') }, [
+          h('span', { 'aria-hidden': 'true', style: 'color:var(--dim);font-size:18px;letter-spacing:-2px;user-select:none', text: '⋮⋮' }),
+          h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+          poster ? h('img', { src: poster, alt: '', loading: 'lazy', style: 'width:34px;height:50px;object-fit:cover;border-radius:6px' }) : h('span', { style: 'width:34px;height:50px;border-radius:6px;background:var(--panel2)' }),
+          h('span', { style: 'flex:1;min-width:160px' }, [h('a', { href: titleHref(m), style: 'font-weight:600', text: d.title || 'Untitled' }), h('div', { class: 'note', text: filmMeta(d) })]),
+          h('span', { style: 'display:flex;gap:6px' }, [
+            h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { move(i, i - 1); } } }),
+            h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' down', text: '↓', disabled: i === pins.length - 1 || !canWrite, on: { click: function () { move(i, i + 1); } } }),
+            h('button', { type: 'button', class: 'btn small danger', text: 'Unpin', disabled: !canWrite, on: { click: function () { writeRows(key, pins.filter(function (x) { return x !== id; }), 'Unpinned'); } } })
+          ])
+        ]);
+        row.addEventListener('dragstart', function (e) { dragFrom = i; rowsDragging = true; row.style.opacity = '.4'; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); } catch (x) {} });
+        row.addEventListener('dragend', function () { row.style.opacity = ''; rowsDragging = false; list.querySelectorAll('.rowpin').forEach(function (x) { x.style.boxShadow = ''; }); });
+        row.addEventListener('dragover', function (e) { if (dragFrom === null) return; e.preventDefault(); var b = row.getBoundingClientRect(), after = e.clientY > b.top + b.height / 2; list.querySelectorAll('.rowpin').forEach(function (x) { x.style.boxShadow = ''; }); row.style.boxShadow = after ? '0 3px 0 var(--accent)' : '0 -3px 0 var(--accent)'; });
+        row.addEventListener('drop', function (e) {
+          e.preventDefault(); if (dragFrom === null) return;
+          var b = row.getBoundingClientRect(), to = i + (e.clientY > b.top + b.height / 2 ? 1 : 0);
+          if (dragFrom < to) to--;
+          var f = dragFrom; dragFrom = null; rowsDragging = false; move(f, to);
+        });
+        list.appendChild(row);
+      });
+      card.appendChild(h('h3', { class: 'sub', style: 'margin:14px 0 8px', text: 'Pinned · shown first' }));
+      card.appendChild(list);
+      // the automatic order after the pins
+      var shown = rowsShowAll[key] ? auto : auto.slice(0, 12);
+      var al = h('div', { class: 'rows' });
+      shown.forEach(function (m, i) {
+        al.appendChild(h('div', { style: rowStyle }, [
+          h('span', { style: 'width:28px;text-align:center;color:var(--muted);font-weight:700', text: String(pins.length + i + 1) }),
+          h('span', { style: 'flex:1;min-width:160px' }, [h('a', { href: titleHref(m), style: 'font-weight:600', text: m.data.title || 'Untitled' }), h('div', { class: 'note', text: filmMeta(m.data) })]),
+          h('button', { type: 'button', class: 'btn small', text: 'Pin', disabled: !canWrite, on: { click: function () { writeRows(key, pins.concat([m.id]), 'Pinned to ' + sec); } } })
+        ]));
+      });
+      if (!auto.length) al.appendChild(h('div', { class: 'empty', style: 'padding:16px', text: pins.length ? 'Every film in ' + sec + ' is pinned.' : 'No published films in ' + sec + '.' }));
+      card.appendChild(h('h3', { class: 'sub', style: 'margin:18px 0 8px', text: 'Then automatically · ' + r[2] }));
+      card.appendChild(al);
+      if (auto.length > 12) card.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-top:10px', text: rowsShowAll[key] ? 'Show fewer' : 'Show all ' + auto.length,
+        on: { click: function () { rowsShowAll[key] = !rowsShowAll[key]; renderRows(); } } }));
+      main.appendChild(card);
+    });
+  }
   var MAX_FEAT = 8;
   function isFeatured(id) { return featured.indexOf(id) !== -1; }
   function writeFeatured(next, msg) {
@@ -912,7 +1019,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', rows: 'Home rows' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -926,10 +1033,11 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; peopleMode = false; popularMode = false; wantSlug = null;
+    featuredMode = false; peopleMode = false; popularMode = false; rowsMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
+    else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
@@ -1428,6 +1536,7 @@ window.ReelAdmin = function (env) {
     if (peopleMode) { renderPeople(); return; }
     if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
+    if (rowsMode) { renderRows(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
       main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/titles', text: '← All titles' })]));
@@ -1690,6 +1799,12 @@ window.ReelAdmin = function (env) {
     featLoaded = true; renderFeatCount();
     if (featuredMode) renderFeatured(); else if (page === 'title' && !dirty) renderEditor();
   }, function () {});
+  db.doc('settings/rows').onSnapshot(function (snap) {
+    if (rowsWriting) return;
+    var d = snap.exists ? snap.data() : {}, ids = function (a) { return Array.isArray(a) ? a.filter(function (x) { return typeof x === 'string'; }) : []; };
+    rowPins = { theatres: ids(d.theatres), coming: ids(d.coming) }; rowsLoaded = true; renderRowsCount();
+    if (rowsMode && !rowsDragging) renderRows();
+  }, function () {});
   db.doc('settings/popular').onSnapshot(function (snap) {
     if (popWriting) return;
     var d = snap.exists ? snap.data() : {};
@@ -1709,6 +1824,7 @@ window.ReelAdmin = function (env) {
       if (!snap.metadata.fromCache) { clearTimeout(timer); }
       movies = snap.docs.map(function (s) { var d = s.data(); if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; } return { id: s.id, data: d }; });
       var nHid = movies.filter(function (m) { return m.data.published === false; }).length;
+      renderRowsCount();
       setStatus((movies.length - nHid).toLocaleString('en-IN') + ' published · ' + nHid.toLocaleString('en-IN') + ' hidden' + (snap.metadata.fromCache ? ' · syncing…' : ''));
       var cur = movies.find(function (m) { return m.id === currentId; });
       if (currentId && currentId !== '__new__' && !cur) { currentId = null; draft = null; setDirty(false); }
