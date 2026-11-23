@@ -17,7 +17,7 @@ window.ReelAdmin = function (env) {
   var draft = null;         // working copy of current movie
   var dirty = false;
   var saving = false;
-  var filter = 'All', missF = [], query = '', langF = '', yearF = '', seoF = '', statusF = 'published', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
+  var filter = 'All', missF = [], fieldF = [], query = '', langF = '', yearF = '', seoF = '', statusF = 'published', seoVotes = null, sortKey = 'release', sortDir = 'desc', pageNo = 1, PAGE = 50;
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
@@ -800,8 +800,10 @@ window.ReelAdmin = function (env) {
       : tvEd ? 'Shown as a label on the show’s page and cards.' : 'Shown to visitors on the film’s page and cards. Moves to OTT on its own once the OTT Release Date passes.';
     return h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_nowPlaying', text: 'Now playing' }), sel, h('span', { class: 'note', text: note })]);
   }
-  function missing(d) { return REQUIRED.filter(function (r) { return !d[r[0]]; }); }
-  function pct(d) { return Math.round(100 * (REQUIRED.length - missing(d).length) / REQUIRED.length); }
+  // A synopsis counts as filled when the site shows one from the editorial file (same rule as the Missing synopsis chip).
+  function missField(d, id, k) { return k === 'synopsis' ? missingSynopsis(d, id) : !d[k]; }
+  function missing(d, id) { return REQUIRED.filter(function (r) { return missField(d, id, r[0]); }); }
+  function pct(d, id) { return Math.round(100 * (REQUIRED.length - missing(d, id).length) / REQUIRED.length); }
   function fmtDate(iso) {
     if (!iso) return 'No date';
     if (/^\d{4}$/.test(iso)) return iso;
@@ -842,6 +844,7 @@ window.ReelAdmin = function (env) {
     query = q.get('q') || ''; langF = q.get('lang') || ''; yearF = q.get('year') || ''; seoF = q.get('seo') || '';
     statusF = STATUS_OPTS[q.get('status')] ? q.get('status') : 'published';
     var sec = q.get('section'); filter = 'All'; missF = [];
+    fieldF = (q.get('fields') || '').split(',').filter(function (k) { return REQUIRED.some(function (r) { return r[0].toLowerCase() === k.toLowerCase(); }); }).map(function (k) { return REQUIRED.filter(function (r) { return r[0].toLowerCase() === k.toLowerCase(); })[0][0]; });
     (q.get('missing') || '').split(',').forEach(function (x) { Object.keys(MISS_SLUG).forEach(function (k) { if (MISS_SLUG[k] === x && missF.indexOf(k) === -1) missF.push(k); }); });
     if (sec === 'unpublished') statusF = 'unpublished'; // old link to the removed Unpublished chip
     Object.keys(SEC_SLUG).forEach(function (k) { if (SEC_SLUG[k] === sec) { if (isMiss(k)) { if (missF.indexOf(k) === -1) missF.push(k); } else filter = k; } }); // old ?section=missing-… links
@@ -856,6 +859,7 @@ window.ReelAdmin = function (env) {
     if (query.trim()) q.set('q', query.trim());
     if (filter !== 'All') q.set('section', SEC_SLUG[filter]);
     if (missF.length) q.set('missing', FILTERS.filter(function (f) { return missF.indexOf(f) !== -1; }).map(function (f) { return MISS_SLUG[f]; }).join(','));
+    if (fieldF.length && missF.indexOf('Missing info') !== -1) q.set('fields', fieldF.join(','));
     if (langF) q.set('lang', langF);
     if (yearF) q.set('year', yearF);
     if (seoF) q.set('seo', seoF);
@@ -868,7 +872,12 @@ window.ReelAdmin = function (env) {
   // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
   var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing synopsis': 'synopsis' };
   function isMiss(f) { return !!MISS_SLUG[f]; }
-  function chipOk(d, id, sec, miss) { sec = sec || filter; miss = miss || missF; return matchSection(d, sec, id) && miss.every(function (g) { return matchSection(d, g, id); }); }
+  // With Missing info picked, the field chips (fieldF) narrow it to titles missing every picked field.
+  function chipOk(d, id, sec, miss, fields) {
+    sec = sec || filter; miss = miss || missF; fields = fields || fieldF;
+    return matchSection(d, sec, id) && miss.every(function (g) { return matchSection(d, g, id); })
+      && (miss.indexOf('Missing info') === -1 || fields.every(function (k) { return missField(d, id, k); }));
+  }
   function setList(fn) { fn(); renderList(); }
   function renderFilters() {
     var box = $('filters'); box.innerHTML = '';
@@ -877,11 +886,11 @@ window.ReelAdmin = function (env) {
       var on, n, click;
       if (f === 'All') {
         on = filter === 'All' && !missF.length; n = base.length;
-        click = function () { filter = 'All'; missF = []; };
+        click = function () { filter = 'All'; missF = []; fieldF = []; };
       } else if (isMiss(f)) {
         on = missF.indexOf(f) !== -1;
         n = base.filter(function (m) { return chipOk(m.data, m.id, filter, on ? missF : missF.concat(f)); }).length;
-        click = function () { missF = on ? missF.filter(function (x) { return x !== f; }) : missF.concat(f); };
+        click = function () { missF = on ? missF.filter(function (x) { return x !== f; }) : missF.concat(f); if (f === 'Missing info' && on) fieldF = []; };
       } else {
         on = filter === f;
         n = base.filter(function (m) { return chipOk(m.data, m.id, f); }).length;
@@ -892,6 +901,18 @@ window.ReelAdmin = function (env) {
         title: isMiss(f) ? 'Combine with a section and other Missing filters' : null,
         on: { click: function () { setList(function () { click(); pageNo = 1; }); } } }));
     });
+    if (missF.indexOf('Missing info') !== -1) {
+      var fr = h('div', { class: 'fieldrow', role: 'group', 'aria-label': 'Missing which field' }, [
+        h('span', { class: 'note', text: 'Missing info = missing any of: ' + REQUIRED.map(function (r) { return r[1].toLowerCase(); }).join(', ') + '. Tap fields to narrow it down:' })]);
+      var cur = base.filter(function (m) { return chipOk(m.data, m.id); });
+      REQUIRED.forEach(function (r) {
+        var k = r[0], fon = fieldF.indexOf(k) !== -1;
+        var n = fon ? cur.length : cur.filter(function (m) { return missField(m.data, m.id, k); }).length;
+        fr.appendChild(h('button', { type: 'button', class: 'chip small gap', 'aria-pressed': String(fon), text: (fon ? '✓ ' : '') + r[1] + ' · ' + n,
+          on: { click: function () { setList(function () { fieldF = fon ? fieldF.filter(function (x) { return x !== k; }) : fieldF.concat(k); pageNo = 1; }); } } }));
+      });
+      box.appendChild(fr);
+    }
     var ls = $('langSel'), counts = {};
     movies.forEach(function (m) { if (pubOk(m.data, statusF)) langsOf(m.data).forEach(function (l) { counts[l] = (counts[l] || 0) + 1; }); });
     var langs = Object.keys(counts).sort(function (a, b) { return counts[b] - counts[a] || a.localeCompare(b); });
@@ -932,7 +953,7 @@ window.ReelAdmin = function (env) {
   function missingSynopsis(d, id) { return !String(d.synopsis || '').trim() && !synFile[id]; }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
     if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
@@ -949,7 +970,7 @@ window.ReelAdmin = function (env) {
     function val(m) {
       var d = m.data;
       if (sortKey === 'title') return (d.title || '').toLowerCase();
-      if (sortKey === 'complete') return pct(d);
+      if (sortKey === 'complete') return pct(d, m.id);
       if (sortKey === 'updated') return d.updatedAt || '';
       if (sortKey === 'section') return secIdx[d.section] != null ? secIdx[d.section] : 9;
       return d.releaseDate || '';
@@ -976,7 +997,7 @@ window.ReelAdmin = function (env) {
       return [m.data.title || '', /^\d{4}$/.test(y) ? y : '', m.id];
     }));
     var csv = '\ufeff' + rows.map(function (r) { return r.map(q).join(','); }).join('\r\n') + '\r\n';
-    var parts = [filter !== 'All' ? SEC_SLUG[filter] : (missF.length ? '' : 'all-titles')].concat(missF.map(function (f) { return SEC_SLUG[f]; }), [statusF !== 'published' ? statusF : '', langF, yearF, seoF, query ? 'search' : '']).filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
+    var parts = [filter !== 'All' ? SEC_SLUG[filter] : (missF.length ? '' : 'all-titles')].concat(missF.map(function (f) { return SEC_SLUG[f]; }), fieldF.length && missF.indexOf('Missing info') !== -1 ? ['no-' + fieldF.join('-')] : [], [statusF !== 'published' ? statusF : '', langF, yearF, seoF, query ? 'search' : '']).filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
     var a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: 'reelscore-' + parts.join('-') + '-' + new Date().toISOString().slice(0, 10) + '.csv' });
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
     setStatus('Downloaded ' + list.length + ' title' + (list.length === 1 ? '' : 's') + '.');
@@ -1004,7 +1025,7 @@ window.ReelAdmin = function (env) {
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
-      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; pageNo = 1; }); } } })]));
+      sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; fieldF = []; pageNo = 1; }); } } })]));
       return;
     }
     function th(key, label, cls) {
@@ -1018,7 +1039,7 @@ window.ReelAdmin = function (env) {
     ])]));
     var tb = h('tbody');
     slice.forEach(function (m) {
-      var d = m.data, p = pct(d), href = titleHref(m), poster = safeUrl(d.posterUrl), miss = missing(d);
+      var d = m.data, p = pct(d, m.id), href = titleHref(m), poster = safeUrl(d.posterUrl), miss = missing(d, m.id);
       var tr = h('tr', { class: d.published === false ? 'unpubrow' : '' }, [
         h('td', { class: 'pc' }, [poster ? h('img', { src: poster, alt: '', loading: 'lazy', decoding: 'async' }) : h('span')]),
         h('td', {}, [
@@ -1026,7 +1047,8 @@ window.ReelAdmin = function (env) {
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
           d.published === false ? h('span', { class: 'unpub', title: 'Visitors can’t see this title', text: 'Not published' }) : null,
           h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m)].filter(Boolean).join(' · ') }),
-          missF.indexOf('Missing photos') !== -1 ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
+          missF.indexOf('Missing info') !== -1 && miss.length ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + miss.map(function (r) { return r[1].toLowerCase(); }).join(', ') }) : null,
+          missF.indexOf('Missing photos') !== -1 && missF.indexOf('Missing info') === -1 ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
         h('td', { class: 'c-sec' }, [h('span', { class: 'sec', text: d.section || '—' })]),
         h('td', { class: 'nw', text: fmtDate(d.releaseDate) }),
@@ -1645,7 +1667,7 @@ window.ReelAdmin = function (env) {
       main.appendChild(h('div', { class: 'banner-note' }, [h('span', { text: 'Someone else saved this title while you were editing. Saving will overwrite their version.' })]));
       main.appendChild(h('div', { style: 'height:16px' }));
     }
-    var miss = missing(draft);
+    var miss = missing(draft, currentId);
     // header + preview
     main.appendChild(h('section', { class: 'card' }, [
       h('div', { class: 'head' }, [
