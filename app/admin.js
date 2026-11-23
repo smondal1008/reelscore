@@ -2003,6 +2003,8 @@ window.ReelAdmin = function (env) {
     }
     var badUrl = [['platformUrl', 'Streaming platform URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
     if (badUrl) { setStatus(badUrl[1] + ' must be a full link starting with https://'); var bf = $('f_' + badUrl[0]); if (bf) bf.focus(); return Promise.resolve(false); }
+    // Date each new video, so the site knows which trailer or song is newest (banners and rows play the newest).
+    if (Array.isArray(draft.videos)) { var vday = new Date().toISOString().slice(0, 10); draft.videos.forEach(function (x) { if (x && x.url && !x.addedAt) x.addedAt = vday; }); }
     saving = true; setDirty(true);
     var isNew = !movies.some(function (m) { return m.id === currentId; });
     var slug = urlSlug(draft.slug) || suggestedSlug(draft);
