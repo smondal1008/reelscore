@@ -212,6 +212,17 @@
   .fh .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,8,10,.92) 0%, rgba(10,8,10,.72) 28%, rgba(10,8,10,.25) 55%, rgba(10,8,10,0) 72%), linear-gradient(to top, rgba(10,8,10,.75) 0%, rgba(10,8,10,0) 40%); }
   .fh .fb { position: absolute; left: 0; bottom: 0; width: min(620px, 92%); padding: 0 0 56px 64px; display: flex; flex-direction: column; gap: 18px; }
   .fh .logo { margin: 0; font-family: Cinzel, Georgia, serif; font-weight: 800; font-size: clamp(44px, 6.4vw, 104px); line-height: .95; letter-spacing: 1px; color: #F3EBDD; text-shadow: 0 4px 24px rgba(0,0,0,.55); }
+  /* Long titles step down so they stay inside the banner; the synopsis keeps to three lines. */
+  .fh .logo.mid { font-size: clamp(38px, 5vw, 80px); }
+  .fh .logo.long { font-size: clamp(32px, 3.8vw, 60px); line-height: 1; }
+  .fh .syn { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  /* TV Shows page banner: a smaller type scale than the home banner. */
+  .fh.tvh .logo { font-size: clamp(32px, 4.2vw, 64px); line-height: 1; }
+  .fh.tvh .logo.mid { font-size: clamp(30px, 3.6vw, 54px); }
+  .fh.tvh .logo.long { font-size: clamp(26px, 3vw, 44px); }
+  .fh.tvh .fb { gap: 14px; }
+  .fh.tvh .meta { font-size: 16px; }
+  .fh.tvh .syn { font-size: 17px; }
   .fh .meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; font-size: 18px; font-weight: 600; color: var(--text); }
   .fh .meta i { width: 5px; height: 5px; border-radius: 50%; background: #8E8899; display: inline-block; }
   .fh .meta .cert { font-weight: 500; color: #D9D5DF; }

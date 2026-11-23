@@ -1303,14 +1303,14 @@
       video.addEventListener('timeupdate', function () { var p = document.getElementById('vProg'); if (p && video.duration) p.style.width = (100 * video.currentTime / video.duration) + '%'; });
       video.addEventListener('error', function () { toast('This clip couldn’t play.'); stopTrailer(); });
     }
-    var hero = h('section', { class: 'fh' + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: art(m, 'banner', 1920), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
+    var hero = h('section', { class: 'fh' + (S.heroCtx === 'tvshows' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: art(m, 'banner', 1920), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
       on: { mouseenter: function () { S.heroPause = true; }, mouseleave: function () { S.heroPause = false; }, focusin: function () { S.heroPause = true; }, focusout: function () { S.heroPause = false; } } }, [
       video,
       h('div', { class: 'scrim' }),
       playing ? h('button', { type: 'button', class: 'vclose', 'aria-label': 'Close trailer', text: '×', on: { click: stopTrailer } }) : null,
       playing ? h('div', { class: 'vprog', 'aria-hidden': 'true' }, [h('span', { id: 'vProg' })]) : null,
       h('div', { class: 'fb' }, [
-        h(S.heroCtx === 'tvshows' ? 'h2' : 'h1', { class: 'logo', text: d.title }),
+        h(S.heroCtx === 'tvshows' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
         meta,
         d.synopsis ? h('p', { class: 'syn', text: d.synopsis }) : null,
         h('div', { class: 'btns' }, [
