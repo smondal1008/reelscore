@@ -16,7 +16,7 @@
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', sort: 'new', page: 1 }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, yr: { year: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
-  try { S.navLang = localStorage.getItem('rs_lang') || ''; } catch (e) { S.navLang = ''; }
+  S.navLang = ''; try { localStorage.removeItem('rs_lang'); } catch (e) {} // header language picker is hidden, so don't keep an old pick
   try { S.city = localStorage.getItem('rs_city') || ''; } catch (e) { S.city = ''; }
   // Cities for ticket booking links. Popular ones are always listed; any other city can be added per title.
   var POP_CITIES = ['Mumbai', 'Delhi-NCR', 'Bengaluru', 'Hyderabad', 'Chandigarh', 'Ahmedabad', 'Pune', 'Chennai', 'Kolkata', 'Kochi'];
