@@ -10,6 +10,7 @@ window.ReelAdmin = function (env) {
 
   var db = null, assets = null, canWrite = true, canUpload = false;
   var movies = [];          // [{id, data}]
+  var linksOpenFor = null;  // the title whose folded Buy tickets card was opened
   var currentId = null;
   var draft = null;         // working copy of current movie
   var dirty = false;
@@ -1419,6 +1420,8 @@ window.ReelAdmin = function (env) {
       field('Subtitle', 'subtitle', { placeholder: 'e.g. Rise of a Legend · Part One' }),
       field('Home page section', 'section', { type: 'select', options: SECTIONS }),
       draft.section === 'On OTT' ? platformField('Streaming platform', false) : draft.section === 'Older releases' ? platformField('Now streaming on', false, 'Leave as “Not known” if you are not sure.') : tvEd ? platformField('Channel or platform', true) : null,
+      field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
+        note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
       tvEd ? field('Episodes', 'episodes', { placeholder: 'e.g. 240', note: 'Total across all seasons.' }) : null,
@@ -1428,14 +1431,20 @@ window.ReelAdmin = function (env) {
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
 
-    // links shown on the title page: a Watch on … button, and for films a Book tickets button
-    var gL = h('div', { class: 'grid' }, [
-      field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
-        note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
-      tvEd ? null : bookingField(),
-      tvEd ? null : bookingUrlsField()
-    ]);
-    main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [h('h2', { text: tvEd ? 'Where to watch' : 'Where to watch & tickets' }), gL]));
+    // Buy tickets (films only): booking partner and a link per city. Folded for Older releases; a tap opens it.
+    if (!tvEd) {
+      var gL = h('div', { class: 'grid' }, [bookingField(), bookingUrlsField()]);
+      var fold = draft.section === 'Older releases' && linksOpenFor !== currentId;
+      gL.hidden = fold;
+      var head = draft.section === 'Older releases'
+        ? h('button', { type: 'button', class: 'cardtoggle', 'aria-expanded': String(!fold), 'aria-controls': 'linksBody', on: { click: function () {
+            var open = gL.hidden; gL.hidden = !open; linksOpenFor = open ? currentId : null;
+            head.setAttribute('aria-expanded', String(open)); head.querySelector('.chev').textContent = open ? '▾' : '▸';
+          } } }, [h('h2', { text: 'Buy tickets' }), h('span', { class: 'sub', text: 'Usually not needed for older releases' }), h('span', { class: 'chev', 'aria-hidden': 'true', text: fold ? '▸' : '▾' })])
+        : h('h2', { text: 'Buy tickets' });
+      gL.id = 'linksBody';
+      main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [head, gL]));
+    }
 
     var g2 = h('div', { class: 'grid' }, [
       field('Languages', 'languages', { placeholder: 'Hindi, English' }),

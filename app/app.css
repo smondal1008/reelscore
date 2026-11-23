@@ -572,3 +572,8 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .pubdot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--muted); margin-right: 8px; vertical-align: 1px; }
   .pubdot.on { background: var(--ok); }
   .unpub { display: inline-block; margin-left: 8px; padding: 1px 7px; border-radius: 999px; font-size: 11px; font-weight: 600; color: var(--muted); border: 1px solid var(--line2); vertical-align: 2px; }
+  .cardtoggle { all: unset; box-sizing: border-box; width: 100%; display: flex; align-items: baseline; gap: 12px; cursor: pointer; }
+  .cardtoggle h2 { margin: 0; }
+  .cardtoggle .chev { margin-left: auto; font-size: 18px; color: var(--muted); }
+  .cardtoggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+  #linksCard .cardtoggle + .grid { margin-top: 14px; }
