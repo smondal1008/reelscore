@@ -1729,7 +1729,8 @@ window.ReelAdmin = function (env) {
     var extra = key === 'cast' ? h('button', { type: 'button', class: 'btn small', text: '+ New person', disabled: !canWrite, on: { click: function () {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
-    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: '★ picks the video the ' + (draft.section === 'TV shows' ? 'TV Shows' : 'Movies') + ' page banner plays for this title (save to apply). With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var bname = draft.section === 'TV shows' ? 'TV Shows' : 'Movies';
+    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: '★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows, hint]);
   }
 
@@ -2036,10 +2037,19 @@ window.ReelAdmin = function (env) {
     body.slugHistory = hist.slice(-10);
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
     return db.doc('movies/' + currentId).set(body).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();
+      // A newly starred video also puts the title on its page banner (Movies or TV Shows), if there is room.
+      if (body.bannerVideo && body.bannerVideo !== prevStar) {
+        var bk = body.section === 'TV shows' ? 'tv' : 'movies', bc = PB[bk];
+        if (!pbHas(bk, currentId)) {
+          if (bc.items.length >= MAX_FEAT) setStatus('Saved ' + body.title + '. The ' + bc.name + ' is full (' + MAX_FEAT + '), so it wasn’t added. Remove one in Admin › ' + bc.name + '.');
+          else pbWrite(bk, bc.items.concat([currentId]), 'Saved ' + body.title + ' and added it to the ' + bc.name);
+        }
+      }
       return true;
     }).catch(function (e) {
       saving = false; setDirty(true);
