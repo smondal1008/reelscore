@@ -576,6 +576,8 @@ async function main() {
     movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: slim(m.data) })),
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
+  // For the admin panel's Missing synopsis filter: titles whose story comes from content/synopses.json.
+  write('synopsis-file-ids.json', JSON.stringify(movies.filter(m => m.data._synFile).map(m => m.id)));
   // The app loads it in two parts: the core (every section but Older releases, plus people) first, Older releases after.
   // catalogue.json stays whole: the next build reads it, and the app falls back to it.
   const isOlder = m => m.data.section === 'Older releases' && String(m.data.releaseDate || '') < '2025';

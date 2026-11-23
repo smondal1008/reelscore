@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Unpublished'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis', 'Unpublished'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
@@ -623,7 +623,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Unpublished': 'unpublished' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing synopsis': 'missing-synopsis', 'Unpublished': 'unpublished' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); })); }
@@ -669,7 +669,7 @@ window.ReelAdmin = function (env) {
     var box = $('filters'); box.innerHTML = '';
     var base = movies.filter(function (m) { return passQL(m.data, m.id); });
     FILTERS.forEach(function (f) {
-      var n = f === 'All' ? base.length : base.filter(function (m) { return matchSection(m.data, f); }).length;
+      var n = f === 'All' ? base.length : base.filter(function (m) { return matchSection(m.data, f, m.id); }).length;
       box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(filter === f), text: f + ' · ' + n,
         on: { click: function () { setList(function () { filter = f; pageNo = 1; }); } } }));
     });
@@ -689,7 +689,7 @@ window.ReelAdmin = function (env) {
     years.forEach(function (y) { ys.appendChild(h('option', { value: y, text: y + ' (' + yc[y] + ')', selected: y === yearF })); });
     if (yc.none) ys.appendChild(h('option', { value: 'none', text: 'No release date (' + yc.none + ')', selected: yearF === 'none' }));
     var es = $('seoSel'), ec = {};
-    movies.forEach(function (m) { if (matchSection(m.data, filter) && passQL(m.data, m.id, true)) { var t = seoTier(m.data, m.id); ec[t] = (ec[t] || 0) + 1; } });
+    movies.forEach(function (m) { if (matchSection(m.data, filter, m.id) && passQL(m.data, m.id, true)) { var t = seoTier(m.data, m.id); ec[t] = (ec[t] || 0) + 1; } });
     es.innerHTML = '';
     es.appendChild(h('option', { value: '', text: 'All SEO statuses' }));
     SEO_TIERS.forEach(function (t) { es.appendChild(h('option', { value: t[0], text: t[1] + ' (' + (ec[t[0]] || 0) + ')', selected: t[0] === seoF })); });
@@ -700,9 +700,16 @@ window.ReelAdmin = function (env) {
     if (!ss.value) ss.appendChild(h('option', { value: sortKey + ':' + sortDir, text: SORTS[sortKey] + (sortDir === 'asc' ? ' ↑' : ' ↓'), selected: true }));
   }
   function missingPhotos(d) { return !safeUrl(d.posterUrl) || !safeUrl(d.bannerUrl); }
+  // No story on the site: none saved here, and none from the editorial file (content/synopses.json), whose titles
+  // the build lists in /synopsis-file-ids.json. Until that list loads, only the saved story counts.
+  var synFile = {};
+  fetch('/synopsis-file-ids.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : []; }).then(function (ids) {
+    (ids || []).forEach(function (id) { synFile[id] = 1; }); if (typeof renderList === 'function' && page === 'titles') renderList();
+  }).catch(function () {});
+  function missingSynopsis(d, id) { return !String(d.synopsis || '').trim() && !synFile[id]; }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
-  function matchSection(d, f) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Unpublished' ? d.published === false : d.section === f); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'Unpublished' ? d.published === false : d.section === f); }
   function passQL(d, id, skipSeo) {
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
     if (langF && langsOf(d).indexOf(langF) === -1) return false;
@@ -713,7 +720,7 @@ window.ReelAdmin = function (env) {
   }
   function visible() {
     var secIdx = {}; SECTIONS.forEach(function (x, i) { secIdx[x] = i; });
-    var list = movies.filter(function (m) { return matchSection(m.data, filter) && passQL(m.data, m.id); });
+    var list = movies.filter(function (m) { return matchSection(m.data, filter, m.id) && passQL(m.data, m.id); });
     var dir = sortDir === 'asc' ? 1 : -1;
     function val(m) {
       var d = m.data;
