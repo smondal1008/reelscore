@@ -161,6 +161,8 @@
   .tp-in img { display: block; width: 100%; aspect-ratio: 16 / 9; object-fit: contain; background: #000; }
   .tp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 14px; }
   .tp-cap { flex: 1; min-width: 200px; font-size: 13px; color: var(--muted); }
+  .tp-in.tall { width: auto; max-width: min(560px, 100%); } .tp-in.tall img { width: auto; max-width: 100%; margin: 0 auto; }
+  .drop.has { cursor: zoom-in; }
   .x.vstar { font-size: 18px; } .x.vstar.on { color: var(--accent); border-color: var(--accent); }
   @media (max-width: 720px) { .row.v { grid-template-columns: 1fr 1fr; } }
   .x { width: 44px; height: 42px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }

@@ -797,6 +797,26 @@ window.ReelAdmin = function (env) {
       img.src = 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg';
     });
   }
+  // Larger preview of an uploaded poster or banner, with its size and whether it matches the shape it is shown in.
+  function imagePreview(url, label, want) {
+    var old = document.getElementById('thumbPrev'); if (old) old.remove();
+    var cap = h('div', { class: 'tp-cap', text: label + ' · loading…' });
+    var img = h('img', { alt: label, src: url, style: 'aspect-ratio:auto;max-height:78vh' });
+    var close = function () { box.remove(); document.removeEventListener('keydown', onKey); };
+    var onKey = function (e) { if (e.key === 'Escape') close(); };
+    img.addEventListener('load', function () {
+      var got = img.naturalWidth / img.naturalHeight, off = Math.abs(got - want) / want > 0.06;
+      cap.textContent = label + ' · ' + img.naturalWidth + '×' + img.naturalHeight + (off ? ' · not ' + (want < 1 ? '2:3' : '16:9') + ', so the site crops it' : '');
+    });
+    img.addEventListener('error', function () { cap.textContent = 'Couldn’t load this image.'; });
+    var box = h('div', { id: 'thumbPrev', class: 'tp-ov', role: 'dialog', 'aria-modal': 'true', 'aria-label': label, on: { click: function (e) { if (e.target === box) close(); } } }, [
+      h('div', { class: 'tp-in' + (want < 1 ? ' tall' : '') }, [img, h('div', { class: 'tp-bar' }, [cap,
+        h('a', { class: 'btn small', href: url, target: '_blank', rel: 'noopener', text: 'Open full size' }),
+        h('button', { type: 'button', class: 'btn small', text: 'Close', on: { click: close } })])])
+    ]);
+    document.body.appendChild(box); document.addEventListener('keydown', onKey);
+    box.querySelector('button').focus();
+  }
   // Larger preview of a video's thumbnail: the HD one when YouTube has it, else the small one, with its size.
   function thumbPreview(id, item) {
     if (!id) { setStatus('Add the YouTube link first.'); return; }
@@ -1556,8 +1576,12 @@ window.ReelAdmin = function (env) {
       on: { click: function () { fileIn.click(); } } });
     var remove = draft[urlKey] ? h('button', { type: 'button', class: 'btn small', text: 'Remove', disabled: !canWrite,
       on: { click: function () { draft[urlKey] = ''; draft[idKey] = ''; touch(); renderEditor(); } } }) : null;
+    var openPrev = function () { if (safeUrl(draft[urlKey])) imagePreview(draft[urlKey], (isPoster ? 'Poster' : 'Banner') + ' of ' + (draft.title || 'this title'), isPoster ? 2 / 3 : 16 / 9); };
+    var view = draft[urlKey] ? h('button', { type: 'button', class: 'btn small', text: 'Preview', on: { click: openPrev } }) : null;
     drop.appendChild(hint);
-    drop.appendChild(h('div', { class: 'acts' }, [pick, remove]));
+    drop.appendChild(h('div', { class: 'acts' }, [pick, view, remove]));
+    // Clicking the image itself (not its buttons) opens the larger preview too.
+    drop.addEventListener('click', function (e) { if (e.target === drop || e.target === hint || hint.contains(e.target)) openPrev(); });
 
     function handle(file) {
       errEl.hidden = true; warnEl.hidden = true;
@@ -1579,6 +1603,7 @@ window.ReelAdmin = function (env) {
         draft[urlKey] = res.url; draft[idKey] = res.id; touch();
         drop.classList.add('has'); drop.setAttribute('style', bgUrl(res.url));
         pick.disabled = false; pick.textContent = 'Replace';
+        if (!view) { view = h('button', { type: 'button', class: 'btn small', text: 'Preview', on: { click: openPrev } }); pick.parentNode.insertBefore(view, pick.nextSibling); }
         updatePreview();
       }).catch(function (e) {
         pick.disabled = false; pick.textContent = draft[urlKey] ? 'Replace' : 'Choose image';
