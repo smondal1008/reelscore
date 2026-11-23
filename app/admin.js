@@ -1334,6 +1334,10 @@ window.ReelAdmin = function (env) {
     renderEditorInner();
     if (page === 'title' && draft) addJumpBar();
     showPage();
+    // A new title: put the cursor in the Title box.
+    if (page === 'title' && draft && !draft.title && !movies.some(function (m) { return m.id === currentId; }) && (!document.activeElement || document.activeElement === document.body)) {
+      var ti = $('f_title'); if (ti) ti.focus();
+    }
   }
   function addJumpBar() {
     var main = $('main'), cards = main.querySelectorAll(':scope > section.card');
@@ -1423,18 +1427,6 @@ window.ReelAdmin = function (env) {
       draft.source ? h('div', { class: 'note', text: draft.source + '. Check facts before publishing.' }) : null
     ]));
 
-    // images
-    main.appendChild(h('section', { class: 'card' }, [
-      h('h2', { text: 'Images' }),
-      h('div', { class: 'images' }, [imageSlot('poster'), imageSlot('banner')]),
-      h('div', { class: 'grid', style: 'margin-top:12px' }, [
-        field('Poster source & permission', 'posterSource', { placeholder: 'e.g. Press kit from Yash Raj Films, OK by email 21 Nov 2026', note: 'Who supplied the image and how you have permission. Kept private, never shown on the site.' })
-      ]),
-      h('div', { class: 'note', text: 'Only upload images you have the rights to use: press-kit art sent or approved by the producer or distributor, or an image under a licence that allows it (TVmaze CC BY-SA images are credited automatically). Do not copy posters from Wikipedia, IMDb or TMDB.' })
-    ]));
-
-    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
-
     // basics
     var tvEd = draft.section === 'TV shows';
     var g1 = h('div', { class: 'grid' }, [
@@ -1453,6 +1445,19 @@ window.ReelAdmin = function (env) {
       slugField()
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
+
+    // images
+    main.appendChild(h('section', { class: 'card' }, [
+      h('h2', { text: 'Images' }),
+      h('div', { class: 'images' }, [imageSlot('poster'), imageSlot('banner')]),
+      h('div', { class: 'grid', style: 'margin-top:12px' }, [
+        field('Poster source & permission', 'posterSource', { placeholder: 'e.g. Press kit from Yash Raj Films, OK by email 21 Nov 2026', note: 'Who supplied the image and how you have permission. Kept private, never shown on the site.' })
+      ]),
+      h('div', { class: 'note', text: 'Only upload images you have the rights to use: press-kit art sent or approved by the producer or distributor, or an image under a licence that allows it (TVmaze CC BY-SA images are credited automatically). Do not copy posters from Wikipedia, IMDb or TMDB.' })
+    ]));
+
+    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+
 
     // Buy tickets (films only): booking partner and a link per city. Folded for Older releases; a tap opens it.
     if (!tvEd) {
