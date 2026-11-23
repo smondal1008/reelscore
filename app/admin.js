@@ -744,6 +744,19 @@ window.ReelAdmin = function (env) {
     if (d <= 0) return 'Today'; if (d === 1) return 'Yesterday'; if (d < 30) return d + ' days ago';
     return fmtDate(iso.slice(0, 10));
   }
+  // CSV of the filtered list: title, release year and the title's ID (its database document id, which never changes).
+  function downloadList(list) {
+    var q = function (v) { v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; };
+    var rows = [['Title', 'Release year', 'Title ID']].concat(list.map(function (m) {
+      var y = String(m.data.releaseDate || '').slice(0, 4);
+      return [m.data.title || '', /^\d{4}$/.test(y) ? y : '', m.id];
+    }));
+    var csv = '\ufeff' + rows.map(function (r) { return r.map(q).join(','); }).join('\r\n') + '\r\n';
+    var parts = [filter !== 'All' ? SEC_SLUG[filter] : 'all-titles', langF, yearF, seoF, query ? 'search' : ''].filter(Boolean).map(function (x) { return String(x).toLowerCase().replace(/[^a-z0-9]+/g, '-'); });
+    var a = h('a', { href: URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' })), download: 'reelscore-' + parts.join('-') + '-' + new Date().toISOString().slice(0, 10) + '.csv' });
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+    setStatus('Downloaded ' + list.length + ' title' + (list.length === 1 ? '' : 's') + '.');
+  }
   function renderList() {
     if (seoF) loadSeoVotes();
     var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
@@ -758,6 +771,8 @@ window.ReelAdmin = function (env) {
     var from = (pageNo - 1) * PAGE, slice = vis.slice(from, from + PAGE);
     sum.textContent = !movies.length ? '' : total ? 'Showing ' + (from + 1) + '–' + (from + slice.length) + ' of ' + total + (total !== movies.length ? ' (filtered from ' + movies.length + ')' : '') : '';
     $('list').parentNode.hidden = !total;
+    if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
+      text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
       sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; filter = 'All'; pageNo = 1; }); } } })]));
