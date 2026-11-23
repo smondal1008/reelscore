@@ -443,7 +443,7 @@ async function main() {
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
     body += '<h2>About ' + esc(d.title) + '</h2><p>' + esc(ABOUT.title({ title: d.title, tv, date: d.releaseDate || '', year: y,
       upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', released: !!d.releaseDate && d.releaseDate <= TODAY,
-      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, endYear: d.endYear,
+      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, episodes: d.episodes, endYear: d.endYear,
       platform: d.platform, director: d.director, cast, verdicts: { pct: sc.pct, tot: sc.tot } })) + '</p>';
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
@@ -475,7 +475,7 @@ async function main() {
       director: directors.length ? directors.map(n => ({ '@type': 'Person', name: n, url: indexedPerson(personSlug(n)) ? SITE + '/person/' + personSlug(n) : undefined })) : undefined,
       actor: actors.length ? actors.slice(0, 15).map(c => ({ '@type': 'Person', name: c.name, url: indexedPerson(personSlug(c.name)) ? SITE + '/person/' + personSlug(c.name) : undefined })) : undefined
     };
-    if (tv) { if (y) node.startDate = d.releaseDate; if (/^\d{4}$/.test(String(d.endYear || ''))) node.endDate = String(d.endYear); if (+d.seasons > 0) node.numberOfSeasons = +d.seasons; }
+    if (tv) { if (y) node.startDate = d.releaseDate; if (/^\d{4}$/.test(String(d.endYear || ''))) node.endDate = String(d.endYear); if (+d.seasons > 0) node.numberOfSeasons = +d.seasons; if (+d.episodes > 0) node.numberOfEpisodes = +d.episodes; }
     else if (d.releaseDate) node.datePublished = d.releaseDate;
     // Only put the score in search markup once enough people have voted (see SEO_MIN_VERDICTS).
     if (sc.tot >= MIN_VERDICTS) { node.aggregateRating = { '@type': 'AggregateRating', ratingValue: sc.pct, bestRating: 100, worstRating: 0, ratingCount: sc.tot }; nRated++; }

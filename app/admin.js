@@ -1402,6 +1402,7 @@ window.ReelAdmin = function (env) {
       draft.section === 'On OTT' ? platformField('Streaming platform', false) : draft.section === 'Older releases' ? platformField('Now streaming on', false, 'Leave as “Not known” if you are not sure.') : tvEd ? platformField('Channel or platform', true) : null,
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
+      tvEd ? field('Episodes', 'episodes', { placeholder: 'e.g. 240', note: 'Total across all seasons.' }) : null,
       tvEd ? field('Last aired (year)', 'endYear', { placeholder: 'e.g. 2019', note: 'Leave blank if the show is still running.' }) : null,
       field('Date note', 'releaseNote', { placeholder: 'e.g. Reported, not confirmed' }),
       slugField()

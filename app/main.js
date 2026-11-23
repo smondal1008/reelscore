@@ -1620,7 +1620,7 @@
     if (!window.RS_ABOUT) return null;
     var d = m.data, sc = score(m.id), y = String(d.releaseDate || '').slice(0, 4);
     var text = RS_ABOUT.title({ title: d.title, tv: isTv(m), date: d.releaseDate || '', year: y, upcoming: isUpcoming(m), released: released(m),
-      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, endYear: d.endYear,
+      languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, episodes: d.episodes, endYear: d.endYear,
       platform: d.platform, director: d.director, cast: (d.cast || []).filter(function (c) { return c && c.name; }), verdicts: { pct: sc.pct, tot: sc.tot } });
     return h('section', { class: 'card', id: 'about' }, [h('h2', { text: 'About ' + d.title }), h('p', { class: 'about', text: text })]);
   }
@@ -1702,7 +1702,7 @@
     else toast(t);
   }
   function factsBlock(m) {
-    var d = m.data, rows = isTv(m) ? [['First aired', d.releaseDate ? fmtDate(d.releaseDate, true) : ''], ['Years', tvYears(d)], ['Channel or platform', d.platform], ['Seasons', d.seasons], ['Languages', d.languages], ['Genre', d.genre], ['Episode length', d.runtime], ['Certificate', d.certificate], ['Created by', d.director]] : [[isOtt(m) ? 'Streaming from' : 'Release date', fmtDate(d.releaseDate, true) + (d.releaseNote ? ' (' + d.releaseNote.toLowerCase() + ')' : '')], ['Platform', isOtt(m) ? d.platform : ''], ['Languages', d.languages], ['Genre', d.genre], ['Runtime', d.runtime], ['Certificate', d.certificate], ['Director', d.director]];
+    var d = m.data, rows = isTv(m) ? [['First aired', d.releaseDate ? fmtDate(d.releaseDate, true) : ''], ['Years', tvYears(d)], ['Channel or platform', d.platform], ['Seasons', d.seasons], ['Episodes', d.episodes], ['Languages', d.languages], ['Genre', d.genre], ['Episode length', d.runtime], ['Certificate', d.certificate], ['Created by', d.director]] : [[isOtt(m) ? 'Streaming from' : 'Release date', fmtDate(d.releaseDate, true) + (d.releaseNote ? ' (' + d.releaseNote.toLowerCase() + ')' : '')], ['Platform', isOtt(m) ? d.platform : ''], ['Languages', d.languages], ['Genre', d.genre], ['Runtime', d.runtime], ['Certificate', d.certificate], ['Director', d.director]];
     var linkers = {
       'Directed by': function (v) { return names(v, function (n) { return personUrl(n); }); }, 'Created by': function (v) { return names(v, function (n) { return personUrl(n); }); },
       'Director': function (v) { return names(v, function (n) { return personUrl(n); }); },

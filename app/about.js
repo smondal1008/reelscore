@@ -12,7 +12,7 @@
   var CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
   var SKIP_ROLE = /^(cast|actor|actress|self)$/i;
 
-  // t: { title, tv, date, year, upcoming, released, languages, genre, runtime, certificate, seasons, endYear, platform,
+  // t: { title, tv, date, year, upcoming, released, languages, genre, runtime, certificate, seasons, episodes, endYear, platform,
   //      director, cast: [{name, role}], verdicts: {pct, tot} }
   function title(t) {
     var s = [], T = t.title, kind = t.tv ? 'series' : 'film';
@@ -25,7 +25,9 @@
     else if (t.year) when = ' from ' + t.year;
     s.push(T + ' is ' + art(desc) + ' ' + desc + when + '.');
     var run = String(t.runtime || '').trim(), cert = String(t.certificate || '').trim();
-    if (t.tv && +t.seasons > 0) s.push('It has ' + (+t.seasons) + ' season' + (+t.seasons === 1 ? '' : 's') + (run ? ', with episodes of about ' + run : '') + '.');
+    var eps = +t.episodes > 0 ? (+t.episodes).toLocaleString('en-US') + ' episode' + (+t.episodes === 1 ? '' : 's') : '';
+    if (t.tv && +t.seasons > 0) s.push('It has ' + (+t.seasons) + ' season' + (+t.seasons === 1 ? '' : 's') + (eps ? ' and ' + eps + (run ? ' of about ' + run : '') : run ? ', with episodes of about ' + run : '') + '.');
+    else if (t.tv && eps) s.push('It has ' + eps + (run ? ' of about ' + run : '') + '.');
     else if (run && cert) s.push('It runs ' + run + ' and is certified ' + cert + '.');
     else if (run) s.push('It runs ' + run + '.');
     if (cert && (t.tv || !run)) s.push('It is certified ' + cert + '.');
