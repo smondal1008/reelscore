@@ -2344,10 +2344,15 @@
       if (tfeat.length) { setHeroCtx('tvshows', tfeat, 'tvHeroBox'); if (S.slide >= tfeat.length) S.slide = 0; v.appendChild(h('div', { id: 'tvHeroBox', style: 'margin-bottom:28px' })); drawHero(); }
     }
     if (tv) { drawTvRows(v); return; }
+    if (location.pathname !== '/movies' || /[?&](lang|genre|year|ott|page)=/.test(location.search)) {
+      // Old section and filter links: the same list on Browse.
+      history.replaceState(null, '', location.pathname.replace(/^\/movies/, '/browse') + location.search); parseRoute(); return;
+    }
     if (S.loaded) {
       var mfeat = movieHeroPicks();
       if (mfeat.length) { setHeroCtx('movies', mfeat, 'movHeroBox'); if (S.slide >= mfeat.length) S.slide = 0; v.appendChild(h('div', { id: 'movHeroBox', style: 'margin-bottom:28px' })); drawHero(); }
     }
+    drawMovieRows(v); return;
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var C = S.cat[kind];
     document.title = tv ? TV_TITLE : C.status === 'All' ? MOVIES_TITLE : (BROWSE_TITLES[C.status] || MOVIES_TITLE);
@@ -2452,6 +2457,51 @@
       if (sec) v.appendChild(sec);
     });
     v.appendChild(h('div', { class: 'wrapx', style: 'padding-top:8px' }, [h('a', { class: 'btn', href: tvHref(''), text: 'Browse all ' + all.length.toLocaleString('en-IN') + ' TV shows →' })]));
+  }
+  // Movies page: rows under the songs banner: what's on now, by streaming service, by language, by genre, catch-up and
+  // classics. Each "See all" opens Browse, a language page, a genre page or a year page; every film is on /browse.
+  function drawMovieRows(v) {
+    document.title = MOVIES_TITLE;
+    v.appendChild(h('div', { class: 'wrapx', style: 'padding-bottom:0' }, [
+      h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: 'Movies' }),
+      h('div', { class: 'sub', text: 'What’s on now, new on each streaming service, the latest in each language, and the best of each genre.' })
+    ]));
+    if (!S.loaded) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: S.loadMsg || 'Loading…' })])); return; }
+    var all = S.movies.filter(function (m) { return !isTv(m) && inNavLang(m); });
+    var td = today(), ago = new Date(); ago.setFullYear(ago.getFullYear() - 1); var yAgo = ago.toISOString().slice(0, 10);
+    var out = all.filter(function (m) { var r = m.data.releaseDate || ''; return r && r <= td; });
+    var newest = function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); };
+    var pop = popularityOf(out), byPop = function (a, b) { return pop[b.id] - pop[a.id] || newest(a, b); };
+    var rows = [];
+    var add = function (title, items, opts, href) { if (items.length >= 6) rows.push([title, items, opts, href]); };
+    add('In theatres now', pinFirst(all.filter(function (m) { return m.data.section === 'In theatres'; }).sort(newest), rowPins('In theatres')), { book: true, inTheatresList: true }, '/browse/in-theatres');
+    add('Coming soon', pinFirst(all.filter(function (m) { return m.data.section === 'Coming soon'; }).sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true }, '/browse/coming-soon');
+    // New on a service: on it in the last 12 months (its OTT date, else its release date).
+    var ottDate = function (m) { return m.data.ottReleaseDate || m.data.releaseDate || ''; };
+    [['netflix', 'Netflix'], ['prime-video', 'Prime Video'], ['zee5', 'ZEE5'], ['jiohotstar', 'JioHotstar'], ['sonyliv', 'SonyLIV']].forEach(function (o) {
+      add('New on ' + o[1], out.filter(function (m) { var t = ottDate(m); return ottOf(m.data) === o[0] && t >= yAgo && t <= td; }).sort(function (a, b) { return ottDate(b).localeCompare(ottDate(a)); }), null, '/browse?ott=' + o[0]);
+    });
+    // Latest in each language: released in the last 12 months, busiest languages first.
+    var recent = out.filter(function (m) { return (m.data.releaseDate || '') >= yAgo; }), lc = {};
+    recent.forEach(function (m) { var l = langOf(m.data); if (/^[A-Za-z]+$/.test(l)) lc[l] = (lc[l] || 0) + 1; });
+    Object.keys(lc).filter(function (l) { return l !== 'English' && lc[l] >= 6; }).sort(function (a, b) { return lc[b] - lc[a]; }).slice(0, 6).forEach(function (l) {
+      add('Latest ' + l + ' movies', recent.filter(function (m) { return langOf(m.data) === l; }).sort(newest), null, '/' + l.toLowerCase() + '-movies');
+    });
+    // Genres, most popular first.
+    [['Action', 'Action'], ['Comedy', 'Comedy'], ['Thriller', 'Thriller & crime'], ['Romance', 'Romance'], ['Horror', 'Horror'], ['Biopic', 'Biopics'], ['Family', 'Family'], ['Sports', 'Sports'], ['Sci-fi', 'Sci-fi']].forEach(function (g) {
+      var inG = g[0] === 'Sports' ? function (m) { return /sport/i.test(m.data.genre || ''); } : function (m) { return genreTags(m.data).indexOf(g[0]) !== -1; };
+      add(g[1], out.filter(inG).sort(byPop), null, genreBySlug(genreSlug(g[0])) ? genreUrl(g[0]) : null);
+    });
+    var ly = String(new Date().getFullYear() - 1), yr = function (a, b) { return function (m) { var y = (m.data.releaseDate || '').slice(0, 4); return y >= a && y <= b; }; };
+    add('Catch up on ' + ly + ' releases', out.filter(yr(ly, ly)).sort(byPop), null, '/year/' + ly);
+    add('Popular from the 2010s', out.filter(yr('2010', '2019')).sort(byPop), null, null);
+    add('’90s classics', out.filter(yr('1990', '1999')).sort(byPop), null, null);
+    rows.forEach(function (r) {
+      var o = Object.assign({ max: TV_ROW_MAX }, r[2] || {});
+      var sec = rowSection(r[0], r[1], o, r[3] ? seeAll(r[3]) : null);
+      if (sec) v.appendChild(sec);
+    });
+    v.appendChild(h('div', { class: 'wrapx', style: 'padding-top:8px' }, [h('a', { class: 'btn', href: '/browse', text: 'Browse all movies and shows →' })]));
   }
   // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
   function pagerNav(cur, pages, hrefFor, onPick) {
