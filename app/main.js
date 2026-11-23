@@ -1357,6 +1357,9 @@
   // TV Shows banner: shows with a banner image and a video. Pinned TV promotionals (Admin > Home rows) first, then shows
   // still running, then those whose newest video is most recent. At most 8.
   function tvHeroPicks() {
+    // Shows chosen in Admin > TV Shows banner, in that order; with none, the automatic pick below.
+    var chosen = (S.tvFeatured || []).map(function (id) { return S.byId[id]; }).filter(function (m) { return m && isTv(m) && inNavLang(m); });
+    if (chosen.length) return chosen;
     var pins = rowPins('tvpromos'), thisYear = String(new Date().getFullYear());
     var newest = function (m) { return (m.data.videos || []).reduce(function (a, x) { var t = String(x.publishedAt || x.addedAt || ''); return t > a ? t : a; }, ''); };
     var list = homeSection('TV shows').filter(function (m) { return safeUrl(m.data.bannerUrl) && (safeUrl(m.data.trailerFileUrl) || heroYt(m)); });
@@ -2715,6 +2718,11 @@
       var d = snap.exists ? snap.data() : {};
       S.featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
       S.slide = 0; render();
+    }, function () {});
+    db.doc('settings/tvbanner').onSnapshot(function (snap) {
+      var d = snap.exists ? snap.data() : {}, was = JSON.stringify(S.tvFeatured || []);
+      S.tvFeatured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+      if (was !== JSON.stringify(S.tvFeatured) && S.route === 'tvshows') { if (S.play) leaveHero(); S.slide = 0; render(); }
     }, function () {});
     db.doc('settings/buttons').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, next = {};

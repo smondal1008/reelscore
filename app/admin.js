@@ -21,6 +21,7 @@ window.ReelAdmin = function (env) {
   var pendingSwitch = null; // unused since titles open on their own page
   var page = 'titles', wantSlug = null, go = function (u) { location.href = u; };
   var featuredMode = false, featured = [], featLoaded = false, featWriting = false;
+  var tvBannerMode = false, tvFeatured = [], tvFeatWriting = false;
   var popularMode = false, popOrder = [], popLoaded = false, popWriting = false, popDragging = false, popVerdicts = null, popShowAll = false;
   var peopleMode = false, people = {}, peopleQ = '', peopleMissingOnly = false, peopleFilter = 'all', peoplePage = 1, PEOPLE_PAGE = 50, dupCache = { sig: null, map: {} };
   function personKey(name) { return (name || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
@@ -783,6 +784,73 @@ window.ReelAdmin = function (env) {
     ]));
     main.appendChild(card);
   }
+  // ---------- TV Shows banner (/admin/tv-banner): the carousel at the top of the site's TV Shows page (settings/tvbanner) ----------
+  // With nothing chosen, the site picks shows itself: pinned TV promotionals, then running shows with the newest videos.
+  function isTvFeatured(id) { return tvFeatured.indexOf(id) !== -1; }
+  function hasVideo(d) { return !!safeUrl(d.trailerFileUrl) || (d.videos || []).some(function (x) { return !!safeUrl(x.url); }); }
+  function writeTvFeatured(next, msg) {
+    if (tvFeatWriting) { setStatus('Still saving the TV Shows banner, try again in a moment.'); return; }
+    tvFeatWriting = true; tvFeatured = next; renderTvFeatCount(); if (tvBannerMode) renderTvFeatured(); else renderEditor();
+    db.doc('settings/tvbanner').set({ featured: next, updatedAt: new Date().toISOString() }).then(function () {
+      tvFeatWriting = false; setStatus(msg || 'TV Shows banner saved');
+    }).catch(function () { tvFeatWriting = false; setStatus('Couldn’t save the TV Shows banner. Try again.'); });
+  }
+  function toggleTvFeatured(id) {
+    if (isTvFeatured(id)) writeTvFeatured(tvFeatured.filter(function (x) { return x !== id; }), 'Removed from the TV Shows banner');
+    else if (tvFeatured.length >= MAX_FEAT) setStatus('The banner holds up to ' + MAX_FEAT + ' shows. Remove one first.');
+    else writeTvFeatured(tvFeatured.concat([id]), 'Added to the TV Shows banner');
+  }
+  function renderTvFeatCount() { var el = $('tvFeatCount'); if (el) el.textContent = tvFeatured.length + '/' + MAX_FEAT; }
+  function renderTvFeatured() {
+    var main = $('main'); main.innerHTML = '';
+    var items = tvFeatured.map(function (id) { return movies.find(function (m) { return m.id === id; }); }).filter(Boolean);
+    var card = h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [
+        h('div', {}, [h('div', { class: 'sub', text: 'Top of the TV Shows page' }), h('h1', { text: 'TV Shows banner' })]),
+        h('div', { class: 'sub', text: items.length + ' of ' + MAX_FEAT + ' slots' })
+      ]),
+      h('div', { class: 'note', text: 'These shows rotate in the banner on the TV Shows page, in this order. Each plays its first trailer, or else its first promo, clip or episode, right in the banner, so give each a 16:9 banner image and a video. With nothing chosen, the page picks shows itself: pinned TV promotionals (Home rows) first, then running shows with the newest videos.' })
+    ]);
+    var list = h('div', { class: 'rows' });
+    if (!items.length) list.appendChild(h('div', { class: 'empty', style: 'padding:24px', text: 'No shows chosen yet, so the page picks them itself. Add one below.' }));
+    items.forEach(function (m, i) {
+      var d = m.data, hasBanner = !!safeUrl(d.bannerUrl), vid = hasVideo(d);
+      var warn = [hasBanner ? '' : 'add a banner image', vid ? '' : 'add a video'].filter(Boolean).join(' and ');
+      list.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)' }, [
+        h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:22px;width:24px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+        h('span', { class: 'thumb', style: 'width:112px;height:63px;' + bgUrl(d.bannerUrl), 'aria-hidden': 'true' }, [hasBanner ? null : 'No banner']),
+        h('span', { style: 'flex:1;min-width:160px' }, [
+          h('div', { class: 't', style: 'font-weight:600', text: d.title || 'Untitled' }),
+          h('div', { class: 'm', style: 'font-size:12px;color:' + (warn ? '#F5C46B' : 'var(--muted)'), text: [d.platform || 'TV show', (d.videos || []).length + ' video' + ((d.videos || []).length === 1 ? '' : 's')].join(' · ') + (warn ? ' · ' + warn : '') })
+        ]),
+        h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { var n = tvFeatured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j - 1, 0, m.id); writeTvFeatured(n, 'Order saved'); } } }),
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' down', text: '↓', disabled: i === items.length - 1 || !canWrite, on: { click: function () { var n = tvFeatured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j + 1, 0, m.id); writeTvFeatured(n, 'Order saved'); } } }),
+          h('a', { class: 'btn small', href: titleHref(m), text: 'Edit show' }),
+          h('button', { type: 'button', class: 'btn small danger', text: 'Remove', disabled: !canWrite, on: { click: function () { toggleTvFeatured(m.id); } } })
+        ])
+      ]));
+    });
+    card.appendChild(list);
+    var avail = movies.filter(function (m) { return m.data.section === 'TV shows' && !isTvFeatured(m.id); })
+      .sort(function (a, b) { return (hasVideo(b.data) && !!safeUrl(b.data.bannerUrl)) - (hasVideo(a.data) && !!safeUrl(a.data.bannerUrl)) || String(a.data.title || '').localeCompare(String(b.data.title || '')); });
+    var ready = avail.filter(function (m) { return hasVideo(m.data) && safeUrl(m.data.bannerUrl); }), rest = avail.filter(function (m) { return ready.indexOf(m) === -1; });
+    var opt = function (m) { var d = m.data, miss = [safeUrl(d.bannerUrl) ? '' : 'no banner', hasVideo(d) ? '' : 'no video'].filter(Boolean).join(', '); return h('option', { value: m.id, text: d.title + (miss ? ' (' + miss + ')' : '') }); };
+    var sel = h('select', { class: 'in', id: 'tvFeatAdd', disabled: !canWrite || tvFeatured.length >= MAX_FEAT },
+      [h('option', { value: '', text: tvFeatured.length >= MAX_FEAT ? 'All ' + MAX_FEAT + ' slots are full' : 'Choose a show to add…' }),
+        h('optgroup', { label: 'With a banner and a video' }, ready.map(opt)),
+        h('optgroup', { label: 'Missing a banner or a video' }, rest.map(opt))]);
+    card.appendChild(h('div', { class: 'field' }, [
+      h('label', { class: 'l', for: 'tvFeatAdd', text: 'Add a show to the banner' }),
+      h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [
+        h('span', { style: 'flex:1;min-width:220px' }, [sel]),
+        h('button', { type: 'button', class: 'btn primary', text: 'Add to banner', disabled: !canWrite || tvFeatured.length >= MAX_FEAT, on: { click: function () {
+          if (!sel.value) { setStatus('Pick a show first.'); return; } toggleTvFeatured(sel.value);
+        } } })
+      ])
+    ]));
+    main.appendChild(card);
+  }
   var remoteChanged = false;
   var confirmDelete = false;
 
@@ -1133,7 +1201,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', rows: 'Home rows', buttons: 'Buttons' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', rows: 'Home rows', buttons: 'Buttons' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1147,10 +1215,11 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; wantSlug = null;
+    featuredMode = false; tvBannerMode = false; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
+    else if (parts[0] === 'tv-banner') { page = 'tvbanner'; tvBannerMode = true; }
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
@@ -1663,6 +1732,7 @@ window.ReelAdmin = function (env) {
     if (peopleMode) { renderPeople(); return; }
     if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
+    if (tvBannerMode) { renderTvFeatured(); return; }
     if (rowsMode) { renderRows(); return; }
     if (btnMode) { renderButtons(); return; }
     var main = $('main'); main.innerHTML = '';
@@ -1733,6 +1803,12 @@ window.ReelAdmin = function (env) {
           text: isFeatured(currentId) ? '★ On the home banner (slot ' + (featured.indexOf(currentId) + 1) + ')' : '☆ Feature on home banner',
           on: { click: function () { toggleFeatured(currentId); } } }),
         h('span', { class: 'note', text: isFeatured(currentId) ? 'Saved straight away. Click to remove.' : (safeUrl(draft.bannerUrl) ? 'Adds it to the first scroll of the home page.' : 'Add a banner image first for the best look.') })
+      ]) : null,
+      movies.some(function (m) { return m.id === currentId && m.data.section === 'TV shows'; }) ? h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:10px' }, [
+        h('button', { type: 'button', class: 'btn small' + (isTvFeatured(currentId) ? ' primary' : ''), 'aria-pressed': String(isTvFeatured(currentId)), disabled: !canWrite,
+          text: isTvFeatured(currentId) ? '★ On the TV Shows banner (slot ' + (tvFeatured.indexOf(currentId) + 1) + ')' : '☆ Feature on TV Shows banner',
+          on: { click: function () { toggleTvFeatured(currentId); } } }),
+        h('span', { class: 'note', text: isTvFeatured(currentId) ? 'Saved straight away. Click to remove.' : 'Adds it to the banner at the top of the TV Shows page.' })
       ]) : null,
       draft.source ? h('div', { class: 'note', text: draft.source + '. Check facts before publishing.' }) : null
     ]));
@@ -1970,6 +2046,13 @@ window.ReelAdmin = function (env) {
     featured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
     featLoaded = true; renderFeatCount();
     if (featuredMode) renderFeatured(); else if (page === 'title' && !dirty) renderEditor();
+  }, function () {});
+  db.doc('settings/tvbanner').onSnapshot(function (snap) {
+    if (tvFeatWriting) return;
+    var d = snap.exists ? snap.data() : {};
+    tvFeatured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+    renderTvFeatCount();
+    if (tvBannerMode) renderTvFeatured(); else if (page === 'title' && !dirty) renderEditor();
   }, function () {});
   db.doc('settings/buttons').onSnapshot(function (snap) {
     if (btnWriting) return;
