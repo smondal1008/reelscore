@@ -1705,10 +1705,20 @@ window.ReelAdmin = function (env) {
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
+        // Videos: ★ picks the one the Movies / TV Shows page banner plays for this title (draft.bannerVideo, its URL).
+        if (key === 'videos') {
+          var star = !!item.url && draft.bannerVideo === item.url;
+          cells.push(h('button', { type: 'button', class: 'x vstar' + (star ? ' on' : ''), 'aria-pressed': String(star), disabled: !canWrite,
+            'aria-label': (star ? 'Stop featuring' : 'Feature') + ' video ' + (i + 1) + ' on the banner', title: star ? 'Plays on the banner. Click to unpick.' : 'Play this video on the banner',
+            text: star ? '★' : '☆', on: { click: function () {
+              if (!String(item.url || '').trim()) { setStatus('Add the YouTube link first.'); return; }
+              draft.bannerVideo = star ? '' : item.url; touch(); draw();
+            } } }));
+        }
         cells.push(h('button', { type: 'button', class: 'x', 'aria-label': 'Remove row ' + (i + 1), text: '×', disabled: !canWrite,
-          on: { click: function () { arr.splice(i, 1); touch(); draw(); } } }));
+          on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
-        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (av ? ' cast' : '') }, cells));
+        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (av ? ' cast' : '') }, cells));
       });
     }
     draw();
@@ -1719,7 +1729,8 @@ window.ReelAdmin = function (env) {
     var extra = key === 'cast' ? h('button', { type: 'button', class: 'btn small', text: '+ New person', disabled: !canWrite, on: { click: function () {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
-    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows]);
+    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: '★ picks the video the ' + (draft.section === 'TV shows' ? 'TV Shows' : 'Movies') + ' page banner plays for this title (save to apply). With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows, hint]);
   }
 
   function renderEditor() {

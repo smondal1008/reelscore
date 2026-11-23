@@ -152,6 +152,8 @@
   .pav.has { border: 2px solid var(--line2); color: transparent; }
   .pav:hover { border-color: var(--accent); }
   .row.v { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px; }
+  .row.v.feat { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px 44px; }
+  .x.vstar { font-size: 18px; } .x.vstar.on { color: var(--accent); border-color: var(--accent); }
   @media (max-width: 720px) { .row.v { grid-template-columns: 1fr 1fr; } }
   .x { width: 44px; height: 42px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }
   .x:hover { color: var(--danger); border-color: #5A2A2A; }

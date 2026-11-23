@@ -1273,7 +1273,7 @@
     var box = $(S.heroBoxId || 'heroBox'); if (!box || !S.feat || !S.feat.length) return;
     var feat = S.feat; if (S.slide >= feat.length) S.slide = 0;
     var m = feat[S.slide], d = m.data, sc = score(m.id);
-    var songs = S.heroCtx === 'movies', clip = songs ? null : safeUrl(d.trailerFileUrl), yt = clip ? null : songs ? heroSong(m) : heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
+    var songs = S.heroCtx === 'movies', pick = S.heroCtx === 'tvshows' ? heroPicked(m) : null, clip = songs || pick ? null : safeUrl(d.trailerFileUrl), yt = clip ? null : songs ? heroSong(m) : pick || heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
     if (playing && S.heroNode && S.heroNode._mid === m.id) {
       box.innerHTML = ''; box.appendChild(S.heroNode);
       if (!S.play.paused && S.heroVideo) safePlay(S.heroVideo);
@@ -1313,7 +1313,7 @@
       h('div', { class: 'fb' }, [
         h(S.heroCtx && S.heroCtx !== 'home' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
         meta,
-        songs && yt && !/^(official )?(video )?song$/i.test(String(yt.title || '').trim()) ? h('div', { class: 'songl' }, [h('span', { 'aria-hidden': 'true', text: '♪ ' }), yt.title]) : null,
+        songs && yt && yt.cat === 'songs' && !/^(official )?(video )?song$/i.test(String(yt.title || '').trim()) ? h('div', { class: 'songl' }, [h('span', { 'aria-hidden': 'true', text: '♪ ' }), yt.title]) : null,
         d.synopsis ? h('p', { class: 'syn', text: d.synopsis }) : null,
         h('div', { class: 'btns' }, [
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
@@ -1376,7 +1376,12 @@
     return list.slice(0, 8);
   }
   // Movies banner: the movie's newest YouTube song (by publish date, else the one saved last).
+  function heroPicked(m) {
+    var u = safeUrl(m.data.bannerVideo); if (!u) return null;
+    return vidItems(m).filter(function (x) { return x.yt && x.url === u; })[0] || null;
+  }
   function heroSong(m) {
+    var pk = heroPicked(m); if (pk) return pk;
     var vs = m.data.videos || [], best = null, bt = '';
     vidItems(m).forEach(function (x, i) {
       if (!x.yt || x.cat !== 'songs') return;
