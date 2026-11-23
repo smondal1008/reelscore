@@ -488,7 +488,7 @@
     else if (path === '/about') { S.route = 'about'; S.param = null; }
     else if ((window.RS_404 || document.querySelector('meta[name="rs-404"]')) && path !== '/') { S.route = 'notfound'; S.param = path; }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
-    if (S.route !== 'home' && S.play) { try { S.heroVideo && S.heroVideo.pause(); } catch (e) {} S.play = null; S.heroNode = null; S.heroVideo = null; }
+    if (S.route !== (S.heroCtx || 'home') && S.play) leaveHero();
     document.body.className = 'r-' + S.route;
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
     if (S.route === 'browse') document.title = S.browse.landing ? S.browse.landing.title : (BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All);
@@ -792,8 +792,8 @@
       if (!feat.length) feat = S.movies.filter(inNavLang).slice(0, 3);
       if (!feat.length) feat = all.length ? all : S.movies.slice(0, 3);
     }
+    setHeroCtx('home', feat, 'heroBox');
     if (S.slide >= feat.length) S.slide = 0;
-    S.feat = feat;
     var heroBox = h('div', { id: 'heroBox' });
     v.appendChild(heroBox);
     drawHero();
@@ -1269,7 +1269,7 @@
     return 0;
   }
   function drawHero() {
-    var box = $('heroBox'); if (!box || !S.feat || !S.feat.length) return;
+    var box = $(S.heroBoxId || 'heroBox'); if (!box || !S.feat || !S.feat.length) return;
     var feat = S.feat; if (S.slide >= feat.length) S.slide = 0;
     var m = feat[S.slide], d = m.data, sc = score(m.id);
     var clip = safeUrl(d.trailerFileUrl), yt = clip ? null : heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
@@ -1310,13 +1310,13 @@
       playing ? h('button', { type: 'button', class: 'vclose', 'aria-label': 'Close trailer', text: '×', on: { click: stopTrailer } }) : null,
       playing ? h('div', { class: 'vprog', 'aria-hidden': 'true' }, [h('span', { id: 'vProg' })]) : null,
       h('div', { class: 'fb' }, [
-        h('h1', { class: 'logo', text: d.title }),
+        h(S.heroCtx === 'tvshows' ? 'h2' : 'h1', { class: 'logo', text: d.title }),
         meta,
         d.synopsis ? h('p', { class: 'syn', text: d.synopsis }) : null,
         h('div', { class: 'btns' }, [
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
-            : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
+            : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), S.heroCtx === 'tvshows' ? heroVidLabel(yt) : 'Trailer'])
             : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
           h('a', { class: 'pill info', href: movieUrl(m), text: 'View details' }),
           playing && !yt ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
@@ -1333,6 +1333,41 @@
     S.heroNode = playing ? hero : null; S.heroVideo = video;
     box.innerHTML = ''; box.appendChild(hero);
     if (video && !yt) safePlay(video, function () { video.muted = true; S.play.muted = true; safePlay(video); var b = document.getElementById('vMute'); if (b) { b.textContent = '🔇'; b.setAttribute('aria-label', 'Unmute'); } });
+  }
+  // The banner is drawn on Home and on TV Shows; each keeps its own slide, and a playing video stops on leaving its page.
+  function setHeroCtx(ctx, feat, boxId) {
+    if (S.heroCtx !== ctx) {
+      S.slideBy = S.slideBy || {}; S.slideBy[S.heroCtx || 'home'] = S.slide || 0;
+      if (S.play) leaveHero();
+      S.slide = S.slideBy[ctx] || 0; S.heroCtx = ctx;
+    }
+    S.feat = feat; S.heroBoxId = boxId;
+  }
+  // Stop a playing banner video and empty its box, so a YouTube player in a page that is no longer shown stops too.
+  function leaveHero() {
+    try { S.heroVideo && S.heroVideo.pause && S.heroVideo.pause(); } catch (e) {}
+    var b = S.heroNode && S.heroNode.parentNode; if (b) b.innerHTML = '';
+    S.play = null; S.heroNode = null; S.heroVideo = null;
+  }
+  // What the TV Shows banner's play button says: the kind of video it plays.
+  function heroVidLabel(x) {
+    var k = String(x.kind || '').toLowerCase();
+    return /teaser/.test(k) ? 'Teaser' : /trailer/.test(k) ? 'Trailer' : /promo|precap|glimpse/.test(k) ? 'Promo' : /episode/.test(k) ? 'Episode' : /clip/.test(k) ? 'Clip' : x.cat === 'trailers' ? 'Trailer' : 'Play video';
+  }
+  // TV Shows banner: shows with a banner image and a video. Pinned TV promotionals (Admin > Home rows) first, then shows
+  // still running, then those whose newest video is most recent. At most 8.
+  function tvHeroPicks() {
+    var pins = rowPins('tvpromos'), thisYear = String(new Date().getFullYear());
+    var newest = function (m) { return (m.data.videos || []).reduce(function (a, x) { var t = String(x.publishedAt || x.addedAt || ''); return t > a ? t : a; }, ''); };
+    var list = homeSection('TV shows').filter(function (m) { return safeUrl(m.data.bannerUrl) && (safeUrl(m.data.trailerFileUrl) || heroYt(m)); });
+    var nv = {}; list.forEach(function (m) { nv[m.id] = newest(m); });
+    list.sort(function (a, b) {
+      var pa = pins.indexOf(a.id), pb = pins.indexOf(b.id);
+      if (pa !== -1 || pb !== -1) return (pa === -1 ? 1e9 : pa) - (pb === -1 ? 1e9 : pb);
+      var ra = !a.data.endYear || String(a.data.endYear) >= thisYear ? 1 : 0, rb = !b.data.endYear || String(b.data.endYear) >= thisYear ? 1 : 0;
+      return rb - ra || nv[b.id].localeCompare(nv[a.id]) || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
+    });
+    return list.slice(0, 8);
   }
   // The hero's YouTube trailer: the first trailer/teaser with a YouTube link, else any YouTube video of the title.
   function heroYt(m) {
@@ -1353,7 +1388,7 @@
     if (b) { b.textContent = vd.muted ? '🔇' : '🔊'; b.setAttribute('aria-label', vd.muted ? 'Unmute' : 'Mute'); }
   }
   setInterval(function () {
-    if (S.route !== 'home' || S.heroPause || S.play || document.hidden || !S.feat || S.feat.length < 2) return;
+    if (S.route !== (S.heroCtx || 'home') || S.heroPause || S.play || document.hidden || !S.feat || S.feat.length < 2) return;
     S.slide = (S.slide + 1) % S.feat.length; drawHero();
   }, 8000);
   // Credit for data from open sources (TVmaze is CC BY-SA and asks for a link; Wikidata is CC0 but credited anyway).
@@ -2256,6 +2291,10 @@
     var tv = kind === 'tv', v = $(tv ? 'view-tvshows' : 'view-movies');
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
     v.innerHTML = '';
+    if (tv && S.loaded) {
+      var tfeat = tvHeroPicks();
+      if (tfeat.length) { setHeroCtx('tvshows', tfeat, 'tvHeroBox'); if (S.slide >= tfeat.length) S.slide = 0; v.appendChild(h('div', { id: 'tvHeroBox', style: 'margin-bottom:28px' })); drawHero(); }
+    }
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     var C = S.cat[kind];
     document.title = tv ? TV_TITLE : C.status === 'All' ? MOVIES_TITLE : (BROWSE_TITLES[C.status] || MOVIES_TITLE);
