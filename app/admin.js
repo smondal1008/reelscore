@@ -820,7 +820,7 @@ window.ReelAdmin = function (env) {
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
   var STATUS_OPTS = { published: 'Published', unpublished: 'Unpublished', all: 'All' };
   function pubOk(d, st) { return st === 'all' || (st === 'unpublished' ? d.published === false : d.published !== false); }
-  function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); })); }
+  function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); }) || (d.moreBooking || []).some(function (p) { return p && Object.keys(p.urls || {}).some(function (c) { return safeUrl(p.urls[c]); }); })); }
   function hasYt(d) { return (d.videos || []).some(function (v) { return /youtu\.?be/.test(v.url || ''); }); }
   function seoTier(d, id) {
     var syn = String(d.synopsis || '').trim().length, tot = (seoVotes && seoVotes[id]) || 0;
@@ -1244,13 +1244,20 @@ window.ReelAdmin = function (env) {
   }
   var OTHER_CITIES = ['Agra', 'Ajmer', 'Aligarh', 'Allahabad (Prayagraj)', 'Amravati', 'Amritsar', 'Anand', 'Asansol', 'Aurangabad', 'Bareilly', 'Belagavi', 'Bhavnagar', 'Bhilai', 'Bhopal', 'Bhubaneswar', 'Bikaner', 'Calicut (Kozhikode)', 'Coimbatore', 'Cuttack', 'Davanagere', 'Dehradun', 'Dhanbad', 'Durgapur', 'Erode', 'Gandhinagar', 'Goa', 'Gorakhpur', 'Guntur', 'Guwahati', 'Gwalior', 'Haridwar', 'Hubballi', 'Indore', 'Jabalpur', 'Jaipur', 'Jalandhar', 'Jammu', 'Jamnagar', 'Jamshedpur', 'Jodhpur', 'Kakinada', 'Kannur', 'Kanpur', 'Karimnagar', 'Kolhapur', 'Kollam', 'Kota', 'Kottayam', 'Kurnool', 'Lucknow', 'Ludhiana', 'Madurai', 'Mangaluru', 'Manipal', 'Meerut', 'Mohali', 'Moradabad', 'Mysuru', 'Nagpur', 'Nanded', 'Nashik', 'Nellore', 'Noida', 'Palakkad', 'Panipat', 'Patiala', 'Patna', 'Puducherry', 'Raipur', 'Rajahmundry', 'Rajkot', 'Ranchi', 'Rourkela', 'Salem', 'Sangli', 'Shillong', 'Shimla', 'Siliguri', 'Solapur', 'Srinagar', 'Surat', 'Thane', 'Thiruvananthapuram', 'Thrissur', 'Tiruchirappalli', 'Tirunelveli', 'Tirupati', 'Udaipur', 'Ujjain', 'Vadodara', 'Varanasi', 'Vellore', 'Vijayawada', 'Visakhapatnam', 'Warangal'];
   // Ticket booking URLs, one per city. The 10 popular cities always have a box; “+ Add” takes any other city.
-  function bookingUrlsField() {
-    var urls = draft.bookingUrls = bookUrls(draft);
-    var sync = function () { draft.bookingUrl = urls.Bengaluru || ''; touch(); };
+  // Booking partners: partner 1 is bookingPlatform + bookingUrls (as before); more partners live in moreBooking [{ platform, urls }].
+  var MAX_PARTNERS = 3;
+  function morePartners() { if (!Array.isArray(draft.moreBooking)) draft.moreBooking = []; return draft.moreBooking; }
+  function bkId(pi, c) { return 'f_bk_' + (pi ? pi + '_' : '') + c.toLowerCase().replace(/[^a-z0-9]+/g, '-'); }
+  function bookingUrlsField(pi) {
+    pi = pi || 0;
+    var mp = pi ? morePartners()[pi - 1] : null, urls;
+    if (pi) { var src = mp.urls || {}; urls = {}; Object.keys(src).forEach(function (c) { var u = String(src[c] || '').trim(); if (u) urls[c] = u; }); mp.urls = urls; }
+    else urls = draft.bookingUrls = bookUrls(draft);
+    var sync = function () { if (!pi) draft.bookingUrl = urls.Bengaluru || ''; touch(); };
     var rows = h('div', { class: 'cityurls' });
-    var idOf = function (c) { return 'f_bk_' + c.toLowerCase().replace(/[^a-z0-9]+/g, '-'); };
+    var idOf = function (c) { return bkId(pi, c); };
     var row = function (city, removable) {
-      var inp = h('input', { id: idOf(city), class: 'in', type: 'url', placeholder: 'https://in.bookmyshow.com/…', disabled: !canWrite });
+      var inp = h('input', { id: idOf(city), class: 'in', type: 'url', placeholder: pi ? 'https://…' : 'https://in.bookmyshow.com/…', disabled: !canWrite });
       inp.value = urls[city] || '';
       inp.addEventListener('input', function () { var v = inp.value.trim(); if (v) urls[city] = v; else delete urls[city]; sync(); });
       var r = h('div', { class: 'cityrow' }, [h('label', { class: 'cl', for: idOf(city), text: city }), inp,
@@ -1260,9 +1267,9 @@ window.ReelAdmin = function (env) {
     POP_CITIES.forEach(function (c) { rows.appendChild(row(c, false)); });
     Object.keys(urls).filter(function (c) { return POP_CITIES.indexOf(c) === -1; }).sort().forEach(function (c) { rows.appendChild(row(c, true)); });
     var known = {}; OTHER_CITIES.forEach(function (c) { known[c] = 1; });
-    movies.forEach(function (m) { Object.keys(m.data.bookingUrls || {}).forEach(function (c) { known[c] = 1; }); });
-    var dl = h('datalist', { id: 'cityList' }, Object.keys(known).filter(function (c) { return POP_CITIES.indexOf(c) === -1; }).sort().map(function (c) { return h('option', { value: c }); }));
-    var add = h('input', { class: 'in', type: 'text', list: 'cityList', placeholder: 'Another city, e.g. Jaipur', disabled: !canWrite });
+    movies.forEach(function (m) { Object.keys(m.data.bookingUrls || {}).forEach(function (c) { known[c] = 1; }); (m.data.moreBooking || []).forEach(function (p) { Object.keys((p && p.urls) || {}).forEach(function (c) { known[c] = 1; }); }); });
+    var dl = h('datalist', { id: 'cityList' + (pi || '') }, Object.keys(known).filter(function (c) { return POP_CITIES.indexOf(c) === -1; }).sort().map(function (c) { return h('option', { value: c }); }));
+    var add = h('input', { class: 'in', type: 'text', list: 'cityList' + (pi || ''), placeholder: 'Another city, e.g. Jaipur', disabled: !canWrite });
     var addIt = function () {
       var name = add.value.trim().replace(/\s+/g, ' '); if (!name) return;
       var all = POP_CITIES.concat(Object.keys(urls), Object.keys(known));
@@ -1273,26 +1280,31 @@ window.ReelAdmin = function (env) {
     };
     add.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); addIt(); } });
     return h('div', { class: 'field wide' }, [h('label', { class: 'l' }, ['Ticket booking URLs by city']),
-      h('span', { class: 'note', text: 'Visitors pick their city at the top of the site, and Book tickets opens that city’s link. Leave a city blank to hide the button there.' }),
+      h('span', { class: 'note', text: pi ? 'Only the cities this partner sells tickets in. Where two partners cover a city, Book tickets lets visitors choose.' : 'Visitors pick their city at the top of the site, and Book tickets opens that city’s link. Leave a city blank to hide the button there.' }),
       rows, h('div', { class: 'cityrow' }, [h('span', { class: 'cl', text: '+ Add a city' }), add, h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Add', on: { click: addIt } })]), dl]);
   }
 
   // Ticket booking platform: a list, with “+ Add a new platform…” for anything else (offered on every title after that).
   var BOOK_LIST = ['BookMyShow', 'District', 'PVR INOX', 'Cinépolis', 'Miraj Cinemas', 'Movietime Cinemas', 'Carnival Cinemas', 'Rajhans Cinemas', 'Mukta A2 Cinemas', 'Ticketnew'];
-  function bookingField() {
-    var cur = draft.bookingPlatform || '', extra = {};
-    movies.forEach(function (m) { var p = (m.data.bookingPlatform || '').trim(); if (p && BOOK_LIST.indexOf(p) === -1) extra[p] = 1; });
+  function bookingField(pi) {
+    pi = pi || 0;
+    var mp = pi ? morePartners()[pi - 1] : null, fid = 'f_bookingPlatform' + (pi ? '_' + pi : '');
+    var get = function () { return (pi ? mp.platform : draft.bookingPlatform) || ''; }, set = function (v) { if (pi) mp.platform = v; else draft.bookingPlatform = v; };
+    var cur = get(), extra = {};
+    var addExtra = function (p) { p = (p || '').trim(); if (p && BOOK_LIST.indexOf(p) === -1) extra[p] = 1; };
+    movies.forEach(function (m) { addExtra(m.data.bookingPlatform); (m.data.moreBooking || []).forEach(function (x) { addExtra(x && x.platform); }); });
+    addExtra(cur);
     var opt = function (v, t) { return h('option', { value: v, text: t || v, selected: v === cur }); };
-    var sel = h('select', { id: 'f_bookingPlatform', class: 'in', disabled: !canWrite },
+    var sel = h('select', { id: fid, class: 'in', disabled: !canWrite },
       [opt('', 'Not set')].concat(BOOK_LIST.map(function (x) { return opt(x); }), Object.keys(extra).sort().map(function (x) { return opt(x); }),
         [h('option', { value: '__new__', text: '+ Add a new platform…' })]));
     var box = h('input', { class: 'in', type: 'text', placeholder: 'Type the booking platform’s name', hidden: true, disabled: !canWrite });
     sel.addEventListener('change', function () {
       if (sel.value === '__new__') { box.hidden = false; box.value = ''; box.focus(); return; }
-      box.hidden = true; draft.bookingPlatform = sel.value; touch();
+      box.hidden = true; set(sel.value); touch();
     });
-    box.addEventListener('input', function () { draft.bookingPlatform = box.value.trim(); touch(); });
-    return h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_bookingPlatform' }, ['Ticket booking platform']), sel, box,
+    box.addEventListener('input', function () { set(box.value.trim()); touch(); });
+    return h('div', { class: 'field' }, [h('label', { class: 'l', for: fid }, ['Ticket booking platform']), sel, box,
       h('span', { class: 'note', text: 'Names the Book tickets button, e.g. “Book on BookMyShow”.' })]);
   }
 
@@ -1695,7 +1707,29 @@ window.ReelAdmin = function (env) {
 
     // Buy tickets (films only): booking partner and a link per city. Folded for Older releases and On OTT; a tap opens it.
     if (!tvEd) {
-      var gL = h('div', { class: 'grid' }, [bookingField(), bookingUrlsField()]);
+      var mps = morePartners(), multi = mps.length > 0;
+      var partnerBlock = function (pi) {
+        var mp = pi ? mps[pi - 1] : null, nm = (pi ? mp.platform : draft.bookingPlatform) || '';
+        var tools = [];
+        if (multi && pi) {
+          tools.push(h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Make partner 1', title: 'Show this partner first', on: { click: function () {
+            var first = { platform: draft.bookingPlatform || '', urls: bookUrls(draft) };
+            var cur = morePartners()[pi - 1] || {};
+            draft.bookingPlatform = cur.platform || ''; draft.bookingUrls = cur.urls || {}; draft.bookingUrl = draft.bookingUrls.Bengaluru || '';
+            morePartners()[pi - 1] = first; touch(); renderEditor();
+          } } }));
+          tools.push(h('button', { type: 'button', class: 'btn small danger', disabled: !canWrite, text: 'Remove partner', on: { click: function () {
+            morePartners().splice(pi - 1, 1); touch(); renderEditor();
+          } } }));
+        }
+        return h('div', { class: 'bkpartner' }, [
+          multi ? h('div', { class: 'bkpartner-h' }, [h('h3', { text: 'Booking partner ' + (pi + 1) + (nm ? ' · ' + nm : '') })].concat(tools)) : null,
+          h('div', { class: 'grid' }, [bookingField(pi), bookingUrlsField(pi)])]);
+      };
+      var gL = h('div', {}, [partnerBlock(0)].concat(mps.map(function (x, i) { return partnerBlock(i + 1); }), [
+        mps.length + 1 < MAX_PARTNERS ? h('button', { type: 'button', class: 'btn', style: 'margin-top:14px', disabled: !canWrite, text: '+ Add another booking partner',
+          on: { click: function () { var all = morePartners(); all.push({ platform: '', urls: {} }); touch(); linksOpenFor = currentId; renderEditor(); setTimeout(function () { var f = $('f_bookingPlatform_' + all.length); if (f) f.focus(); }, 0); } } })
+          : h('div', { class: 'note', style: 'margin-top:12px', text: 'Up to ' + MAX_PARTNERS + ' booking partners per title.' })]));
       var foldable = draft.section === 'Older releases' || draft.section === 'On OTT';
       var fold = foldable && linksOpenFor !== currentId;
       gL.hidden = fold;
@@ -1782,6 +1816,17 @@ window.ReelAdmin = function (env) {
       var bu = draft.bookingUrls, badCity = Object.keys(bu).filter(function (c) { bu[c] = String(bu[c] || '').trim(); if (!bu[c]) delete bu[c]; return bu[c] && !/^https:\/\/[^\s]+\.[^\s]+/.test(bu[c]); })[0];
       if (badCity) { setStatus('The ' + badCity + ' booking URL must be a full link starting with https://'); var bc = $('f_bk_' + badCity.toLowerCase().replace(/[^a-z0-9]+/g, '-')); if (bc) bc.focus(); return Promise.resolve(false); }
       draft.bookingUrl = bu.Bengaluru || '';
+    }
+    if (Array.isArray(draft.moreBooking)) {
+      // Tidy in place (the open editor holds these objects), and drop empty partners only once every link checks out.
+      var badP = null;
+      draft.moreBooking.forEach(function (p) {
+        if (!p) return; p.platform = String(p.platform || '').trim(); if (!p.urls || typeof p.urls !== 'object') p.urls = {};
+        Object.keys(p.urls).forEach(function (c) { var v = String(p.urls[c] || '').trim(); if (v) p.urls[c] = v; else delete p.urls[c]; });
+      });
+      draft.moreBooking.forEach(function (p, i) { if (!p) return; if (badP) return; Object.keys(p.urls).forEach(function (c) { if (!badP && !/^https:\/\/[^\s]+\.[^\s]+/.test(p.urls[c])) badP = [i + 1, c, p.platform]; }); });
+      if (badP) { setStatus('The ' + badP[1] + ' booking URL' + (badP[2] ? ' for ' + badP[2] : '') + ' must be a full link starting with https://'); var bp2 = $(bkId(badP[0], badP[1])); if (bp2) bp2.focus(); return Promise.resolve(false); }
+      draft.moreBooking = draft.moreBooking.filter(function (p) { return p && (p.platform || Object.keys(p.urls).length); });
     }
     var badUrl = [['platformUrl', 'Streaming platform URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
     if (badUrl) { setStatus(badUrl[1] + ' must be a full link starting with https://'); var bf = $('f_' + badUrl[0]); if (bf) bf.focus(); return Promise.resolve(false); }

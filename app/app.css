@@ -198,6 +198,10 @@
   .citybox h2 { margin: 0 0 6px; font-size: 20px; }
   .citygrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; margin: 14px 0; }
   .citygrid .btn { justify-content: center; text-decoration: none; }
+  .citygrid.partners { grid-template-columns: 1fr; }
+  .bkpartner + .bkpartner { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .bkpartner-h { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .bkpartner-h h3 { margin: 0; font-size: 15px; flex: 1; }
   .nav a.lnk[aria-current="page"] { background: rgba(244,241,234,.14); color: var(--text); border-bottom: 0; font-weight: 600; }
   .fh { position: relative; margin: 8px 40px 0; border-radius: 22px; overflow: hidden; aspect-ratio: 2.2 / 1; min-height: 480px; max-height: 760px; background-color: #1a1418; background-size: cover; background-position: center right; box-shadow: 0 20px 60px rgba(0,0,0,.45); }
   .fh .scrim { position: absolute; inset: 0; background: linear-gradient(90deg, rgba(10,8,10,.92) 0%, rgba(10,8,10,.72) 28%, rgba(10,8,10,.25) 55%, rgba(10,8,10,0) 72%), linear-gradient(to top, rgba(10,8,10,.75) 0%, rgba(10,8,10,0) 40%); }
