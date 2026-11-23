@@ -1304,7 +1304,7 @@
       video.addEventListener('timeupdate', function () { var p = document.getElementById('vProg'); if (p && video.duration) p.style.width = (100 * video.currentTime / video.duration) + '%'; });
       video.addEventListener('error', function () { toast('This clip couldn’t play.'); stopTrailer(); });
     }
-    var hero = h('section', { class: 'fh' + (S.heroCtx && S.heroCtx !== 'home' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: art(m, 'banner', 1920), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
+    var hero = h('section', { class: 'fh' + (S.heroCtx && S.heroCtx !== 'home' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: heroArt(m, yt), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
       on: { mouseenter: function () { S.heroPause = true; }, mouseleave: function () { S.heroPause = false; }, focusin: function () { S.heroPause = true; }, focusout: function () { S.heroPause = false; } } }, [
       video,
       h('div', { class: 'scrim' }),
@@ -1374,6 +1374,17 @@
       return rb - ra || nv[b.id].localeCompare(nv[a.id]) || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
     });
     return list.slice(0, 8);
+  }
+  // The picture behind the banner. Movies and TV Shows banners can show the playing video's own YouTube thumbnail:
+  // Admin's choice per title (settings/<page>banner images: thumb / banner), else the thumbnail when YouTube has it in HD.
+  function heroArt(m, v) {
+    var ctx = S.heroCtx, imgs = (ctx === 'movies' ? S.movImages : ctx === 'tvshows' ? S.tvImages : null) || {};
+    if (ctx && ctx !== 'home' && v && v.yt) {
+      var pick = imgs[m.id] || 'auto', th = v.thumb || 'https://i.ytimg.com/vi/' + v.yt + '/hqdefault.jpg', hasBanner = !!safeUrl(m.data.bannerUrl);
+      if (pick === 'thumb' || (pick === 'auto' && ((v.thumb && v.thumbHd) || !hasBanner)))
+        return 'background-image:url("' + th.replace(/"/g, '%22') + '");background-position:center';
+    }
+    return art(m, 'banner', 1920);
   }
   // Movies banner: the movie's newest YouTube song (by publish date, else the one saved last).
   function heroPicked(m) {
@@ -1706,7 +1717,7 @@
     if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
     (d.videos || []).forEach(function (x) {
       var u = safeUrl(x.url), id = ytId(u);
-      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind) });
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd });
     });
     return out;
   }
@@ -2865,11 +2876,15 @@
     db.doc('settings/moviesbanner').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, was = JSON.stringify(S.movFeatured || []);
       S.movFeatured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+      var wi = JSON.stringify(S.movImages || {}); S.movImages = d.images && typeof d.images === 'object' ? d.images : {};
+      if (wi !== JSON.stringify(S.movImages) && S.route === 'movies' && !S.play) drawHero();
       if (was !== JSON.stringify(S.movFeatured) && S.route === 'movies') { if (S.play) leaveHero(); S.slide = 0; render(); }
     }, function () {});
     db.doc('settings/tvbanner').onSnapshot(function (snap) {
       var d = snap.exists ? snap.data() : {}, was = JSON.stringify(S.tvFeatured || []);
       S.tvFeatured = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+      var wt = JSON.stringify(S.tvImages || {}); S.tvImages = d.images && typeof d.images === 'object' ? d.images : {};
+      if (wt !== JSON.stringify(S.tvImages) && S.route === 'tvshows' && !S.play) drawHero();
       if (was !== JSON.stringify(S.tvFeatured) && S.route === 'tvshows') { if (S.play) leaveHero(); S.slide = 0; render(); }
     }, function () {});
     db.doc('settings/buttons').onSnapshot(function (snap) {

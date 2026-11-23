@@ -152,7 +152,9 @@
   .pav.has { border: 2px solid var(--line2); color: transparent; }
   .pav:hover { border-color: var(--accent); }
   .row.v { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px; }
-  .row.v.feat { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px 44px; }
+  .row.v.feat { grid-template-columns: 64px 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px 44px; }
+  .vthumb { width: 64px; height: 36px; border-radius: 6px; background: #1f1a22 center / cover no-repeat; border: 1px solid var(--line); }
+  .vthumb.hd { border-color: rgba(245,196,107,.6); }
   .x.vstar { font-size: 18px; } .x.vstar.on { color: var(--accent); border-color: var(--accent); }
   @media (max-width: 720px) { .row.v { grid-template-columns: 1fr 1fr; } }
   .x { width: 44px; height: 42px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--muted); cursor: pointer; font-size: 18px; }

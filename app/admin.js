@@ -785,25 +785,47 @@ window.ReelAdmin = function (env) {
   }
   // ---------- page banners: TV Shows (/admin/tv-banner, settings/tvbanner) and Movies (/admin/movies-banner, settings/moviesbanner) ----------
   // The carousels at the top of the site's TV Shows and Movies pages. With nothing chosen, each page picks titles itself.
+  // YouTube thumbnails: each video's official thumbnail, stored on the video when the title is saved (thumbUrl, and
+  // thumbHd when YouTube has the 1280×720 one; otherwise the 480×360 one).
+  function ytIdOf(u) { var mm = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return mm ? mm[1] : ''; }
+  function probeThumb(id) {
+    return new Promise(function (res) {
+      var img = new Image(), done = false, fin = function (v) { if (!done) { done = true; res(v); } };
+      img.onload = function () { fin(img.naturalWidth > 200 ? 'max' : 'hq'); };
+      img.onerror = function () { fin('hq'); };
+      setTimeout(function () { fin(null); }, 6000);
+      img.src = 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg';
+    });
+  }
+  function fillThumbs(videos) {
+    return Promise.all((videos || []).map(function (x) {
+      var id = x && ytIdOf(x.url); if (!id) { if (x) { delete x.thumbUrl; delete x.thumbHd; } return null; }
+      if (x.thumbUrl && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1) return null;
+      return probeThumb(id).then(function (q) {
+        if (!q) return;
+        x.thumbUrl = 'https://i.ytimg.com/vi/' + id + '/' + (q === 'max' ? 'maxresdefault' : 'hqdefault') + '.jpg'; x.thumbHd = q === 'max';
+      });
+    }));
+  }
   function hasVideo(d) { return !!safeUrl(d.trailerFileUrl) || (d.videos || []).some(function (x) { return !!safeUrl(x.url); }); }
   function hasSong(d) { return (d.videos || []).some(function (x) { return !!safeUrl(x.url) && vidKind(x.kind) === 'songs'; }); }
   var PB = {
     tv: { doc: 'settings/tvbanner', page: 'tvbanner', name: 'TV Shows banner', where: 'Top of the TV Shows page', noun: 'show', nouns: 'shows', countId: 'tvFeatCount', selId: 'tvFeatAdd',
       fits: function (m) { return m.data.section === 'TV shows'; }, media: hasVideo, mediaWord: 'video',
-      note: 'These shows rotate in the banner on the TV Shows page, in this order. Each plays its first trailer, or else its first promo, clip or episode, right in the banner, so give each a 16:9 banner image and a video. With nothing chosen, the page picks shows itself: pinned TV promotionals (Home rows) first, then running shows with the newest videos.',
-      count: function (d) { var n = (d.videos || []).length; return n + ' video' + (n === 1 ? '' : 's'); }, items: [], writing: false },
+      note: 'These shows rotate in the banner on the TV Shows page, in this order. Each plays its starred video, or else its first trailer, promo, clip or episode, right in the banner. Picture: auto shows the video’s own thumbnail when YouTube has it in HD, and the show’s banner image otherwise. With nothing chosen, the page picks shows itself: pinned TV promotionals (Home rows) first, then running shows with the newest videos.',
+      count: function (d) { var n = (d.videos || []).length; return n + ' video' + (n === 1 ? '' : 's'); }, items: [], images: {}, writing: false },
     movies: { doc: 'settings/moviesbanner', page: 'moviesbanner', name: 'Movies banner', where: 'Top of the Movies page', noun: 'movie', nouns: 'movies', countId: 'movFeatCount', selId: 'movFeatAdd',
       fits: function (m) { return m.data.section !== 'TV shows'; }, media: hasSong, mediaWord: 'song',
-      note: 'These movies rotate in the banner on the Movies page, in this order. Each plays its newest song right in the banner, so give each a 16:9 banner image and a song video. With nothing chosen, the page picks movies itself: pinned New songs (Home rows) first, then the movies with the newest songs.',
-      count: function (d) { var n = (d.videos || []).filter(function (x) { return vidKind(x.kind) === 'songs'; }).length; return n + ' song' + (n === 1 ? '' : 's'); }, items: [], writing: false }
+      note: 'These movies rotate in the banner on the Movies page, in this order. Each plays its starred video, or else its newest song, right in the banner. Picture: auto shows the song’s own thumbnail when YouTube has it in HD, and the movie’s banner image otherwise. With nothing chosen, the page picks movies itself: pinned New songs (Home rows) first, then the movies with the newest songs.',
+      count: function (d) { var n = (d.videos || []).filter(function (x) { return vidKind(x.kind) === 'songs'; }).length; return n + ' song' + (n === 1 ? '' : 's'); }, items: [], images: {}, writing: false }
   };
   var pbMode = null;
   function pbHas(k, id) { return PB[k].items.indexOf(id) !== -1; }
-  function pbWrite(k, next, msg) {
+  function pbWrite(k, next, msg, images) {
     var c = PB[k];
     if (c.writing) { setStatus('Still saving the ' + c.name + ', try again in a moment.'); return; }
-    c.writing = true; c.items = next; pbCount(k); if (pbMode === k) renderPageBanner(k); else renderEditor();
-    db.doc(c.doc).set({ featured: next, updatedAt: new Date().toISOString() }).then(function () {
+    c.writing = true; c.items = next; if (images) c.images = images; pbCount(k); if (pbMode === k) renderPageBanner(k); else renderEditor();
+    db.doc(c.doc).set({ featured: next, images: c.images || {}, updatedAt: new Date().toISOString() }).then(function () {
       c.writing = false; setStatus(msg || c.name + ' saved');
     }).catch(function () { c.writing = false; setStatus('Couldn’t save the ' + c.name + '. Try again.'); });
   }
@@ -839,6 +861,13 @@ window.ReelAdmin = function (env) {
         h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { var n = c.items.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j - 1, 0, m.id); pbWrite(k, n, 'Order saved'); } } }),
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' down', text: '↓', disabled: i === items.length - 1 || !canWrite, on: { click: function () { var n = c.items.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j + 1, 0, m.id); pbWrite(k, n, 'Order saved'); } } }),
+          (function () {
+            var cur = (c.images || {})[m.id] || 'auto', pid = 'pbpic' + i;
+            var ps = h('select', { class: 'in', id: pid, style: 'height:34px;padding:4px 10px;width:auto', disabled: !canWrite, title: 'Picture shown behind this ' + c.noun },
+              [['auto', 'Picture: auto'], ['thumb', c.mediaWord.charAt(0).toUpperCase() + c.mediaWord.slice(1) + ' thumbnail'], ['banner', 'Banner image']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === cur }); }));
+            ps.addEventListener('change', function () { var im = Object.assign({}, c.images || {}); if (ps.value === 'auto') delete im[m.id]; else im[m.id] = ps.value; pbWrite(k, c.items.slice(), 'Picture saved', im); });
+            return h('span', {}, [h('label', { class: 'sr', for: pid, text: 'Picture for ' + d.title }), ps]);
+          })(),
           h('a', { class: 'btn small', href: titleHref(m), text: 'Edit ' + c.noun }),
           h('button', { type: 'button', class: 'btn small danger', text: 'Remove', disabled: !canWrite, on: { click: function () { pbToggle(k, m.id); } } })
         ])
@@ -1718,6 +1747,11 @@ window.ReelAdmin = function (env) {
         cells.push(h('button', { type: 'button', class: 'x', 'aria-label': 'Remove row ' + (i + 1), text: '×', disabled: !canWrite,
           on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
+        if (key === 'videos') {
+          var vid0 = ytIdOf(item.url), prev = h('span', { class: 'vthumb' + (item.thumbHd ? ' hd' : ''), title: item.thumbUrl ? (item.thumbHd ? 'HD thumbnail' : 'Small thumbnail only') : '', style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '', 'aria-hidden': 'true' });
+          cells.unshift(prev);
+          (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
+        }
         rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (av ? ' cast' : '') }, cells));
       });
     }
@@ -2038,7 +2072,7 @@ window.ReelAdmin = function (env) {
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
-    return db.doc('movies/' + currentId).set(body).then(function () {
+    return fillThumbs(body.videos).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();
@@ -2098,6 +2132,7 @@ window.ReelAdmin = function (env) {
       if (PB[k].writing) return;
       var d = snap.exists ? snap.data() : {};
       PB[k].items = Array.isArray(d.featured) ? d.featured.filter(function (x) { return typeof x === 'string'; }) : [];
+      PB[k].images = d.images && typeof d.images === 'object' ? d.images : {};
       pbCount(k);
       if (pbMode === k) renderPageBanner(k); else if (page === 'title' && !dirty) renderEditor();
     }, function () {});
