@@ -2081,6 +2081,123 @@
     var src = bo.source || (bo.url ? (function () { try { return new URL(bo.url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } })() : '');
     return h('div', { class: 'note' }, [bits.join(''), bits.length && src ? ' · ' : '', src ? 'Source: ' : '', src ? (bo.url ? h('a', { href: bo.url, target: '_blank', rel: 'noopener nofollow', style: 'color:var(--muted)', text: src }) : src) : '', ' · reported figures']);
   }
+  // ---------- box office in detail: daily figures (Admin > Daily figures, or the CSV import) ----------
+  var WD3 = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  function boN(v) { var x = parseFloat(String(v == null ? '' : v).replace(/[,₹\s]|cr(ore)?s?\.?$/ig, '')); return isFinite(x) && x > 0 ? x : null; }
+  // Rows with a date and that day's India nett, numbered from the release date (release day = Day 1), oldest first.
+  function boDays(m) {
+    var rel = String(m.data.releaseDate || ''); if (!/^\d{4}-\d{2}-\d{2}$/.test(rel)) return [];
+    var r0 = Date.parse(rel + 'T00:00:00'), seen = {};
+    return (m.data.boDaily || []).filter(function (r) { return r && /^\d{4}-\d{2}-\d{2}$/.test(r.date || '') && boN(r.nett) != null; })
+      .map(function (r) { var t = Date.parse(r.date + 'T00:00:00'); return { date: r.date, t: t, nett: boN(r.nett), world: boN(r.world), langs: String(r.langs || '').trim(), day: Math.round((t - r0) / 864e5) + 1, wd: new Date(t).getDay() }; })
+      .filter(function (r) { if (seen[r.date] || r.day < 1) return false; seen[r.date] = 1; return true; })
+      .sort(function (a, b) { return a.t - b.t; });
+  }
+  function dmy(r) { var p = r.date.split('-'); return WD3[r.wd] + ' ' + (+p[2]) + ' ' + MONTHS[+p[1] - 1]; }
+  function pctCh(a, b) { return b ? Math.round(1000 * (a - b) / b) / 10 : null; }
+  function chgEl(c, vs) { return c == null ? h('span', { class: 'note', text: '–' }) : h('span', { class: 'bochg ' + (c < 0 ? 'dn' : 'up'), text: (c < 0 ? '▼ ' : '▲ ') + Math.abs(c) + '%' + (vs ? ' ' + vs : '') }); }
+  // Club tracker on worldwide gross: crossed clubs get a tick and, when a daily row shows it, the day it was crossed.
+  function boClubs(m, bo, rows) {
+    var w = bo && bo.world; if (!w) return null;
+    var n = CLUBS.length, pos = function (v) {
+      if (v >= CLUBS[n - 1]) return 100;
+      var k = 0; while (k < n - 1 && v >= CLUBS[k + 1]) k++;
+      if (v < CLUBS[0]) return 0;
+      return 100 * (k + (v - CLUBS[k]) / (CLUBS[k + 1] - CLUBS[k])) / (n - 1);
+    };
+    var next = CLUBS.filter(function (c) { return c > w; })[0];
+    var marks = CLUBS.map(function (c, k) {
+      // The day it got there: exact when an earlier row was still below the club, otherwise "by" the first day we have above it.
+      var done = w >= c, wr = rows.filter(function (r) { return r.world; }), hi = -1;
+      for (var q = 0; q < wr.length; q++) if (wr[q].world >= c) { hi = q; break; }
+      var hit = hi >= 0 ? wr[hi] : null, exact = hi > 0 && wr[hi - 1].world < c && wr[hi - 1].day === hit.day - 1;
+      return h('div', { class: 'bc-mark' + (done ? ' done' : '') + (c === next ? ' next' : ''), style: 'left:' + (100 * k / (n - 1)) + '%' }, [
+        h('span', { class: 'bc-lab', text: '₹' + c.toLocaleString('en-IN') + ' Cr' }), h('span', { class: 'bc-dot', 'aria-hidden': 'true', text: done ? '✓' : '' }),
+        done && hit ? h('span', { class: 'bc-day', text: (exact ? 'Day ' : 'by Day ') + hit.day }) : null]);
+    });
+    var nowX = pos(w);
+    return h('div', { class: 'bo-blk' }, [
+      h('div', { class: 'bo-bh' }, [h('h3', { text: 'Club tracker · worldwide' }), h('span', { class: 'note' }, ['Now ', h('b', { text: crore(w) })].concat(next ? [' · ', h('b', { text: crore(next - w) }), ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club'] : [' · past every club']))]),
+      h('div', { class: 'bo-card bc', role: 'img', 'aria-label': 'Worldwide ' + crore(w) + (next ? ', ' + crore(next - w) + ' short of the ₹' + next.toLocaleString('en-IN') + ' Cr club' : '') }, [
+        h('div', { class: 'bc-track' }, [h('div', { class: 'bc-fill', style: 'width:' + nowX + '%' }), h('div', { class: 'bc-now', style: 'left:' + nowX + '%' })].concat(marks))])
+    ]);
+  }
+  function boDayByDay(m, rows) {
+    S.boView = S.boView || {}; S.boAll = S.boAll || {};
+    var view = S.boView[m.id] === 'table' ? 'table' : 'chart', last = rows[rows.length - 1];
+    var byDay = {}; rows.forEach(function (r, i) { byDay[r.day] = r; r.prev = i && rows[i - 1].day === r.day - 1 ? rows[i - 1] : null; r.chg = r.prev ? pctCh(r.nett, r.prev.nett) : null; });
+    var max = Math.max.apply(null, rows.map(function (r) { return r.nett; })), d0 = rows[0].day, d1 = last.day, span = d1 - d0 + 1;
+    var sec;
+    var toggle = h('span', { class: 'seg', role: 'group', 'aria-label': 'Show as' }, [['chart', 'Chart'], ['table', 'Table']].map(function (o) {
+      return h('button', { type: 'button', class: o[0] === view ? 'on' : '', 'aria-pressed': String(o[0] === view), text: o[1], on: { click: function () { S.boView[m.id] = o[0]; var b = $('boxoffice'); swapInPlace(b, boxOfficeBlock(m), '#boxoffice .seg .on'); } } });
+    }));
+    var body;
+    if (view === 'chart') {
+      var every = span > 45 ? 7 : span > 24 ? 3 : span > 14 ? 2 : 1, bars = [], xs = [];
+      for (var d = d0; d <= d1; d++) {
+        var r = byDay[d];
+        if (!r) { bars.push(h('span', { class: 'bd-gap', 'aria-hidden': 'true' })); xs.push(h('span', { text: '' })); continue; }
+        var cls = r === last ? ' last' : (r.wd === 5 || r.wd === 6 || r.wd === 0) ? ' wk' : '';
+        var fx = (d - d0) / Math.max(1, span - 1); cls += fx < 0.2 ? ' tl' : fx > 0.8 ? ' tr' : '';
+        var tip = 'Day ' + r.day + ' · ' + dmy(r);
+        bars.push(h('button', { type: 'button', class: 'bd-bar' + cls, style: 'height:' + Math.max(2, 100 * r.nett / max) + '%', 'aria-label': tip + ': ' + crore(r.nett) + ' India nett' + (r.chg != null ? ', ' + (r.chg < 0 ? 'down ' : 'up ') + Math.abs(r.chg) + '% on the day before' : '') }, [
+          h('span', { class: 'bd-tip' }, [h('b', { text: tip }), h('span', { text: 'India nett ' + crore(r.nett) }), r.chg != null ? chgEl(r.chg, 'vs Day ' + (r.day - 1)) : null])]));
+        xs.push(h('span', { text: (d - d0) % every === 0 || d === d1 ? String(d) : '' }));
+      }
+      var weeks = [], w0 = Math.floor((d0 - 1) / 7), w1 = Math.floor((d1 - 1) / 7);
+      for (var wk = w0; wk <= w1; wk++) {
+        var a = Math.max(d0, wk * 7 + 1), b = Math.min(d1, wk * 7 + 7);
+        weeks.push(h('span', { style: 'flex:' + (b - a + 1) }, [h('i'), 'Week ' + (wk + 1) + (wk * 7 + 7 > d1 ? ' (so far)' : '')]));
+      }
+      body = h('div', { class: 'bo-card bd' }, [h('div', { class: 'bd-bars' }, bars), h('div', { class: 'bd-x', 'aria-hidden': 'true' }, xs), h('div', { class: 'bd-w', 'aria-hidden': 'true' }, weeks),
+        h('div', { class: 'bd-key note' }, [h('span', {}, [h('i', { class: 'wk' }), 'Fri–Sun']), h('span', {}, [h('i'), 'Mon–Thu']), h('span', {}, [h('i', { class: 'last' }), 'Latest day'])])]);
+    } else {
+      var all = !!S.boAll[m.id], list = rows.slice().reverse(), show = all ? list : list.slice(0, 7);
+      var running = rows[0].day === 1 && rows.length === d1; // every day from Day 1 is there
+      var acc = 0, run = {}; rows.forEach(function (r) { acc += r.nett; run[r.day] = acc; });
+      body = h('div', { class: 'bo-card' }, [h('table', { class: 'bo-tbl' }, [
+        h('thead', {}, [h('tr', {}, [h('th', { text: 'Day' }), h('th', { text: 'Date' }), h('th', { class: 'n', text: 'India nett' }), h('th', { class: 'n', text: 'Change' })].concat(running ? [h('th', { class: 'n', text: 'Running India nett' })] : []))]),
+        h('tbody', {}, show.map(function (r) {
+          return h('tr', {}, [h('td', {}, [h('b', { text: 'Day ' + r.day })]), h('td', { class: 'note', text: dmy(r) }), h('td', { class: 'n', text: crore(r.nett) }), h('td', { class: 'n' }, [chgEl(r.chg)])].concat(running ? [h('td', { class: 'n', text: crore(run[r.day]) })] : []));
+        }))]),
+        list.length > 7 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + list.length + ' days', on: { click: function () { S.boAll[m.id] = !all; swapInPlace($('boxoffice'), boxOfficeBlock(m), '#boxoffice .bo-card .btn.more'); } } }) : null]);
+    }
+    // Quick stats: opening day, opening weekend (release day to the first Sunday), best day, Mon–Thu average in the latest week.
+    var first = byDay[1], sun = 0; for (var k = 1; k <= 7; k++) { if (byDay[k] && byDay[k].wd === 0) { sun = k; break; } }
+    var owk = null; if (first && sun) { owk = 0; for (k = 1; k <= sun; k++) { if (!byDay[k]) { owk = null; break; } owk += byDay[k].nett; } }
+    var best = rows.reduce(function (a, r) { return !a || r.nett > a.nett ? r : a; }, null);
+    var lw = Math.floor((d1 - 1) / 7), wdays = rows.filter(function (r) { return Math.floor((r.day - 1) / 7) === lw && r.wd >= 1 && r.wd <= 4; });
+    var stats = [first ? ['Opening day', crore(first.nett), dmy(first)] : null, owk != null ? ['Opening weekend', crore(owk), 'Days 1–' + sun] : null,
+      ['Best day', crore(best.nett), 'Day ' + best.day + ' · ' + WD3[best.wd]],
+      wdays.length >= 2 ? ['Mon–Thu average', crore(wdays.reduce(function (a, r) { return a + r.nett; }, 0) / wdays.length), 'Week ' + (lw + 1)] : null].filter(Boolean);
+    return h('div', { class: 'bo-blk' }, [h('div', { class: 'bo-bh' }, [h('h3', { text: 'Day by day · India nett' }), toggle]), body,
+      h('div', { class: 'bo-stats' }, stats.map(function (t) { return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v on sm', text: t[1] }), h('span', { class: 'note', text: t[2] })]); }))]);
+  }
+  function boWeeks(rows) {
+    var last = rows[rows.length - 1].day, wk = {};
+    rows.forEach(function (r) { var k = Math.floor((r.day - 1) / 7); (wk[k] = wk[k] || []).push(r); });
+    var keys = Object.keys(wk).map(Number).sort(function (a, b) { return a - b; }); if (keys.length < 1) return null;
+    var prevFull = null;
+    var trs = keys.map(function (k) {
+      var list = wk[k], sum = list.reduce(function (a, r) { return a + r.nett; }, 0), ended = k * 7 + 7 <= last, full = list.length === 7;
+      var a = list[0], z = list[list.length - 1], note = full ? '' : ended ? ' · ' + list.length + ' of 7 days' : ' · so far';
+      var c = full && prevFull != null ? pctCh(sum, prevFull) : null; if (full) prevFull = sum; else prevFull = null;
+      return h('tr', {}, [h('td', {}, [h('b', { text: 'Week ' + (k + 1) })]), h('td', { class: 'note', text: 'Days ' + (k * 7 + 1) + '–' + (k * 7 + 7) + note }), h('td', { class: 'n', text: crore(sum) }), h('td', { class: 'n' }, [chgEl(c)])]);
+    });
+    return h('div', {}, [h('div', { class: 'bo-bh' }, [h('h3', { text: 'Week by week' })]), h('div', { class: 'bo-card' }, [h('table', { class: 'bo-tbl' }, [
+      h('thead', {}, [h('tr', {}, [h('th', { text: 'Week' }), h('th', { text: 'Days' }), h('th', { class: 'n', text: 'India nett' }), h('th', { class: 'n', text: 'vs week before' })])]), h('tbody', {}, trs)])])]);
+  }
+  var LANG_COL = ['#F5A524', '#7FB2FF', '#B58CFF', '#7BD88F', '#FF7A6B', '#5FD3C6'];
+  function boLangs(rows) {
+    var r = rows.slice().reverse().filter(function (x) { return x.langs; })[0]; if (!r) return null;
+    var parts = r.langs.split(/[,;]/).map(function (t) { var mm = t.trim().match(/^([A-Za-z][A-Za-z .]*?)\s*[:\-]?\s*₹?\s*([\d.]+)/); return mm ? [mm[1].trim(), parseFloat(mm[2])] : null; }).filter(function (x) { return x && x[1] > 0; });
+    if (parts.length < 2) return null;
+    var tot = parts.reduce(function (a, x) { return a + x[1]; }, 0);
+    return h('div', {}, [h('div', { class: 'bo-bh' }, [h('h3', { text: 'By language' }), h('span', { class: 'note', text: 'Day ' + r.day + ' · ' + dmy(r) })]),
+      h('div', { class: 'bo-card' }, [h('div', { class: 'bl-bar', role: 'img', 'aria-label': parts.map(function (x) { return x[0] + ' ' + Math.round(100 * x[1] / tot) + '%'; }).join(', ') }, parts.map(function (x, i) { return h('span', { style: 'width:' + (100 * x[1] / tot) + '%;background:' + LANG_COL[i % LANG_COL.length] }); })),
+        h('div', { class: 'bl-key' }, parts.map(function (x, i) { return h('span', { class: 'note' }, [h('i', { style: 'background:' + LANG_COL[i % LANG_COL.length] }), x[0] + ' ' + crore(x[1]) + ' · ' + Math.round(100 * x[1] / tot) + '%']); }))])]);
+  }
+
   // Box office: tiles from the Admin figures; "Coming soon" until there are some.
   function boxOfficeBlock(m) {
     if (isTv(m) || isOtt(m) || !released(m)) return null;
@@ -2100,7 +2217,13 @@
         return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v' + (t[1] == null ? '' : ' on'), text: crore(t[1]) }), typeof t[2] === 'string' ? h('span', { class: 'note', text: t[2] }) : t[2]]);
       })),
       bo ? boSourceLine(bo) : h('div', { class: 'note', text: live ? 'Collections will show here while it runs in theatres.' : 'Collections will show here.' })
-    ]);
+    ].concat(boMore(m, bo)));
+  }
+  // With 2 or more days of figures: the club tracker, day by day, week by week and the language split.
+  function boMore(m, bo) {
+    var rows = boDays(m); if (rows.length < 2) return bo ? [boClubs(m, bo, rows)] : [];
+    var wk = boWeeks(rows), lg = boLangs(rows);
+    return [boClubs(m, bo, rows), boDayByDay(m, rows), wk || lg ? h('div', { class: 'bo-2col' + (lg ? '' : ' one') }, [wk, lg]) : null];
   }
   // The box office call in the verdict strip: will it reach the next club? Votes live in each person's public verdicts doc (bo).
   function boCall(m) {

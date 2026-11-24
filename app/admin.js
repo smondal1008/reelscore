@@ -1294,6 +1294,7 @@ window.ReelAdmin = function (env) {
     if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
+    if (canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Update box office figures for many films from a CSV file', text: '⬆ Import box office CSV', on: { click: importBoCsv } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
       sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; fieldF = []; pageNo = 1; }); } } })]));
@@ -1826,6 +1827,118 @@ window.ReelAdmin = function (env) {
     wrap.appendChild(inp); wrap.appendChild(lb);
     return wrap;
   }
+  // ---------- box office: daily rows and the CSV import ----------
+  function boNum(v) { var x = parseFloat(String(v == null ? '' : v).replace(/[,₹\s]|cr(ore)?s?\.?$/ig, '')); return isFinite(x) ? x : null; }
+  function boStr(v) { var x = boNum(v); return x == null ? '' : String(Math.round(x * 100) / 100); }
+  // Sorts the daily rows, drops empty ones, and lets the newest row fill the summary fields (unless they're already newer).
+  function deriveBo(body) {
+    var rows = (body.boDaily || []).map(function (r) { return { date: String(r.date || '').trim(), nett: boStr(r.nett), tnett: boStr(r.tnett), gross: boStr(r.gross), world: boStr(r.world), langs: String(r.langs || '').trim(), chg: r.chg != null && r.chg !== '' ? String(r.chg) : '' }; })
+      .filter(function (r) { return /^\d{4}-\d{2}-\d{2}$/.test(r.date) && (r.nett || r.tnett || r.gross || r.world); });
+    var seen = {}; rows = rows.filter(function (r) { if (seen[r.date]) return false; seen[r.date] = 1; return true; }).sort(function (a, b) { return a.date < b.date ? -1 : 1; });
+    rows.forEach(function (r) { Object.keys(r).forEach(function (k) { if (r[k] === '') delete r[k]; }); });
+    if (!rows.length) { delete body.boDaily; return body; }
+    body.boDaily = rows;
+    var last = rows[rows.length - 1];
+    if (body.boUpdated && /^\d{4}-\d{2}-\d{2}$/.test(body.boUpdated) && body.boUpdated > last.date) return body;
+    body.boUpdated = last.date;
+    if (last.nett) {
+      body.boDay = last.nett;
+      var prevDate = new Date(Date.parse(last.date + 'T00:00:00') - 864e5), pd = prevDate.getFullYear() + '-' + String(prevDate.getMonth() + 1).padStart(2, '0') + '-' + String(prevDate.getDate()).padStart(2, '0');
+      var prev = rows.filter(function (r) { return r.date === pd && r.nett; })[0];
+      body.boDayChg = prev ? String(Math.round(1000 * (boNum(last.nett) - boNum(prev.nett)) / boNum(prev.nett)) / 10) : (last.chg || '');
+    }
+    if (last.tnett) body.boNett = last.tnett;
+    if (last.gross) body.boGross = last.gross;
+    if (last.world) body.boWorld = last.world;
+    return body;
+  }
+  function parseCsv(text) {
+    var rows = [], row = [], cell = '', q = false;
+    for (var i = 0; i < text.length; i++) {
+      var c = text[i];
+      if (q) { if (c === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += c; }
+      else if (c === '"') q = true;
+      else if (c === ',') { row.push(cell); cell = ''; }
+      else if (c === '\n' || c === '\r') { if (c === '\r' && text[i + 1] === '\n') i++; row.push(cell); rows.push(row); row = []; cell = ''; }
+      else cell += c;
+    }
+    if (cell || row.length) { row.push(cell); rows.push(row); }
+    return rows.filter(function (r) { return r.some(function (x) { return String(x).trim(); }); });
+  }
+  var MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+  function normT(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
+  function importBoCsv() {
+    var fileIn = h('input', { type: 'file', accept: '.csv,text/csv', class: 'sr' });
+    var box = h('div', { class: 'boimp', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Import box office CSV' });
+    var panel = h('div', { class: 'boimp-in' }); box.appendChild(panel);
+    var close = function () { box.remove(); document.removeEventListener('keydown', onKey); };
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    function intro(msg) {
+      panel.innerHTML = '';
+      panel.appendChild(h('div', { class: 'head' }, [h('h2', { text: 'Import box office CSV' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]));
+      panel.appendChild(h('p', { class: 'note', text: 'One row per film: Movie, India Gross, India Nett, Worldwide Gross, “<Month> <day> Nett” (that day’s India nett) and % Change. Figures in ₹ crore. The day’s date comes from that column’s name.' }));
+      if (msg) panel.appendChild(h('p', { class: 'err', text: msg }));
+      panel.appendChild(h('div', {}, [fileIn, h('button', { type: 'button', class: 'btn primary', text: 'Choose CSV file', on: { click: function () { fileIn.click(); } } })]));
+    }
+    fileIn.addEventListener('change', function () {
+      var f = fileIn.files[0]; fileIn.value = ''; if (!f) return;
+      f.text().then(function (txt) { preview(txt.replace(/^﻿/, ''), f.name); }).catch(function () { intro('Couldn’t read that file.'); });
+    });
+    function preview(txt, name) {
+      var rows = parseCsv(txt); if (rows.length < 2) { intro('That file has no rows.'); return; }
+      var hd = rows[0].map(function (x) { return String(x).trim(); }), find = function (re, not) { for (var i = 0; i < hd.length; i++) if (re.test(hd[i]) && !(not && not.test(hd[i]))) return i; return -1; };
+      var cM = find(/^(movie|film|title)/i), cDay = find(/^([a-z]{3,9})\.?\s+(\d{1,2})\s+net/i);
+      var cG = find(/india\s*gross/i), cN = find(/india\s*net/i), cW = find(/world/i), cC = find(/%|change/i);
+      if (cM < 0) { intro('No “Movie” column in that file.'); return; }
+      var yr = (String(name).match(/(20\d\d)/) || [])[1] || String(new Date().getFullYear()), date = '';
+      if (cDay >= 0) { var mm = hd[cDay].match(/^([a-z]{3,9})\.?\s+(\d{1,2})/i), mo = MON[mm[1].slice(0, 3).toLowerCase()]; if (mo) date = yr + '-' + String(mo).padStart(2, '0') + '-' + String(+mm[2]).padStart(2, '0'); }
+      var films = movies.filter(function (m) { return m.data.section !== 'TV shows'; });
+      var items = rows.slice(1).map(function (r) {
+        var t = String(r[cM] || '').trim(); if (!t) return null;
+        var v = { nett: cDay >= 0 ? boStr(r[cDay]) : '', tnett: cN >= 0 ? boStr(r[cN]) : '', gross: cG >= 0 ? boStr(r[cG]) : '', world: cW >= 0 ? boStr(r[cW]) : '', chg: cC >= 0 ? boStr(r[cC]) : '' };
+        var cands = films.filter(function (m) { return normT(m.data.title) === normT(t); });
+        cands.sort(function (a, b) { var ta = a.data.section === 'In theatres' ? 1 : 0, tb = b.data.section === 'In theatres' ? 1 : 0; return tb - ta || String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')); });
+        var m = cands[0] || null, has = v.nett || v.tnett || v.gross || v.world;
+        var odd = m && v.nett && v.tnett && v.nett === v.tnett && m.data.releaseDate && date && m.data.releaseDate < date;
+        return { t: t, m: m, v: v, st: !has ? 'skip' : !m ? 'none' : odd ? 'check' : 'ok', on: has && m && !odd };
+      }).filter(Boolean);
+      panel.innerHTML = '';
+      var dateIn = h('input', { type: 'date', class: 'in', value: date, style: 'width:auto' });
+      var n = { ok: 0, check: 0, skip: 0, none: 0 }; items.forEach(function (x) { n[x.st]++; });
+      var apply = h('button', { type: 'button', class: 'btn primary' });
+      var count = function () { var k = items.filter(function (x) { return x.on; }).length; apply.textContent = 'Apply ' + k + (k === 1 ? ' update' : ' updates'); apply.disabled = !k || !canWrite; };
+      var tag = { ok: ['Update', 'ok'], check: ['Check: day = total', 'warn'], skip: ['No figures · skipped', 'dim'], none: ['Not found', 'bad'] };
+      var tb = h('tbody', {}, items.map(function (x) {
+        var cb = x.st === 'ok' || x.st === 'check' ? h('input', { type: 'checkbox', checked: x.on, 'aria-label': 'Update ' + x.t, on: { change: function () { x.on = cb.checked; count(); } } }) : null;
+        return h('tr', {}, [h('td', {}, [cb]), h('td', { text: x.t }), h('td', { class: x.m ? '' : 'dim', text: x.m ? (x.m.data.title + (x.m.data.releaseDate ? ' (' + String(x.m.data.releaseDate).slice(0, 4) + ')' : '')) : '–' }),
+          h('td', { class: 'n', text: x.v.nett || '–' }), h('td', { class: 'n', text: x.v.tnett || '–' }), h('td', { class: 'n', text: x.v.world || '–' }), h('td', {}, [h('span', { class: 'bostat ' + tag[x.st][1], text: tag[x.st][0] })])]);
+      }));
+      panel.appendChild(h('div', { class: 'head' }, [h('h2', { text: 'Import box office CSV' }), h('span', { style: 'display:flex;gap:8px' }, [apply, h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })])]));
+      panel.appendChild(h('div', { style: 'display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:6px 0 12px' }, [h('span', { class: 'note', text: name + ' · figures for' }), dateIn,
+        h('span', { class: 'note', text: items.length + ' rows · ' + n.ok + ' to update · ' + n.check + ' to check · ' + n.skip + ' skipped · ' + n.none + ' not found' })]));
+      panel.appendChild(h('div', { class: 'boimp-tbl' }, [h('table', {}, [h('thead', {}, [h('tr', {}, ['', 'Film in file', 'Matched title', 'That day’s nett', 'Total nett', 'Worldwide', 'Status'].map(function (x, i) { return h('th', { class: i >= 3 && i <= 5 ? 'n' : '', text: x }); }))]), tb])]));
+      count();
+      apply.addEventListener('click', function () {
+        var d = dateIn.value; if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) { setStatus('Pick the date these figures are for.'); dateIn.focus(); return; }
+        var todo = items.filter(function (x) { return x.on && x.m; }); apply.disabled = true; apply.textContent = 'Saving…';
+        Promise.all(todo.map(function (x) {
+          var dd = clone(x.m.data), rows = (dd.boDaily || []).filter(function (r) { return r.date !== d; });
+          var row = { date: d }; ['nett', 'tnett', 'gross', 'world', 'chg'].forEach(function (k) { if (x.v[k]) row[k] = x.v[k]; });
+          var old = (dd.boDaily || []).filter(function (r) { return r.date === d; })[0]; if (old && old.langs) row.langs = old.langs;
+          rows.push(row); var b = { boDaily: rows, boUpdated: dd.boUpdated || '' };
+          deriveBo(b);
+          var up = { boDaily: b.boDaily, updatedAt: new Date().toISOString() };
+          ['boUpdated', 'boDay', 'boDayChg', 'boNett', 'boGross', 'boWorld'].forEach(function (k) { if (b[k] != null && b[k] !== dd[k]) up[k] = b[k]; });
+          return db.doc('movies/' + x.m.id).update(up);
+        })).then(function () { close(); setStatus('Box office updated for ' + todo.length + (todo.length === 1 ? ' film' : ' films') + '. Deploy to show it on the site.'); })
+          .catch(function (e) { apply.disabled = false; count(); setStatus('Import failed: ' + (e && e.message || 'error')); });
+      });
+    }
+    intro(); document.body.appendChild(box);
+  }
+
   function listEditor(title, key, cols, empty) {
     var rows = h('div', { class: 'rows' });
     function draw() {
@@ -1923,7 +2036,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'boDaily' ? ' bod' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
         if (key === 'videos' || key === 'extras' || key === 'interviews' || key === 'posters') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
@@ -1977,7 +2090,7 @@ window.ReelAdmin = function (env) {
           .catch(function (e) { setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
       });
     }
-    var hint = key === 'interviews' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Cast interviews, after Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. “Who’s in it” shows under each video, with its length. Press and entertainment channels are fine here; trailers and songs stay official only.' }) : key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'boDaily' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'One row per day, in ₹ crore. Only that day’s India nett is needed; the totals are optional. On save, the newest row fills the box office figures above (latest day, change vs the day before, totals and date). The title page draws the chart, weeks and clubs (worldwide) from these rows.' }) : key === 'interviews' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Cast interviews, after Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. “Who’s in it” shows under each video, with its length. Press and entertainment channels are fine here; trailers and songs stay official only.' }) : key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, upBtn, extra, add])]), rows, hint]);
   }
 
@@ -2200,6 +2313,7 @@ window.ReelAdmin = function (env) {
           field('Figures as of', 'boUpdated', { type: 'date' }),
           field('Source', 'boSource', { placeholder: 'e.g. Producer announcement' }),
           field('Source link', 'boUrl', { placeholder: 'https://…', note: 'Shown as a link next to the source.' })])]));
+      main.appendChild(listEditor('Daily box office', 'boDaily', [{ k: 'date', label: 'Date 2026-11-23' }, { k: 'nett', label: 'That day’s India nett' }, { k: 'tnett', label: 'Total India nett' }, { k: 'gross', label: 'Total India gross' }, { k: 'world', label: 'Total worldwide' }, { k: 'langs', label: 'By language: Hindi 8.1, Telugu 2.6' }], 'No daily figures yet. Add a row per day, or use Import box office CSV on the Titles page.'));
     }
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
@@ -2306,6 +2420,7 @@ window.ReelAdmin = function (env) {
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     body.extras = (body.extras || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    deriveBo(body);
     body.interviews = (body.interviews || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     if (!body.interviews.length) delete body.interviews;
     body.posters = (body.posters || []).filter(function (p) { return String(p.url || '').trim(); });
