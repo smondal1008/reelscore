@@ -873,3 +873,7 @@ a.lead:hover .ln { text-decoration: underline; }
 .vstrip.pre.named .cd b { text-shadow: 0 0 14px color-mix(in srgb, var(--cd, #F5A524) 45%, transparent); }
 .vstrip.pre.named .tl .d { background: var(--cd, var(--accent)); }
 @media (prefers-reduced-motion: reduce) { .vstrip.pre.named .pulse { animation: none; } }
+
+/* Post-credit scene breakdowns: blurred thumbnail and a Spoilers label until played */
+.vcard .th.pcsp img, .vcard .th.pcsp .ph { filter: blur(14px) brightness(.6); transform: scale(1.1); }
+.vcard .sptag { position: absolute; left: 8px; top: 8px; z-index: 2; padding: 3px 8px; border-radius: 6px; background: var(--danger); color: #0B0A0F; font-size: 11px; font-weight: 800; letter-spacing: .04em; text-transform: uppercase; }

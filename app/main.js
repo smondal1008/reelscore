@@ -1734,7 +1734,7 @@
     // Announcements and trailer breakdowns (Admin > their own card) come after, so the indexes above stay the same.
     (d.extras || []).forEach(function (x) {
       var u = safeUrl(x.url), id = ytId(u); if (!u) return;
-      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: 'extras', thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: 'extras', spoil: /post.?credit/i.test(x.kind || ''), thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
         artists: String(x.channel || '').trim().slice(0, 80), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
     });
     return out;
@@ -2186,8 +2186,8 @@
       var all = !!S.vmore[key], show = all ? g.idx : g.idx.slice(0, 6);
       kids.push(h('div', { class: 'vgrid' }, show.map(function (i) {
         var y = items[i], on = i === pl, can = !!(y.yt || y.clip), u = vurl(y);
-        return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': on ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i, true); } } }, [
-          h('span', { class: 'th' }, [vThumb(m, y, 640), y.dur ? h('span', { class: 'dur', text: y.dur }) : null, on ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+        return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': on ? 'true' : 'false', 'aria-disabled': can ? null : 'true', 'aria-label': y.spoil ? y.title + ' (spoilers)' : null, on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i, true); } } }, [
+          h('span', { class: 'th' + (y.spoil && !on ? ' pcsp' : '') }, [vThumb(m, y, 640), y.spoil ? h('span', { class: 'sptag', text: 'Spoilers · post-credit scene' }) : null, y.dur ? h('span', { class: 'dur', text: y.dur }) : null, on ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: y.title }), vSub(y, can)
         ]);
       })));
