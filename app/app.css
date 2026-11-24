@@ -154,6 +154,7 @@
   .pav:hover { border-color: var(--accent); }
   .row.v { grid-template-columns: 130px minmax(0, 1fr) minmax(0, 1.4fr) 44px; }
   .row.v.feat { grid-template-columns: 96px 120px minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 76px 44px 44px; }
+  .row.v.xtra { grid-template-columns: 96px 170px minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 76px 44px; }
   .row.v.awards { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 130px minmax(0, 1fr) 80px 44px; }
   .row.trivia { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) 44px; }
   .row.v.news { grid-template-columns: 130px minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, .8fr) 130px 44px; }
@@ -779,7 +780,7 @@ a.lead:hover .ln { text-decoration: underline; }
 .memenu a, .memenu button { display: block; width: 100%; padding: 10px 12px; border: 0; border-radius: 10px; background: none; color: var(--text); font: inherit; font-size: 14px; text-align: left; text-decoration: none; cursor: pointer; }
 .memenu a:hover, .memenu button:hover, .memenu a:focus-visible, .memenu button:focus-visible { background: var(--panel2); }
 .memenu [hidden] { display: none; }
-@media (max-width: 720px) { .row.v.feat { grid-template-columns: 96px 1fr 1fr; } }
+@media (max-width: 720px) { .row.v.feat, .row.v.xtra { grid-template-columns: 96px 1fr 1fr; } }
 .vcard .dur { position: absolute; right: 8px; bottom: 8px; padding: 2px 7px; border-radius: 6px; background: rgba(11,10,15,.85); color: var(--text); font-size: 12px; font-weight: 600; }
 .vcard .vsub { overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .stage .top { border: 0; padding: 0; flex-wrap: nowrap; }

@@ -3,6 +3,7 @@ window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
   var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
+  var EXTRA_KINDS = ['Announcement', 'Trailer breakdown'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
     ['runtime', 'Runtime'], ['certificate', 'Certificate'], ['posterUrl', 'Poster'], ['bannerUrl', 'Banner']
@@ -1873,10 +1874,10 @@ window.ReelAdmin = function (env) {
         cells.push(h('button', { type: 'button', class: 'x', 'aria-label': 'Remove row ' + (i + 1), text: '×', disabled: !canWrite,
           on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
-        if (key === 'videos') {
+        if (key === 'videos' || key === 'extras') {
           var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
             title: 'Click for a larger preview' + (item.thumbUrl ? (item.thumbHd ? ' (HD)' : ' (small only)') : ''), style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '',
-            on: { click: function () { var u = rows.querySelector('#videos' + i + 'url'); thumbPreview(ytIdOf(u ? u.value : item.url), item); } } });
+            on: { click: function () { var u = rows.querySelector('#' + key + i + 'url'); thumbPreview(ytIdOf(u ? u.value : item.url), item); } } });
           // ⋮⋮ moves the row: drag it, or focus it and use the arrow keys. The title page shows trailers and songs in this order.
           var grip = h('button', { type: 'button', class: 'grip', 'aria-label': 'Move video ' + (i + 1) + ' (' + (item.title || item.kind || 'untitled') + '). Use the up and down arrow keys, or drag.', title: 'Drag to reorder', disabled: !canWrite, text: '⋮⋮' });
           grip.addEventListener('keydown', function (e) {
@@ -1887,10 +1888,10 @@ window.ReelAdmin = function (env) {
           grip.addEventListener('mousedown', function () { if (canWrite) rowEl.draggable = true; });
           grip.addEventListener('touchstart', function () { if (canWrite) rowEl.draggable = true; }, { passive: true });
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
-          (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
+          (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
-        if (key === 'videos') dragRow(rowEl, i);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
+        if (key === 'videos' || key === 'extras') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
     }
@@ -1921,12 +1922,12 @@ window.ReelAdmin = function (env) {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
     var bname = draft.section === 'TV shows' ? 'TV Shows' : 'Movies';
-    var ytBtn = key === 'videos' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Fill lengths & singers from YouTube', on: { click: function () {
+    var ytBtn = key === 'videos' || key === 'extras' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: key === 'extras' ? 'Fill lengths from YouTube' : 'Fill lengths & singers from YouTube', on: { click: function () {
       var k = ytKey(true); if (!k) return; setStatus('Fetching from YouTube…');
-      fillYt(draft.videos, k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
+      fillYt(draft[key], k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
         .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
     } } }) : null;
-    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page in their own section, under Trailers and Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, extra, add])]), rows, hint]);
   }
 
@@ -2073,6 +2074,7 @@ window.ReelAdmin = function (env) {
     ]));
 
     main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'artists', label: 'Singers / people' }, { k: 'dur', label: 'Length 3:45' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+    main.appendChild(listEditor('Announcements & trailer breakdowns', 'extras', [{ k: 'kind', label: 'Type', options: EXTRA_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'channel', label: 'Channel' }, { k: 'dur', label: 'Length 3:45' }], 'None yet. Add the YouTube link for an announcement video or a trailer breakdown.'));
 
 
     // Buy tickets (films only): booking partner and a link per city. Folded for Older releases and On OTT; a tap opens it.
@@ -2249,8 +2251,10 @@ window.ReelAdmin = function (env) {
     body.slugHistory = hist.slice(-10);
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    body.extras = (body.extras || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    if (!body.extras.length) delete body.extras;
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
-    return fillThumbs(body.videos).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
+    return fillThumbs(body.videos).then(function () { return fillThumbs(body.extras || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();
