@@ -2106,29 +2106,35 @@
   function dmy(r) { var p = r.date.split('-'); return WD3[r.wd] + ' ' + (+p[2]) + ' ' + MONTHS[+p[1] - 1]; }
   function pctCh(a, b) { return b ? Math.round(1000 * (a - b) / b) / 10 : null; }
   function chgEl(c, vs) { return c == null ? h('span', { class: 'note', text: '–' }) : h('span', { class: 'bochg ' + (c < 0 ? 'dn' : 'up'), text: (c < 0 ? '▼ ' : '▲ ') + Math.abs(c) + '%' + (vs ? ' ' + vs : '') }); }
-  // Club tracker on worldwide gross: crossed clubs get a tick and, when a daily row shows it, the day it was crossed.
+  // Club tracker on India nett: crossed clubs get a tick and, when the daily rows show it, the day it was crossed.
+  var NCLUBS = [100, 200, 300, 500, 1000, 1500];
   function boClubs(m, bo, rows) {
-    var w = bo && bo.world; if (!w) return null;
-    var n = CLUBS.length, pos = function (v) {
-      if (v >= CLUBS[n - 1]) return 100;
-      var k = 0; while (k < n - 1 && v >= CLUBS[k + 1]) k++;
-      if (v < CLUBS[0]) return 0;
-      return 100 * (k + (v - CLUBS[k]) / (CLUBS[k + 1] - CLUBS[k])) / (n - 1);
+    var w = bo && bo.nett; if (!w) return null;
+    var CL = NCLUBS, n = CL.length, pos = function (v) {
+      if (v >= CL[n - 1]) return 100;
+      var k = 0; while (k < n - 1 && v >= CL[k + 1]) k++;
+      if (v < CL[0]) return 0;
+      return 100 * (k + (v - CL[k]) / (CL[k + 1] - CL[k])) / (n - 1);
     };
-    var next = CLUBS.filter(function (c) { return c > w; })[0];
-    var marks = CLUBS.map(function (c, k) {
-      // The day it got there: exact when an earlier row was still below the club, otherwise "by" the first day we have above it.
-      var done = w >= c, wr = rows.filter(function (r) { return r.world; }), hi = -1;
-      for (var q = 0; q < wr.length; q++) if (wr[q].world >= c) { hi = q; break; }
-      var hit = hi >= 0 ? wr[hi] : null, exact = hi > 0 && wr[hi - 1].world < c && wr[hi - 1].day === hit.day - 1;
+    // Running India nett per day: the stated total when a row has one, else the sum of every day from Day 1 (only while no day is missing).
+    var run = 0, full = true, cum = (m.data.boDaily || []).reduce(function (o, r) { if (r && r.date) o[r.date] = boN(r.tnett); return o; }, {});
+    var tr = rows.map(function (r, i) {
+      full = full && r.day === (i ? rows[i - 1].day + 1 : 1); run += r.nett;
+      return { day: r.day, tot: cum[r.date] != null ? cum[r.date] : full ? Math.round(run * 100) / 100 : null };
+    }).filter(function (r) { return r.tot != null; });
+    var next = CL.filter(function (c) { return c > w; })[0];
+    var marks = CL.map(function (c, k) {
+      var done = w >= c, hi = -1;
+      for (var q = 0; q < tr.length; q++) if (tr[q].tot >= c) { hi = q; break; }
+      var hit = hi >= 0 ? tr[hi] : null, exact = hit && (hit.day === 1 || (hi > 0 && tr[hi - 1].tot < c && tr[hi - 1].day === hit.day - 1));
       return h('div', { class: 'bc-mark' + (done ? ' done' : '') + (c === next ? ' next' : ''), style: 'left:' + (100 * k / (n - 1)) + '%' }, [
-        h('span', { class: 'bc-lab', text: '₹' + c.toLocaleString('en-IN') + ' Cr' }), h('span', { class: 'bc-dot', 'aria-hidden': 'true', text: done ? '✓' : '' }),
-        done && hit && exact ? h('span', { class: 'bc-day', text: 'Day ' + hit.day }) : null]);
+        h('span', { class: 'bc-lab' }, ['₹' + c.toLocaleString('en-IN'), h('i', { text: ' Cr' })]), h('span', { class: 'bc-dot', 'aria-hidden': 'true', text: done ? '✓' : '' }),
+        done && exact ? h('span', { class: 'bc-day', text: 'Day ' + hit.day }) : null]);
     });
     var nowX = pos(w);
     return h('div', { class: 'bo-blk' }, [
-      h('div', { class: 'bo-bh' }, [h('h3', { text: 'Club tracker · worldwide' }), h('span', { class: 'note' }, ['Now ', h('b', { text: crore(w) })].concat(next ? [' · ', h('b', { text: crore(next - w) }), ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club'] : [' · past every club']))]),
-      h('div', { class: 'bo-card bc', role: 'img', 'aria-label': 'Worldwide ' + crore(w) + (next ? ', ' + crore(next - w) + ' short of the ₹' + next.toLocaleString('en-IN') + ' Cr club' : '') }, [
+      h('div', { class: 'bo-bh' }, [h('h3', { text: 'Club tracker · India nett' }), h('span', { class: 'note' }, ['Now ', h('b', { text: crore(w) })].concat(next ? [' · ', h('b', { text: crore(next - w) }), ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club'] : [' · past every club']))]),
+      h('div', { class: 'bo-card bc', role: 'img', 'aria-label': 'India nett ' + crore(w) + (next ? ', ' + crore(next - w) + ' short of the ₹' + next.toLocaleString('en-IN') + ' Cr club' : '') }, [
         h('div', { class: 'bc-track' }, [h('div', { class: 'bc-fill', style: 'width:' + nowX + '%' }), h('div', { class: 'bc-now', style: 'left:' + nowX + '%' })].concat(marks))])
     ]);
   }
