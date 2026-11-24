@@ -561,6 +561,7 @@
   .pc .fu-b { display: flex; gap: 8px; }
   .pc .fu-b .btn { flex: 1; }
   .pc .pctag { font-size: 12px; font-weight: 600; color: var(--muted); }
+  #becauselist .pc .pctag { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pc .pctag.hot { color: var(--accent); }
   .pc .vtag.myv { align-self: flex-start; margin-top: 6px; font-size: 12px; padding: 5px 9px; border-radius: 6px; letter-spacing: .2px; }
   .castg a.cp { display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; color: var(--text); text-decoration: none; border-radius: 12px; padding: 6px 2px; }

@@ -717,7 +717,8 @@
       h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
       h('span', { class: 'mt', text: meta, title: meta })
     ];
-    if (opts.tag) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: opts.tag }));
+    var tagTxt = opts.tagFor ? opts.tagFor(m) : opts.tag;
+    if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
@@ -740,6 +741,77 @@
   }
   var HOME_MAX = 20;
   function seeAll(href) { return h('span', { class: 'sub' }, [h('a', { href: href, text: 'See all' })]); }
+  // "Because it's on your list" (home): a taste profile built from your whole watchlist and your verdicts.
+  // Watchlist titles count 1, Theatre / Must watch 1.5, OTT / Watch 0.5, Skip -1 (pushes those genres, languages and people down).
+  // Every title you haven't saved or rated is scored on genre (3), language (2), shared actors / directors (2 each, up to 3)
+  // and a small boost (0.5) if it's watchable now. Upcoming titles are allowed. At most 3 cards per saved title, 20 in all.
+  function tasteFeatures(m) {
+    var d = m.data, g = {}, l = {}, p = {};
+    String(d.genre || '').toLowerCase().split(/[^a-z-]+/).forEach(function (t) { if (t.length > 2 && t !== 'and') g[t] = 1; });
+    langsOf(d).forEach(function (x) { l[x.toLowerCase()] = 1; });
+    var actors = 0;
+    (d.cast || []).forEach(function (c) {
+      if (!c || !c.name) return; var k = personSlug(c.name); if (!k) return;
+      if (/director/i.test(c.role || '')) p[k] = 1;
+      else if (!CREW_RE.test(c.role || '') && actors < 6) { actors++; p[k] = 1; }
+    });
+    return { g: g, l: l, p: p };
+  }
+  function becauseListSection() {
+    if (!S.uid && !(S.mine.watchlist || []).length) return null;
+    var seeds = {}, add = function (id, w, why) { if (!S.byId[id]) return; var s = seeds[id]; if (!s || Math.abs(w) > Math.abs(s.w)) seeds[id] = { w: w, why: why }; };
+    (S.mine.watchlist || []).forEach(function (id) { add(id, 1, 'saved'); });
+    var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
+    var ck = (S.mine.watchlist || []).join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length + '|' + (S.navLang || '');
+    if (becauseListSection.ck === ck) return becauseListSection.draw();
+    Object.keys(vv).forEach(function (id) { var x = vv[id]; add(id, x === 'a' ? 1.5 : x === 'b' ? 0.5 : -1, x === 'c' ? 'skip' : 'rated'); });
+    var ids = Object.keys(seeds), W = 0, pg = {}, pl = {}, pp = {}, feat = {};
+    ids.forEach(function (id) {
+      var s = seeds[id], f = feat[id] = tasteFeatures(S.byId[id]); if (s.w > 0) W += s.w;
+      Object.keys(f.g).forEach(function (k) { pg[k] = (pg[k] || 0) + s.w; });
+      Object.keys(f.l).forEach(function (k) { pl[k] = (pl[k] || 0) + s.w; });
+      Object.keys(f.p).forEach(function (k) { pp[k] = (pp[k] || 0) + s.w; });
+    });
+    if (!W) return null;
+    var scored = [];
+    S.movies.forEach(function (m) {
+      if (seeds[m.id] || inList(m.id) || vv[m.id] || m.data.published === false || !inNavLang(m)) return;
+      var f = tasteFeatures(m), gs = 0, ls = 0, ps = 0, gk = Object.keys(f.g), pk = Object.keys(f.p);
+      gk.forEach(function (k) { gs += (pg[k] || 0) / W; });
+      if (gk.length) gs = gs / Math.sqrt(gk.length);
+      Object.keys(f.l).forEach(function (k) { ls = Math.max(ls, (pl[k] || 0) / W); });
+      pk.forEach(function (k) { ps += pp[k] || 0; });
+      ps = Math.max(-3, Math.min(3, ps));
+      if (gs <= 0 && ps <= 0) return;
+      var np = nowPlayingOf(m.data), now = np === 'theatres' || np === 'ott' || m.data.section === 'In theatres' || m.data.section === 'On OTT';
+      var w = gs * 3 + ls * 2 + ps * 2 + (now ? 0.5 : 0);
+      if (w > 1) scored.push({ m: m, w: w, f: f });
+    });
+    scored.sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    var pos = ids.filter(function (id) { return seeds[id].w > 0; }), per = {}, out = [], why = {};
+    for (var i = 0; i < scored.length && out.length < 20 && i < 300; i++) {
+      var o = scored[i], best = null, bw = 0;
+      pos.forEach(function (id) {
+        var f = feat[id], sw = 0;
+        Object.keys(o.f.p).forEach(function (k) { if (f.p[k]) sw += 2; });
+        Object.keys(o.f.g).forEach(function (k) { if (f.g[k]) sw += 1; });
+        Object.keys(o.f.l).forEach(function (k) { if (f.l[k]) sw += 0.5; });
+        sw *= seeds[id].w;
+        if (sw > bw) { bw = sw; best = id; }
+      });
+      if (!best || (per[best] || 0) >= 3) continue;
+      per[best] = (per[best] || 0) + 1; out.push(o.m);
+      why[o.m.id] = (vv[best] === 'a' ? 'Because you loved ' : seeds[best].why === 'rated' ? 'Because you rated ' : 'Because you saved ') + S.byId[best].data.title;
+    }
+    becauseListSection.ck = ck;
+    becauseListSection.draw = function () {
+      if (out.length < 4) return null;
+      var sec = rowSection('Because it’s on your list', out.filter(function (m) { return S.byId[m.id] && !inList(m.id); }), { tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
+      if (sec) sec.id = 'becauselist';
+      return sec;
+    };
+    return becauseListSection.draw();
+  }
   function rowSection(title, items, opts, link) {
     if (!items.length) return null;
     if (opts && opts.max && items.length > opts.max) items = items.slice(0, opts.max);
@@ -806,6 +878,7 @@
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
     [langNote, none,
       mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
+      becauseListSection(),
       trailerSection(),
       rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
