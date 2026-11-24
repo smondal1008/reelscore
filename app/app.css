@@ -888,9 +888,10 @@ a.lead:hover .ln { text-decoration: underline; }
 .psec .pchips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .psec .pchips .n { opacity: .7; font-weight: 500; }
 .prow { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: thin; padding: 14px 2px 8px; margin-top: 2px; }
-.pcard { flex: 0 0 170px; display: flex; flex-direction: column; gap: 2px; scroll-snap-align: start; min-width: 0; }
-.pth { position: relative; display: block; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; aspect-ratio: 2 / 3; background: var(--panel2); cursor: zoom-in; }
+.pcard { flex: 0 0 230px; display: flex; flex-direction: column; gap: 2px; scroll-snap-align: start; min-width: 0; }
+.pth { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; aspect-ratio: 2 / 3; background: var(--panel2); cursor: zoom-in; }
 .pth:hover { border-color: var(--line2); }
+.pth img { position: absolute; inset: 0; }
 .pth img, .pview img { width: 100%; height: 100%; object-fit: cover; display: block; -webkit-user-drag: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; pointer-events: auto; }
 .pth .ptag { position: absolute; left: 8px; top: 8px; height: 22px; padding: 0 8px; border-radius: 6px; background: rgba(11,10,15,.78); border: 1px solid rgba(255,255,255,.15); font-size: 10.5px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; display: flex; align-items: center; color: var(--text); }
 .pcap { margin-top: 8px; font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -908,7 +909,7 @@ a.lead:hover .ln { text-decoration: underline; }
 .pview .pv-t { flex: 0 0 48px; aspect-ratio: 2 / 3; padding: 0; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; opacity: .5; cursor: pointer; background: var(--panel2); }
 .pview .pv-t.on { opacity: 1; outline: 2px solid var(--accent); outline-offset: 2px; }
 @media (max-width: 900px) {
-  .pcard { flex-basis: 132px; }
+  .pcard { flex-basis: 168px; }
   .psec .parr { display: none; }
   .pview { padding: 12px; }
   .pview .pv-mid { flex-direction: column; gap: 14px; }

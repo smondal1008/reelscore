@@ -2305,7 +2305,7 @@
       var p = x.p, name = p.label || (p.kind || 'Poster');
       return h('div', { role: 'listitem', class: 'pcard' }, [
         h('button', { type: 'button', class: 'pth', 'aria-label': 'Open ' + name + ' larger', on: { click: function () { openPosterViewer(m, x.i); } } }, [
-          posterImg(p, 400, d.title + ' ' + name.toLowerCase()), p.kind ? h('span', { class: 'ptag', text: p.kind }) : null]),
+          posterImg(p, 500, d.title + ' ' + name.toLowerCase()), p.kind ? h('span', { class: 'ptag', text: p.kind }) : null]),
         h('span', { class: 'pcap', text: name }), h('span', { class: 'note psub', text: [p.kind, p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? fmtDate(p.date, true) : ''].filter(Boolean).join(' · ') })
       ]);
     }));
