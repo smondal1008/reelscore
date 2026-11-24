@@ -242,7 +242,7 @@
     if (cur.v[mid] === val) delete cur.v[mid]; else cur.v[mid] = val;
     cur.at = new Date().toISOString();
     S.verdicts[S.uid] = cur;
-    if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else render();
+    if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else if (!patchTitleBits()) render();
     writing.v = true;
     guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
   }
@@ -1956,7 +1956,7 @@
       if (!needUser() || writing.v) return;
       var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
       if (cur.bo[key] === val) delete cur.bo[key]; else cur.bo[key] = val;
-      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; render();
+      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; if (!patchTitleBits()) render();
       writing.v = true; guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
     };
     var pctTo = next ? Math.max(4, Math.min(100, Math.round(100 * (bo.world - prev) / (next - prev)))) : 100;
@@ -2107,6 +2107,17 @@
   }
 
 
+  // Title page: after a vote, redraw only the verdict strip, the fan poll and the review box (no full redraw, no image reloads).
+  function patchTitleBits() {
+    if (S.route !== 'title' || !S.loaded) return false;
+    var m = findMovie(S.param), v = $('view-title'); if (!m || !v || !v.classList.contains('tpage')) return false;
+    var strip = v.querySelector('.vstrip'); if (!strip) return false;
+    var sy = window.scrollY;
+    strip.replaceWith(verdictStrip(m, released(m)));
+    var poll = $('poll'), np = pollBlock(m); if (poll && np) poll.replaceWith(np);
+    if (window.scrollY !== sy) window.scrollTo(0, sy);
+    return true;
+  }
   // Swap one section for its redrawn copy without redrawing the page, so the scroll position stays put; keeps focus on the toggle.
   function swapInPlace(oldEl, newEl, focusSel) {
     if (!oldEl || !newEl || !oldEl.parentNode) { render(true); return; }
@@ -2144,10 +2155,10 @@
       if (!needUser() || writing.v) return;
       var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
       if (cur.bo[key] === slug) delete cur.bo[key]; else cur.bo[key] = slug;
-      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; render();
+      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; if (!patchTitleBits()) render();
       writing.v = true; guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
     };
-    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-poll' }, [
+    return h('section', { class: 'card side-x', id: 'poll', 'aria-labelledby': 'h-poll' }, [
       h('div', { class: 'kicker', style: 'color:var(--accent)', text: 'Fan poll' }),
       h('h2', { id: 'h-poll', text: 'Best performance in ' + m.data.title + '?' }),
       h('div', { class: 'poll', role: 'group', 'aria-label': 'Best performance' }, opts.map(function (c, i) {
@@ -3174,7 +3185,7 @@
       if (S.uid && writing.v && S.verdicts[S.uid]) o[S.uid] = S.verdicts[S.uid];
       S.verdicts = o;
       // After the first load, verdict changes only update scores and buttons on a drawn home page.
-      if (S.verdictsIn && S.route === 'home' && S.lastDrawn === 'home:' && S.loaded) patchVerdicts(); else render();
+      if (S.verdictsIn && S.route === 'home' && S.lastDrawn === 'home:' && S.loaded) patchVerdicts(); else if (!(S.verdictsIn && S.loaded && patchTitleBits())) render();
       S.verdictsIn = true;
     }, function () {});
     db.doc('settings/home').onSnapshot(function (snap) {
