@@ -3020,6 +3020,23 @@
     }).catch(function () { loadAllFromFirestore(db); });
   }
 
+  // Profile picture in the header: opens a small menu with your name, My List and Sign out.
+  function setupMeMenu(me) {
+    var wrap = $('meWrap'), btn = $('meBtn'), menu = $('meMenu'), av = $('meAvatar'), ini = $('meIni');
+    if (!wrap || !btn) return;
+    if (me.avatarUrl) { av.src = me.avatarUrl; av.alt = ''; av.hidden = false; ini.hidden = true; }
+    else { ini.textContent = initials(me.name || 'You'); ini.hidden = false; av.hidden = true; }
+    $('meName').textContent = me.name || 'Signed in';
+    btn.setAttribute('aria-label', (me.name || 'Your account') + ' · account menu');
+    var out = $('meOut'); if (!window.reelSignOut) out.hidden = true;
+    out.addEventListener('click', function () { if (window.reelSignOut) window.reelSignOut(); });
+    var close = function () { menu.hidden = true; btn.setAttribute('aria-expanded', 'false'); };
+    btn.addEventListener('click', function (e) { e.stopPropagation(); var open = menu.hidden; menu.hidden = !open; btn.setAttribute('aria-expanded', String(open)); if (open) { var f = menu.querySelector('a,button'); if (f) f.focus(); } });
+    document.addEventListener('click', function (e) { if (!wrap.contains(e.target)) close(); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !menu.hidden) { close(); btn.focus(); } });
+    menu.addEventListener('click', function (e) { if (e.target.tagName === 'A') close(); });
+    wrap.hidden = false;
+  }
   var cl = window.claude;
   if (!cl || typeof cl.use !== 'function') { clearTimeout(timer); S.loadMsg = 'Couldn’t start. Check firebase-config.js.'; render(true); return; }
   cl.use('user').then(function (u) {
@@ -3028,7 +3045,7 @@
     return u.me().then(function (me) {
       S.uid = me.id; S.canEdit = !!me.canEdit;
       if (S.canEdit) { $('adminLink').hidden = false; $('adminLink').setAttribute('href', '/admin'); }
-      var av = $('meAvatar'); if (me.avatarUrl) { av.src = me.avatarUrl; av.alt = me.name || 'You'; av.hidden = false; }
+      setupMeMenu(me);
     });
   }).catch(function () {}).then(function () {
     return cl.use('assets').then(function (a) { S.assets = a; }).catch(function () {});

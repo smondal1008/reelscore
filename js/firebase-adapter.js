@@ -156,9 +156,11 @@ async function start() {
     try { await A.signInWithPopup(auth, p); }
     catch (e) { if (/popup-blocked|operation-not-supported/.test(e.code || '')) await A.signInWithRedirect(auth, p); else console.warn(e); }
   };
+  window.reelSignOut = () => A.signOut(auth);
+  // Signed out: a Sign in button. Signed in: the profile picture opens a menu with Sign out (app/main.js).
   const mountAuthUi = () => {
     const navr = document.querySelector('.navr');
-    if (!navr || document.getElementById('authBtn')) return;
+    if (!navr || document.getElementById('authBtn') || user) return;
     const b = document.createElement('button');
     b.type = 'button'; b.id = 'authBtn'; b.className = 'authbtn';
     b.textContent = user ? 'Sign out' : 'Sign in';
