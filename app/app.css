@@ -838,8 +838,8 @@ a.lead:hover .ln { text-decoration: underline; }
 
 /* Before release: countdown, your plan, buzz */
 .vstrip.pre .cd { display: flex; gap: 8px; align-self: end; }
-.vstrip.pre .cd > span { display: flex; flex-direction: column; align-items: center; min-width: 62px; padding: 8px 6px 6px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
-.vstrip.pre .cd b { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 34px; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.vstrip.pre .cd > span { display: flex; flex-direction: column; align-items: center; min-width: 58px; padding: 8px 6px 6px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.vstrip.pre .cd b { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 34px; line-height: 1; color: var(--cd, var(--accent)); font-variant-numeric: tabular-nums; }
 .vstrip.pre .cd small { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); margin-top: 4px; }
 .vstrip.pre .tlw { align-self: center; }
 .vstrip.pre .tl { display: flex; align-items: center; }
@@ -862,3 +862,14 @@ a.lead:hover .ln { text-decoration: underline; }
   .vstrip.pre .cd > span { flex: 1 1 0; min-width: 0; }
   .vstrip.pre .tlw { align-self: stretch; }
 }
+
+/* Named countdown (e.g. "Doomsday Clock"): its own colour, a pulsing dot and glowing tiles */
+.vstrip.pre.named .cdname { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.vstrip.pre.named .cdn { display: inline-flex; align-items: center; gap: 8px; color: var(--cd, var(--accent)); font-size: 14px; letter-spacing: .16em; }
+.vstrip.pre.named .cdw { color: var(--muted); }
+.vstrip.pre.named .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--cd, var(--accent)); box-shadow: 0 0 0 0 var(--cd, var(--accent)); animation: cdpulse 2s infinite; }
+@keyframes cdpulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--cd, #F5A524) 60%, transparent); } 70% { box-shadow: 0 0 0 8px transparent; } 100% { box-shadow: 0 0 0 0 transparent; } }
+.vstrip.pre.named .cd > span { background: color-mix(in srgb, var(--cd, #F5A524) 7%, var(--panel2)); border-color: color-mix(in srgb, var(--cd, #F5A524) 35%, var(--line)); box-shadow: 0 0 22px -8px color-mix(in srgb, var(--cd, #F5A524) 55%, transparent); }
+.vstrip.pre.named .cd b { text-shadow: 0 0 14px color-mix(in srgb, var(--cd, #F5A524) 45%, transparent); }
+.vstrip.pre.named .tl .d { background: var(--cd, var(--accent)); }
+@media (prefers-reduced-motion: reduce) { .vstrip.pre.named .pulse { animation: none; } }

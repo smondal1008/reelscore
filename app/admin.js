@@ -2135,7 +2135,9 @@ window.ReelAdmin = function (env) {
       draft.section === 'On OTT' || tvEd ? null : field('Formats', 'formats', { placeholder: 'IMAX 3D · Hindi, 3D · Hindi', note: 'Comma-separated; shown as format choices in Book tickets.' }),
       field('Banner hook', 'hook', { wide: true, max: 90, placeholder: tvEd ? 'e.g. A family secret unravels over one long monsoon.' : 'e.g. One spy, one mission, no way back.',
         note: 'One line, in our own words, shown on the Home, Movies and TV Shows banners. Empty: the banner uses the first sentence of the synopsis.' }),
-      field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers. Shown on the title page.' })
+      field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers. Shown on the title page.' }),
+      field('Countdown name', 'cdName', { max: 30, placeholder: 'e.g. Doomsday Clock', note: 'Optional. Names the release countdown on the title page, for a big release. Empty: the usual countdown.' }),
+      field('Countdown colour', 'cdColor', { placeholder: '#7BD88F', note: 'Optional, as #RRGGBB. Colours the named countdown.' })
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
     // Box office (films only): figures in ₹ crore, with the date and where they come from.

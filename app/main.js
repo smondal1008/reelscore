@@ -1884,8 +1884,8 @@
   function relAt(m) { var d = m.data.releaseDate || ''; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T00:00:00') : null; }
   function cdParts(m) {
     var t = relAt(m); if (!t) return null;
-    var mins = Math.floor((t - Date.now()) / 6e4); if (mins <= 0) return null;
-    return [Math.floor(mins / 1440), Math.floor(mins / 60) % 24, mins % 60];
+    var sec = Math.floor((t - Date.now()) / 1000); if (sec <= 0) return null;
+    return [Math.floor(sec / 86400), Math.floor(sec / 3600) % 24, Math.floor(sec / 60) % 60, sec % 60];
   }
   function streamFirst(m) { return isOtt(m) || isTv(m); }
   function planSet(m) {
@@ -1949,7 +1949,7 @@
     document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
   function cdTiles(cd) {
-    return [['days', cd[0]], ['hrs', cd[1]], ['min', cd[2]]].map(function (x, i) { return h('span', {}, [h('b', { text: i ? String(x[1]).padStart(2, '0') : String(x[1]) }), h('small', { text: x[0] })]); });
+    return [['days', cd[0]], ['hrs', cd[1]], ['min', cd[2]], ['sec', cd[3]]].map(function (x, i) { return h('span', {}, [h('b', { text: i ? String(x[1]).padStart(2, '0') : String(x[1]) }), h('small', { text: x[0] })]); });
   }
   // Keep the countdown ticking without redrawing the page; redraw once the title is out.
   setInterval(function () {
@@ -1957,12 +1957,17 @@
     var m = S.byId[el.getAttribute('data-cd')]; if (!m) return;
     var cd = cdParts(m); if (!cd) { render(); return; }
     el.querySelectorAll('b').forEach(function (b, i) { b.textContent = i ? String(cd[i]).padStart(2, '0') : String(cd[i]); });
-    el.setAttribute('aria-label', cd[0] + ' days, ' + cd[1] + ' hours and ' + cd[2] + ' minutes to release');
-  }, 30000);
+    // The spoken label changes once a minute, so screen readers aren't flooded every second.
+    if (cd[3] === 59) el.setAttribute('aria-label', (el.getAttribute('data-name') ? el.getAttribute('data-name') + ': ' : '') + cdSay(cd));
+  }, 1000);
+  function cdSay(cd) { return cd[0] + ' days, ' + cd[1] + ' hours and ' + cd[2] + ' minutes to release'; }
+  // A title can give its countdown a name and colour in Admin (e.g. Avengers: Doomsday's "Doomsday Clock").
+  function cdColor(d) { return /^#[0-9a-f]{6}$/i.test(String(d.cdColor || '').trim()) ? String(d.cdColor).trim() : ''; }
   function preStrip(m) {
     var d = m.data, o = streamFirst(m), t = relAt(m), cd = cdParts(m), my = myPlan(m.id), ps = planSet(m), pc = planCounts(m.id);
     var wk = t ? t.toLocaleDateString('en-IN', { weekday: 'short' }) + ' ' + fmtDate(d.releaseDate, true) : '';
     var kick = o ? (t ? (isTv(m) ? 'Premieres' : 'Streams') + (d.platform ? ' on ' + d.platform : '') + ' · ' + wk : 'Release date TBA') : (t ? 'In theatres · ' + wk : 'Release date TBA');
+    var cdName = String(d.cdName || '').trim().slice(0, 30), cdc = cdColor(d);
     var hasVid = (d.videos || []).some(function (v) { return safeUrl(v.url); });
     var steps = o ? [['Announced', true], ['Trailer out', hasVid], [isTv(m) ? 'Premiere' : 'Streaming', false]]
       : [['Announced', true], ['Trailer out', hasVid], ['Bookings open', hasBooking(d)], ['Release', false]];
@@ -1970,8 +1975,8 @@
     var line = h('div', { class: 'tl', role: 'img', 'aria-label': 'Done so far: ' + steps.filter(function (x) { return x[1]; }).map(function (x) { return x[0]; }).join(', ') }, []);
     steps.forEach(function (x, i) { if (i) line.appendChild(h('em', { class: x[1] ? 'd' : '' })); line.appendChild(h('i', { class: x[1] ? 'd' : '' })); });
     var left = h('div', { class: 'vs-score' }, [
-      h('div', { class: 'kicker', text: kick }),
-      cd ? h('div', { class: 'cd', 'data-cd': m.id, role: 'timer', 'aria-label': cd[0] + ' days, ' + cd[1] + ' hours and ' + cd[2] + ' minutes to release' }, cdTiles(cd))
+      cdName && cd ? h('div', { class: 'kicker cdname' }, [h('span', { class: 'cdn' }, [h('span', { class: 'pulse', 'aria-hidden': 'true' }), cdName]), h('span', { class: 'cdw', text: kick })]) : h('div', { class: 'kicker', text: kick }),
+      cd ? h('div', { class: 'cd', 'data-cd': m.id, 'data-name': cdName || null, role: 'timer', 'aria-label': (cdName ? cdName + ': ' : '') + cdSay(cd) }, cdTiles(cd))
         : h('div', { class: 'vs-big' }, [h('span', { class: 'big', style: 'font-size:30px', text: /^\d{4}$/.test(d.releaseDate || '') ? 'Coming ' + d.releaseDate : 'Date TBA' })]),
       h('div', { class: 'tlw' }, [line, h('div', { class: 'tll' }, steps.map(function (x, i) { return h('span', { class: i === last ? 'on' : '', text: x[0] }); }))]),
       h('div', { class: 'pre-acts' }, [
@@ -2006,7 +2011,7 @@
         }).concat([h('span', { class: 'note', text: pc.tot + ' plans' })]))
         : h('div', { class: 'note', text: pc.tot ? pc.tot + (pc.tot === 1 ? ' plan' : ' plans') + ' so far · the split shows at ' + MIN_PLANS : 'The split shows once ' + MIN_PLANS + ' people have made a plan.' })
     ]);
-    return h('section', { class: 'card vstrip pre', 'aria-label': 'Before release' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), right]);
+    return h('section', { class: 'card vstrip pre' + (cdName && cd ? ' named' : ''), style: cdc ? '--cd:' + cdc : null, 'aria-label': 'Before release' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), right]);
   }
 
   // Score, your verdict, and what people you follow said: one strip under the banner.
