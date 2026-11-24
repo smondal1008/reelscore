@@ -893,10 +893,14 @@ window.ReelAdmin = function (env) {
   var YT_NOISE = /^(full|official|lyrical|lyric|lyrics|video|audio|music|song|songs|4k|hd|uhd|new|latest|hindi|tamil|telugu|malayalam|kannada|punjabi|bengali|marathi)$/i;
   function songName(t, film) {
     var plain = function (x) { return String(x || '').normalize('NFKD').replace(/[̀-ͯ]/g, ''); };
-    var q = String(t || '').match(/["“]([^"”]{2,60})["”]/); if (q) return q[1].trim();
-    var src = plain(cleanYtTitle(t)), f = plain(film).trim();
+    var f = plain(film).trim(), t0 = String(t || '').replace(/\(\s*from\s+[^)]*\)/ig, ' ').replace(/\bfrom\s+["“][^"”]+["”]/ig, ' ');
+    var q = t0.match(/["“]([^"”]{2,60})["”]/); if (q && normT(q[1]) !== normT(f)) return q[1].trim();
+    var src = plain(cleanYtTitle(t0));
     var fw = f.split(/[^A-Za-z0-9]+/).filter(Boolean);
-    if (fw.length) src = src.replace(new RegExp('(^|[^A-Za-z0-9])' + fw.join('[^A-Za-z0-9]*') + '(?=$|[^A-Za-z0-9])', 'ig'), '$1 | ');
+    if (fw.length) {
+      var fre = fw.join('[^A-Za-z0-9]*');
+      src = src.replace(new RegExp('^\\s*' + fre + '\\s*:', 'i'), ' | ').replace(new RegExp('([^A-Za-z0-9])' + fre + '(?=$|[^A-Za-z0-9])', 'ig'), function (m0, pre, at) { return at > 0 ? pre + ' | ' : m0; });
+    }
     var segs = src.split(/\s*(?:\||｜|–|—|\s-\s|:)\s*/).map(function (x) {
       x = x.replace(/[(\[][^)\]]*(video|lyric|audio|song|from|official|4k|hd)[^)\]]*[)\]]/gi, ' ').replace(/["“”']/g, '').replace(/\s{2,}/g, ' ').trim();
       var w = x.split(' '); while (w.length && YT_NOISE.test(w[w.length - 1])) w.pop(); while (w.length && YT_NOISE.test(w[0])) w.shift();
@@ -1353,6 +1357,7 @@ window.ReelAdmin = function (env) {
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
     if (canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Update box office figures for many films from a CSV file', text: '⬆ Import box office CSV', on: { click: importBoCsv } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Search YouTube for an official trailer for titles in this list that have none', text: '🔎 Find trailers', on: { click: function () { findTrailers(vis); } } }));
+    if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Find songs on official music-label channels for films in this list that have none', text: '♪ Find songs', on: { click: function () { findSongs(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
       sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; fieldF = []; pageNo = 1; }); } } })]));
@@ -2010,6 +2015,122 @@ window.ReelAdmin = function (env) {
           }).then(function () { close(); setStatus('Added ' + pick.length + (pick.length === 1 ? ' trailer' : ' trailers') + '. Deploy to show them on the site.'); })
           .catch(function (e) { apply.disabled = false; count(); setStatus('Saving failed: ' + (e && e.message || 'error')); });
       });
+    }
+  }
+  // ---------- Find songs: match films with no songs against the uploads of official music-label channels ----------
+  // Reads each label's whole upload list (1 quota unit per 50 videos, so a full run costs a few thousand of the 10,000 daily units)
+  // and matches video titles like "Song | Film | Cast" or "Song (From \"Film\")" to films in the current list. Nothing is saved until you Apply.
+  var SONG_LABELS = '@tseries @zeemusiccompany @SonyMusicIndia @saregamamusic @TipsOfficial @yrf @erosnowmusic @ShemarooFilmiGaane @UltraBollywood @JungleeMusic ' +
+    '@SonyMusicSouth @thinkmusicindia @tseriestamil @SaregamaTamil @divomusicindia @adityamusic @LahariMusic @tseriestelugu @SaregamaTelugu @MangoMusic ' +
+    '@AnandAudio @PRKAudio @Muzik247 @SaregamaMalayalam @ManoramaMusic @SVFMusic @SpeedRecords @WhiteHillMusic @ZeeMusicMarathi @ZeeMusicSouth';
+  function findSongs(list) {
+    var films = list.filter(function (m) { return m.data.section !== 'TV shows' && missingSongs(m.data) && normT(m.data.title).length >= 3; });
+    var box = h('div', { class: 'boimp', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Find songs' }), panel = h('div', { class: 'boimp-in' }); box.appendChild(panel);
+    var stop = false, close = function () { stop = true; box.remove(); document.removeEventListener('keydown', onKey); };
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey); box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    var head = function (extra) { return h('div', { class: 'head' }, [h('h2', { text: 'Find songs' }), h('span', { style: 'display:flex;gap:8px' }, [extra, h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })])]); };
+    panel.appendChild(head(null)); document.body.appendChild(box);
+    if (!films.length) { panel.appendChild(h('p', { class: 'note', text: 'Every film in this list already has a song.' })); return; }
+    var ta = h('textarea', { class: 'in', rows: 4, style: 'width:100%;font-size:13px', 'aria-label': 'Official music channels to read' }); ta.value = SONG_LABELS;
+    panel.appendChild(h('p', { class: 'note', text: films.length + (films.length === 1 ? ' film' : ' films') + ' in this list have no songs. This reads every upload of the official music-label channels below and matches them to these films by name. Only these channels are used. Add or remove channels (their @handle) if you like. A full run takes about 10 minutes and a few thousand of YouTube’s 10,000 daily units. Nothing is saved until you review the matches and Apply.' }));
+    panel.appendChild(ta);
+    panel.appendChild(h('div', { style: 'margin-top:10px' }, [h('button', { type: 'button', class: 'btn primary', text: 'Find songs for ' + films.length + (films.length === 1 ? ' film' : ' films'), on: { click: start } })]));
+    var BAD = /trailer|teaser|jukebox|making|behind the scenes|\bbts\b|reaction|\bscene\b|dialogue|promo\b|motion poster|interview|full movie|#shorts|\bshorts\b|status|announcement|glimpse|first look|launch|event|press meet|review|spoof|mashup|non ?stop|back to back|top \d|best of|hits of|audio launch|karaoke|instrumental cover|unplugged cover/i;
+    var SONGY = /song|lyric|video|audio|title track|full|official|reprise|version|\(from /i;
+    function filmKeys(vt) {
+      var keys = [], t = vt.normalize('NFKD').replace(/[̀-ͯ]/g, '');
+      var fm = t.match(/\(\s*from\s+["“']?([^"”')]+)["”']?\s*\)/i) || t.match(/\bfrom\s+["“]([^"”]+)["”]/i); if (fm) keys.push({ k: normT(fm[1]), how: 'from' });
+      var segs = t.split(/\s*(?:\||｜|\s[–—-]\s)\s*/).map(function (x) { return x.trim(); }).filter(Boolean);
+      segs.forEach(function (x, ix) {
+        x = x.replace(/[(\[][^)\]]*[)\]]/g, ' ').replace(/\b(full|official|lyrical|lyric|video|audio|song|songs|movie|film|new|hindi|tamil|telugu|malayalam|kannada|bengali|punjabi|marathi|4k|hd)\b/gi, ' ').replace(/\s{2,}/g, ' ').trim();
+        if (ix > 0 && x) keys.push({ k: normT(x), how: 'seg' });
+      });
+      var c = t.match(/^([^:|]{3,60}):\s*\S/); if (c) keys.push({ k: normT(c[1]), how: 'colon' });
+      return keys;
+    }
+    function start() {
+      var key = ytKey(true); if (!key) return;
+      var handles = (ta.value.match(/@[\w.\-]+/g) || []).filter(function (x, i, a) { return a.indexOf(x) === i; });
+      if (!handles.length) { setStatus('Add at least one channel @handle.'); return; }
+      panel.innerHTML = '';
+      var apply = h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'Reading channels…' }), prog = h('div', { class: 'note', style: 'margin:4px 0 10px;white-space:pre-line' });
+      panel.appendChild(head(apply)); panel.appendChild(prog);
+      var byKey = {}, films2 = {}, units = 0, chans = [], quota = false, done = 0;
+      films.forEach(function (m) { var k = normT(m.data.title); (films2[k] = films2[k] || []).push(m); });
+      var api = function (path) { units++; return fetch('https://www.googleapis.com/youtube/v3/' + path + '&key=' + encodeURIComponent(key)).then(function (r) { return r.json(); }).then(function (j) { if (j && j.error) { if (/quota/i.test(JSON.stringify(j.error))) quota = true; throw new Error(j.error.message || 'YouTube error'); } return j; }); };
+      var status = function () { prog.textContent = 'Channels read: ' + done + ' of ' + handles.length + ' · videos scanned: ' + chans.reduce(function (a, c) { return a + (c.n || 0); }, 0).toLocaleString('en-IN') + ' · YouTube units used: ' + units + (quota ? '\nYouTube’s daily limit ran out; showing what was read so far.' : '') + '\n' + chans.map(function (c) { return c.h + ': ' + (c.err ? c.err : c.name ? c.name + ' · ' + (c.n || 0).toLocaleString('en-IN') + ' videos' + (c.done ? '' : '…') : 'looking up…'); }).join('\n'); };
+      function readChannel(hd) {
+        var c = { h: hd, n: 0 }; chans.push(c); status();
+        return api('channels?part=snippet,contentDetails&fields=items(id,snippet/title,contentDetails/relatedPlaylists/uploads)&forHandle=' + encodeURIComponent(hd)).then(function (j) {
+          var it = j.items && j.items[0]; if (!it) { c.err = 'not found'; return; }
+          c.name = it.snippet.title; var pl = it.contentDetails.relatedPlaylists.uploads;
+          var page = function (tok) {
+            if (stop || quota) return;
+            return api('playlistItems?part=snippet&maxResults=50&playlistId=' + pl + '&fields=nextPageToken,items(snippet(title,publishedAt,resourceId/videoId))' + (tok ? '&pageToken=' + tok : '')).then(function (r) {
+              (r.items || []).forEach(function (x) {
+                var vt = dec(x.snippet.title), id = x.snippet.resourceId && x.snippet.resourceId.videoId; if (!id || BAD.test(vt)) return;
+                c.n++;
+                filmKeys(vt).forEach(function (fk) { if (films2[fk.k]) (byKey[fk.k] = byKey[fk.k] || []).push({ id: id, t: vt, ch: c.name, at: x.snippet.publishedAt, how: fk.how }); });
+              });
+              if (c.n % 2000 < 50) status();
+              if (r.nextPageToken) return page(r.nextPageToken);
+            });
+          };
+          return page('');
+        }).catch(function (e) { if (!c.err) c.err = quota ? 'stopped: daily limit' : 'couldn’t read (' + (e && e.message || 'error') + ')'; }).then(function () { c.done = true; done++; status(); });
+      }
+      function dec(t) { var x = document.createElement('textarea'); x.innerHTML = t; return x.value; }
+      var q = handles.slice(), workers = [];
+      for (var w = 0; w < 4; w++) workers.push((function loop() { var hd = q.shift(); return hd && !stop ? readChannel(hd).then(loop) : Promise.resolve(); })());
+      Promise.all(workers).then(function () { if (!stop) review(); });
+      function review() {
+        var rows = [];
+        Object.keys(byKey).forEach(function (k) {
+          var fl = films2[k]; if (!fl) return;
+          var amb = fl.length > 1;
+          fl.forEach(function (m) {
+            var y = +String(m.data.releaseDate || '').slice(0, 4) || 0, seen = {};
+            var vids = byKey[k].filter(function (v) { var vy = +String(v.at).slice(0, 4); return !y || y < 2009 || (vy >= y - 1 && vy <= y + 4); });
+            vids.sort(function (a, b) { var r = function (v) { return /lyric/i.test(v.t) ? 1 : /audio/i.test(v.t) ? 2 : 0; }; return r(a) - r(b) || (a.at < b.at ? -1 : 1); });
+            var songs = [];
+            vids.forEach(function (v) { if (!SONGY.test(v.t) && v.how !== 'from') return; var n = songName(v.t, m.data.title), nk = normT(n); if (!nk || seen[nk] || nk === k) return; seen[nk] = 1; songs.push({ id: v.id, name: n, t: v.t, ch: v.ch, on: true }); });
+            if (!songs.length) return;
+            songs = songs.slice(0, 12);
+            rows.push({ m: m, songs: songs, on: !amb, amb: amb });
+          });
+        });
+        rows.sort(function (a, b) { return String(b.m.data.releaseDate || '').localeCompare(String(a.m.data.releaseDate || '')); });
+        var nSongs = function () { return rows.reduce(function (a, r) { return a + (r.on ? r.songs.filter(function (s) { return s.on; }).length : 0); }, 0); };
+        var count = function () { var f = rows.filter(function (r) { return r.on && r.songs.some(function (s) { return s.on; }); }).length, n = nSongs(); apply.textContent = 'Apply ' + n + ' songs to ' + f + (f === 1 ? ' film' : ' films'); apply.disabled = !n || !canWrite; };
+        status();
+        prog.textContent += '\n\nFound songs for ' + rows.length + ' of ' + films.length + ' films. Films that share their name with another film are unticked: check those. Untick any song that belongs to a different film.';
+        var tb = h('tbody'); panel.appendChild(h('div', { class: 'boimp-tbl' }, [h('table', {}, [h('thead', {}, [h('tr', {}, ['', 'Film', 'Songs found (official channels)'].map(function (x) { return h('th', { text: x }); }))]), tb])]));
+        rows.forEach(function (r) {
+          var cb = h('input', { type: 'checkbox', checked: r.on, 'aria-label': 'Add songs to ' + r.m.data.title, on: { change: function () { r.on = cb.checked; count(); } } });
+          tb.appendChild(h('tr', {}, [h('td', {}, [cb]),
+            h('td', {}, [h('b', { text: r.m.data.title }), h('div', { class: 'note', text: [String(r.m.data.releaseDate || '').slice(0, 4), r.m.data.languages].filter(Boolean).join(' · ') }), r.amb ? h('span', { class: 'bostat warn', text: 'Same name as another film' }) : null]),
+            h('td', {}, r.songs.map(function (s) {
+              var sc = h('input', { type: 'checkbox', checked: s.on, 'aria-label': 'Keep ' + s.name, on: { change: function () { s.on = sc.checked; count(); } } });
+              return h('label', { style: 'display:flex;gap:8px;align-items:center;margin:2px 0' }, [sc, h('a', { href: 'https://www.youtube.com/watch?v=' + s.id, target: '_blank', rel: 'noopener', title: s.t, text: s.name }), h('span', { class: 'note', text: '· ' + s.ch })]);
+            }))]));
+        });
+        count();
+        apply.onclick = function () {
+          var pick = rows.filter(function (r) { return r.on && r.songs.some(function (s) { return s.on; }); }); if (!pick.length) return;
+          apply.disabled = true; var day = new Date().toLocaleDateString('en-CA'), ok = 0, i = 0;
+          var next = function () {
+            if (i >= pick.length) { close(); setStatus('Added songs to ' + ok + (ok === 1 ? ' film' : ' films') + '. Run “Fill video lengths & singers” next, then deploy to show them on the site.'); return; }
+            var r = pick[i++], cur = movies.find(function (m) { return m.id === r.m.id; }) || r.m, have = {};
+            (cur.data.videos || []).forEach(function (v) { var id = ytIdOf(v.url); if (id) have[id] = 1; });
+            var add = r.songs.filter(function (s) { return s.on && !have[s.id]; }).map(function (s) { return { kind: 'Song', title: s.name, url: 'https://www.youtube.com/watch?v=' + s.id, channel: s.ch, addedAt: day }; });
+            apply.textContent = 'Saving ' + i + ' of ' + pick.length + '…';
+            (add.length ? db.doc('movies/' + r.m.id).update({ videos: (cur.data.videos || []).concat(add), updatedAt: new Date().toISOString() }).then(function () { ok++; }) : Promise.resolve())
+              .catch(function (e) { setStatus('Saving ' + r.m.data.title + ' failed: ' + (e && e.message || 'error')); }).then(next);
+          };
+          next();
+        };
+      }
     }
   }
   function importBoCsv() {
