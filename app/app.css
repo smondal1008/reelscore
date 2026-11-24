@@ -136,7 +136,8 @@
   .err { font-size: 13px; color: var(--danger); }
   .rows { display: flex; flex-direction: column; gap: 8px; }
   .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
-  .row.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 44px; }
+  .row.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 44px 44px; }
+  .row.v.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 90px 90px 44px 44px; }
   .cname { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 0 4px; min-width: 0; }
   .cname strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cname a { font-size: 12px; color: var(--muted, #A59FB3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -699,7 +700,9 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .btn.more { align-self: center; }
 .story { margin: 0; font-size: 17px; line-height: 1.65; color: #D9D5DF; max-width: 780px; }
 .leads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-.lead.card { flex-direction: row; align-items: center; gap: 16px; padding: 14px; color: var(--text); text-decoration: none; }
+.leads.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.leads.three .lead .lf { width: 64px; height: 64px; font-size: 20px; }
+.lead.card { margin: 0; flex-direction: row; align-items: center; gap: 16px; padding: 14px; color: var(--text); text-decoration: none; }
 .lead .lf { width: 88px; height: 88px; border-radius: 16px; object-fit: cover; object-position: center top; flex: none; display: flex; align-items: center; justify-content: center; font-size: 26px; font-weight: 700; color: #0B0A0F; }
 .lead .lt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .lbadge { align-self: flex-start; padding: 2px 8px; border-radius: 6px; background: rgba(245,165,36,.16); color: #FFD08A; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
@@ -743,7 +746,8 @@ a.lead:hover .ln { text-decoration: underline; }
   .vs-peer { flex-basis: auto; }
   .vgrid { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 4px; }
   .vgrid .vcard { flex: 0 0 240px; }
-  .leads { grid-template-columns: 1fr; }
+  .leads, .leads.three { grid-template-columns: 1fr; }
   .lead .lf { width: 64px; height: 64px; font-size: 20px; }
 }
 @media (max-width: 720px) { .row.v.news { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .row.v.cast { grid-template-columns: 1fr 1fr; } }

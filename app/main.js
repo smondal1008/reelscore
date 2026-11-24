@@ -2003,8 +2003,11 @@
     };
     var link = function (c, cls, kids, label) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name), 'aria-label': label }, kids) : h('div', { class: cls }, kids); };
     var sub = function (c) { return [/^(lead|cast|actor|actress)$/i.test(c.role || '') ? '' : c.role || '', tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
-    var leads = actors.slice(0, actors.length > 2 ? 2 : actors.length), rest = actors.slice(leads.length);
-    if (leads.length) box.appendChild(h('div', { class: 'leads' }, leads.map(function (c, i) {
+    // Leads: the cast marked ★ in Admin; with none marked, the first two actors.
+    var marked = actors.filter(function (c) { return c.lead; });
+    var leads = marked.length ? marked : actors.slice(0, actors.length > 2 ? 2 : actors.length);
+    var rest = actors.filter(function (c) { return leads.indexOf(c) === -1; });
+    if (leads.length) box.appendChild(h('div', { class: 'leads' + (leads.length > 2 ? ' three' : '') }, leads.map(function (c, i) {
       return link(c, 'lead card', [face(c, i, 'lf'), h('span', { class: 'lt' }, [h('span', { class: 'lbadge', text: 'Lead' }), h('span', { class: 'ln', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null])], c.name + ', lead');
     })));
     if (crew.length) {

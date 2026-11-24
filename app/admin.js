@@ -299,7 +299,7 @@ window.ReelAdmin = function (env) {
     var jobs = [];
     movies.forEach(function (m) {
       var cast = (m.data.cast || []), hit = false;
-      var next = cast.map(function (c) { if (personKey(c.name) === oldKey) { hit = true; return { name: newName, role: c.role || '' }; } return c; });
+      var next = cast.map(function (c) { if (personKey(c.name) === oldKey) { hit = true; return Object.assign({}, c, { name: newName, role: c.role || '' }); } return c; });
       if (!hit) return;
       // drop a duplicate row if the title already had the target person with the same role
       var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || ''); if (seen[k]) return false; seen[k] = 1; return true; });
@@ -1793,6 +1793,13 @@ window.ReelAdmin = function (env) {
               if (!String(item.url || '').trim()) { setStatus('Add the YouTube link first.'); return; }
               draft.bannerVideo = star ? '' : item.url; touch(); draw();
             } } }));
+        }
+        // Cast: ★ marks a lead; leads show large at the top of Cast & crew on the title page.
+        if (key === 'cast') {
+          var crewRow = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i.test(item.role || '');
+          cells.push(h('button', { type: 'button', class: 'x vstar' + (item.lead ? ' on' : ''), 'aria-pressed': String(!!item.lead), disabled: !canWrite || (crewRow && !item.lead),
+            'aria-label': (item.lead ? 'Unmark ' : 'Mark ') + (item.name || 'person ' + (i + 1)) + ' as a lead', title: crewRow && !item.lead ? 'Leads are for cast, not crew' : item.lead ? 'Lead. Click to unmark.' : 'Mark as lead',
+            text: item.lead ? '★' : '☆', on: { click: function () { if (item.lead) delete item.lead; else item.lead = true; touch(); draw(); } } }));
         }
         cells.push(h('button', { type: 'button', class: 'x', 'aria-label': 'Remove row ' + (i + 1), text: '×', disabled: !canWrite,
           on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
