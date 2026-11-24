@@ -1472,6 +1472,7 @@
   }
 
   // ---------- title ----------
+  var FOLLOW_ON = false; // following other reviewers isn't live yet
   function drawTitle() {
     var v = $('view-title');
     // A pre-rendered page (built for search engines) stays on screen until the catalogue arrives.
@@ -1709,7 +1710,9 @@
     var all = [];
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) all.push({ uid: uid, it: it }); });
     var fol = all.filter(function (r) { return following(r.uid); });
-    box.appendChild(h('div', { class: 'chips', role: 'tablist' }, [['all', 'All reviews (' + all.length + ')'], ['friends', 'People you follow (' + fol.length + ')']].map(function (t) {
+    // The All / People you follow tabs come back once following is ready (FOLLOW_ON).
+    if (!FOLLOW_ON) S.rtab = 'all';
+    else box.appendChild(h('div', { class: 'chips', role: 'tablist' }, [['all', 'All reviews (' + all.length + ')'], ['friends', 'People you follow (' + fol.length + ')']].map(function (t) {
       return h('button', { type: 'button', role: 'tab', class: 'chip', 'aria-selected': String(S.rtab === t[0]), text: t[1], on: { click: function () { S.rtab = t[0]; render(true); } } });
     })));
     var show = (S.rtab === 'friends' ? fol : all).slice().sort(function (a, b) {
