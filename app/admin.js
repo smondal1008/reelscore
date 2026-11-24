@@ -1032,6 +1032,10 @@ window.ReelAdmin = function (env) {
   function clone(o) { return JSON.parse(JSON.stringify(o || {})); }
   function setStatus(t) { $('status').textContent = t; }
   function safeUrl(u) { return (typeof u === 'string' && (/^\/_blob\//.test(u) || /^https:\/\//.test(u))) ? u : ''; }
+  // The article's own link-preview image (og:image), via /api/og. Resolves to '' when there is none or the site can't be reached.
+  function ogImage(u) {
+    return fetch('/api/og?url=' + encodeURIComponent(u)).then(function (r) { return r.ok ? r.json() : {}; }).then(function (j) { return safeUrl(j.image) || ''; }).catch(function () { return ''; });
+  }
   function bgUrl(u) { u = safeUrl(u); return u ? 'background-image:url("' + u.replace(/"/g, '%22') + '")' : ''; }
   // Now playing (set in the admin panel): theatres | out | ott | direct. It decides a film's home page section, and
   // a film marked theatres or out moves to ott once its OTT Release Date has passed. Same rule in scripts/build.mjs
@@ -2034,7 +2038,19 @@ window.ReelAdmin = function (env) {
               .catch(function (e) { setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
           });
           cells.unshift(h('span', { class: 'vgrip' }, [nIn, nprev]));
-          (function (pv) { setTimeout(function () { var u = rows.querySelector('#news' + i + 'img'); if (u) u.addEventListener('change', function () { var ok = safeUrl(u.value); pv.setAttribute('style', bgUrl(u.value)); pv.classList.toggle('none', !ok); pv.textContent = ok ? '' : '+'; }); }, 0); })(nprev);
+          (function (pv) { setTimeout(function () {
+            var u = rows.querySelector('#news' + i + 'img'); if (u) u.addEventListener('change', function () { var ok = safeUrl(u.value); delete item.imgAuto; pv.setAttribute('style', bgUrl(u.value)); pv.classList.toggle('none', !ok); pv.textContent = ok ? '' : '+'; });
+            // A new article link fetches the article's own preview image, unless this story already has an image.
+            var l = rows.querySelector('#news' + i + 'url'); if (l) l.addEventListener('change', function () {
+              if (!safeUrl(l.value) || (safeUrl(item.img) && !item.imgAuto)) return;
+              pv.classList.add('busy'); setStatus('Fetching the article’s image…');
+              ogImage(l.value).then(function (img) {
+                pv.classList.remove('busy');
+                if (img) { item.img = img; item.imgAuto = true; touch(); draw(); setStatus('Image fetched from the article. Save to keep it.'); }
+                else setStatus('That article has no preview image; the title page will use the film’s banner. You can upload one.');
+              });
+            });
+          }, 0); })(nprev);
         }
         if (key === 'videos' || key === 'extras' || key === 'interviews') {
           var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
@@ -2084,6 +2100,15 @@ window.ReelAdmin = function (env) {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
     var bname = draft.section === 'TV shows' ? 'TV Shows' : 'Movies';
+    if (key === 'news') extra = h('button', { type: 'button', class: 'btn small', disabled: !canWrite, title: 'Fetch the preview image of every story that has no image yet', text: 'Fetch images', on: { click: function () {
+      var todo = (draft.news || []).filter(function (n) { return safeUrl(n.url) && !safeUrl(n.img); });
+      if (!todo.length) { setStatus('Every story already has an image.'); return; }
+      setStatus('Fetching ' + todo.length + (todo.length === 1 ? ' image…' : ' images…'));
+      Promise.all(todo.map(function (n) { return ogImage(n.url).then(function (img) { if (img) { n.img = img; n.imgAuto = true; } return !!img; }); })).then(function (ok) {
+        var got = ok.filter(Boolean).length; if (got) { touch(); draw(); }
+        setStatus(got ? 'Fetched ' + got + ' of ' + todo.length + '. Save to keep them.' + (got < todo.length ? ' The rest use the film’s banner.' : '') : 'None of those articles have a preview image; they use the film’s banner.');
+      });
+    } } });
     var ytBtn = key === 'videos' || key === 'extras' || key === 'interviews' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: key !== 'videos' ? 'Fill lengths from YouTube' : 'Fill lengths & singers from YouTube', on: { click: function () {
       var k = ytKey(true); if (!k) return; setStatus('Fetching from YouTube…');
       fillYt(draft[key], k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })

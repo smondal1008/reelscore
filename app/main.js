@@ -2634,7 +2634,7 @@
       h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-news', text: m.data.title + ' news' })]),
       h('div', { class: 'card news' }, show.map(function (n) {
         return h('a', { class: 'nwi', href: safeUrl(n.url), target: '_blank', rel: 'noopener nofollow' }, [
-          safeUrl(n.img) ? h('span', { class: 'nth' }, [guardImg(h('img', { src: cld(n.img, 320), alt: '', loading: 'lazy', draggable: 'false', width: 256, height: 144 }))]) : h('span', { class: 'nth', style: art(m, 'banner', 320), 'aria-hidden': 'true' }),
+          safeUrl(n.img) ? h('span', { class: 'nth', style: art(m, 'banner', 320) }, [guardImg(h('img', { src: cld(n.img, 320), alt: '', loading: 'lazy', draggable: 'false', referrerpolicy: 'no-referrer', width: 256, height: 144, on: { error: function () { this.remove(); } } }))]) : h('span', { class: 'nth', style: art(m, 'banner', 320), 'aria-hidden': 'true' }),
           h('span', { class: 'nm' }, [n.topic && n.topic !== 'Other' ? h('span', { class: 'ntag', text: n.topic }) : null, h('span', { class: 'note', text: [n.source || host(n.url), /^\d{4}-\d{2}-\d{2}$/.test(n.date || '') ? fmtDate(n.date, true) : ''].filter(Boolean).join(' · ') })]),
           h('span', { class: 'nt', text: n.title }), h('span', { class: 'na', 'aria-hidden': 'true', text: '↗' })
         ]);

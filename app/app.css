@@ -165,6 +165,7 @@
   .row.v.news { grid-template-columns: 80px 130px minmax(0, 1.6fr) minmax(0, 1.2fr) minmax(0, .8fr) 130px minmax(0, 1fr) 44px; }
   button.vthumb.nthumb { cursor: pointer; }
   .vthumb.nthumb { width: 72px; height: 40px; background-size: cover; background-position: center; }
+  .vthumb.nthumb.busy { opacity: .45; }
   .vthumb.nthumb.none { border-style: dashed; color: var(--dim); font-size: 18px; }
   .vgrip { display: flex; align-items: center; gap: 4px; }
   .grip { width: 28px; height: 42px; flex: none; border: 0; border-radius: 8px; background: transparent; color: var(--dim); font-size: 16px; letter-spacing: -3px; cursor: grab; padding: 0; }
