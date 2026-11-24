@@ -1464,6 +1464,9 @@
     var v = $('view-title');
     // A pre-rendered page (built for search engines) stays on screen until the catalogue arrives.
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    // Redrawing the same title (a vote, a toggle): hold the page's height while it rebuilds so the scroll position isn't lost.
+    var sy = window.scrollY, prevTitle = S.titleDrawnId;
+    if (prevTitle) v.style.minHeight = v.offsetHeight + 'px';
     var keep = S.vKeep && S.vKeep.parentNode === v && S.vplay && S.vKeep._mid === S.vplay.mid ? S.vKeep : null;
     Array.prototype.slice.call(v.childNodes).forEach(function (c) { if (c !== keep) v.removeChild(c); });
     if (!keep) S.vKeep = null;
@@ -1474,6 +1477,7 @@
     if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
     setNoindex(!m && S.loaded);
     v.classList.remove('tpage');
+    if (!S.loaded || !m) { v.style.minHeight = ''; S.titleDrawnId = null; }
     if (!S.loaded) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
     if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
@@ -1541,6 +1545,8 @@
     if (rc) put(rc);
     if (r) put(r);
     put(footer());
+    S.titleDrawnId = m.id; v.style.minHeight = '';
+    if (prevTitle === m.id && Math.abs(window.scrollY - sy) > 2) window.scrollTo(0, sy);
   }
 
   // Sticky section tabs on the title page; the tab for the section in view is marked current.
@@ -2095,26 +2101,35 @@
       box.appendChild(h('div', { class: 'castg' }, show.map(function (c, i) {
         return link(c, 'cp', [face(c, i + 2, 'c'), h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null], c.name + (c.role ? ', ' + c.role : '') + ' — see all titles');
       })));
-      if (rest.length > 12) box.appendChild(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + actors.length + ' cast', on: { click: function () { S.castAll[m.id] = !open; render(true); } } }));
+      if (rest.length > 12) box.appendChild(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + actors.length + ' cast', on: { click: function () { S.castAll[m.id] = !open; swapInPlace(box, castBlock(m), '#cast .btn.more'); } } }));
     }
     return box;
   }
 
 
+  // Swap one section for its redrawn copy without redrawing the page, so the scroll position stays put; keeps focus on the toggle.
+  function swapInPlace(oldEl, newEl, focusSel) {
+    if (!oldEl || !newEl || !oldEl.parentNode) { render(true); return; }
+    var sy = window.scrollY;
+    oldEl.replaceWith(newEl);
+    if (window.scrollY !== sy) window.scrollTo(0, sy);
+    var f = focusSel && document.querySelector(focusSel); if (f) f.focus({ preventScroll: true });
+  }
   // ---------- sidebar extras: trivia, fan poll, filming locations, awards ----------
   function triviaBlock(m) {
     var items = (m.data.trivia || []).filter(function (t) { return t && String(t.text || '').trim(); });
     if (!items.length) return null;
     S.trivAll = S.trivAll || {};
     var open = !!S.trivAll[m.id], show = open ? items : items.slice(0, 3);
-    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-triv' }, [
+    var sec = h('section', { class: 'card side-x', id: 'trivia', 'aria-labelledby': 'h-triv' }, [
       h('div', { class: 'sx-h' }, [h('h2', { id: 'h-triv', text: 'Did you know?' }), h('span', { class: 'note', text: items.length + (items.length === 1 ? ' fact' : ' facts') })]),
       h('ol', { class: 'trivia' }, show.map(function (t, i) {
         var u = safeUrl(t.source);
         return h('li', {}, [h('span', { class: 'tn', 'aria-hidden': 'true', text: String(i + 1).padStart(2, '0') }), h('p', {}, [String(t.text).trim(), u ? ' ' : null, u ? h('a', { href: u, target: '_blank', rel: 'noopener nofollow', class: 'tsrc', text: 'Source ↗' }) : null])]);
       })),
-      items.length > 3 ? h('button', { type: 'button', class: 'chip', style: 'align-self:flex-start', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show ' + (items.length - 3) + ' more', on: { click: function () { S.trivAll[m.id] = !open; render(true); } } }) : null
+      items.length > 3 ? h('button', { type: 'button', class: 'chip', style: 'align-self:flex-start', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show ' + (items.length - 3) + ' more', on: { click: function () { S.trivAll[m.id] = !open; swapInPlace(sec, triviaBlock(m), '#trivia .chip'); } } }) : null
     ]);
+    return sec;
   }
   // Fan poll: best performance among the leads and top-billed cast. Votes live in each person's public verdicts doc (bo map).
   function pollBlock(m) {
@@ -2177,7 +2192,7 @@
     S.newsAll = S.newsAll || {};
     var open = !!S.newsAll[m.id], show = open ? items : items.slice(0, 5);
     var host = function (u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
-    return h('section', { class: 'tsec', id: 'news', 'aria-labelledby': 'h-news' }, [
+    var sec = h('section', { class: 'tsec', id: 'news', 'aria-labelledby': 'h-news' }, [
       h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-news', text: m.data.title + ' news' })]),
       h('div', { class: 'card news' }, show.map(function (n) {
         return h('a', { class: 'nwi', href: safeUrl(n.url), target: '_blank', rel: 'noopener nofollow' }, [
@@ -2185,9 +2200,10 @@
           h('span', { class: 'nt', text: n.title }), h('span', { class: 'na', 'aria-hidden': 'true', text: '↗' })
         ]);
       })),
-      items.length > 5 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + items.length + ' stories', on: { click: function () { S.newsAll[m.id] = !open; render(true); } } }) : null,
+      items.length > 5 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + items.length + ' stories', on: { click: function () { S.newsAll[m.id] = !open; swapInPlace(sec, newsBlock(m), '#news .btn.more'); } } }) : null,
       h('div', { class: 'note', text: 'Headlines link to the publisher’s own page.' })
     ]);
+    return sec;
   }
   // "Watch on …": a real link once a streaming URL is added in Admin, otherwise a disabled button.
   function watchBtn(d, label, off) {
