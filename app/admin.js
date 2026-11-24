@@ -2308,12 +2308,16 @@ window.ReelAdmin = function (env) {
     // Box office (films only): figures in ₹ crore, with the date and where they come from.
     if (!tvEd) {
       var crN = function (label, key) { return field(label, key, { placeholder: 'e.g. 812.5', note: '₹ crore' }); };
-      main.appendChild(h('section', { class: 'card', id: 'boxCard' }, [h('h2', {}, ['Box office ', h('span', { class: 'note', text: '(optional · shown on the title page)' })]),
+      var boImp = h('button', { type: 'button', class: 'btn small', disabled: !canWrite, title: 'Update box office figures from a CSV file (it can cover many films at once)', text: '⬆ Import box office CSV', on: { click: function () {
+        if (dirty) { setStatus('Save or discard your changes first, then import.'); return; }
+        importBoCsv();
+      } } });
+      main.appendChild(h('section', { class: 'card', id: 'boxCard' }, [h('div', { class: 'head' }, [h('h2', {}, ['Box office ', h('span', { class: 'note', text: '(optional · shown on the title page)' })]), boImp]),
         h('div', { class: 'grid' }, [crN('India gross', 'boGross'), crN('India nett', 'boNett'), crN('Worldwide gross', 'boWorld'), crN('Latest day · India nett', 'boDay'), field('Change vs the day before (%)', 'boDayChg', { placeholder: 'e.g. -64.3', note: 'Minus for a drop' }),
           field('Figures as of', 'boUpdated', { type: 'date' }),
           field('Source', 'boSource', { placeholder: 'e.g. Producer announcement' }),
           field('Source link', 'boUrl', { placeholder: 'https://…', note: 'Shown as a link next to the source.' })])]));
-      main.appendChild(listEditor('Daily box office', 'boDaily', [{ k: 'date', label: 'Date 2026-11-23' }, { k: 'nett', label: 'That day’s India nett' }, { k: 'dgross', label: 'That day’s India gross' }, { k: 'tnett', label: 'Total India nett' }, { k: 'gross', label: 'Total India gross' }, { k: 'world', label: 'Total worldwide' }, { k: 'langs', label: 'India nett by language so far: Hindi 725, Tamil 47.45' }], 'No daily figures yet. Add a row per day, or use Import box office CSV on the Titles page.'));
+      main.appendChild(listEditor('Daily box office', 'boDaily', [{ k: 'date', label: 'Date 2026-11-23' }, { k: 'nett', label: 'That day’s India nett' }, { k: 'dgross', label: 'That day’s India gross' }, { k: 'tnett', label: 'Total India nett' }, { k: 'gross', label: 'Total India gross' }, { k: 'world', label: 'Total worldwide' }, { k: 'langs', label: 'India nett by language so far: Hindi 725, Tamil 47.45' }], 'No daily figures yet. Add a row per day, or use ⬆ Import box office CSV in the Box office card above.'));
     }
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
