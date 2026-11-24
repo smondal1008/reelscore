@@ -1491,7 +1491,7 @@
     var items = vidItems(m), groups = vidGroups(m, items);
     var bo = boxOfficeBlock(m);
     var act = actionBlock(m, rel, ott);
-    var side = h('aside', { class: 'tside', 'aria-label': 'Where to watch and details' }, [act, factsBlock(m), planBlock(m)]);
+    var side = h('aside', { class: 'tside', 'aria-label': 'Where to watch and details' }, [act, factsBlock(m), planBlock(m), triviaBlock(m), pollBlock(m), locationsBlock(m), awardsBlock(m)]);
     var vsecs = groups.map(function (g) { return keep && keep.id === g.id && keep._mid === m.id ? keep : vidSection(m, g, items); });
     var story = storyBlock(m), cast = castBlock(m), reviews = rel ? reviewsBlock(m, rel) : null, news = newsBlock(m);
     if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
@@ -2095,6 +2095,76 @@
     return box;
   }
 
+
+  // ---------- sidebar extras: trivia, fan poll, filming locations, awards ----------
+  function triviaBlock(m) {
+    var items = (m.data.trivia || []).filter(function (t) { return t && String(t.text || '').trim(); });
+    if (!items.length) return null;
+    S.trivAll = S.trivAll || {};
+    var open = !!S.trivAll[m.id], show = open ? items : items.slice(0, 3);
+    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-triv' }, [
+      h('div', { class: 'sx-h' }, [h('h2', { id: 'h-triv', text: 'Did you know?' }), h('span', { class: 'note', text: items.length + (items.length === 1 ? ' fact' : ' facts') })]),
+      h('ol', { class: 'trivia' }, show.map(function (t, i) {
+        var u = safeUrl(t.source);
+        return h('li', {}, [h('span', { class: 'tn', 'aria-hidden': 'true', text: String(i + 1).padStart(2, '0') }), h('p', {}, [String(t.text).trim(), u ? ' ' : null, u ? h('a', { href: u, target: '_blank', rel: 'noopener nofollow', class: 'tsrc', text: 'Source ↗' }) : null])]);
+      })),
+      items.length > 3 ? h('button', { type: 'button', class: 'chip', style: 'align-self:flex-start', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show ' + (items.length - 3) + ' more', on: { click: function () { S.trivAll[m.id] = !open; render(true); } } }) : null
+    ]);
+  }
+  // Fan poll: best performance among the leads and top-billed cast. Votes live in each person's public verdicts doc (bo map).
+  function pollBlock(m) {
+    if (!released(m)) return null;
+    var actors = (m.data.cast || []).filter(function (c) { return c && c.name && !CREW_RE.test(c.role || ''); });
+    var leads = actors.filter(function (c) { return c.lead; }), rest = actors.filter(function (c) { return !c.lead; });
+    var opts = leads.concat(rest).slice(0, 4).filter(function (c) { return personSlug(c.name); });
+    if (opts.length < 2) return null;
+    var key = m.id + ':best', mine = S.uid && S.verdicts[S.uid] && (S.verdicts[S.uid].bo || {})[key], n = {}, tot = 0;
+    Object.keys(S.verdicts).forEach(function (u) { var x = (S.verdicts[u].bo || {})[key]; if (x) { n[x] = (n[x] || 0) + 1; tot++; } });
+    var vote = function (slug) {
+      if (!needUser() || writing.v) return;
+      var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
+      if (cur.bo[key] === slug) delete cur.bo[key]; else cur.bo[key] = slug;
+      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; render();
+      writing.v = true; guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
+    };
+    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-poll' }, [
+      h('div', { class: 'kicker', style: 'color:var(--accent)', text: 'Fan poll' }),
+      h('h2', { id: 'h-poll', text: 'Best performance in ' + m.data.title + '?' }),
+      h('div', { class: 'poll', role: 'group', 'aria-label': 'Best performance' }, opts.map(function (c, i) {
+        var k = personSlug(c.name), pct = mine && tot ? Math.round(100 * (n[k] || 0) / tot) : null, ph = personPhotoUrl(c.name, 96);
+        return h('button', { type: 'button', class: 'po', 'aria-pressed': String(mine === k), on: { click: function () { vote(k); } } }, [
+          pct !== null ? h('span', { class: 'pobar', style: 'width:' + pct + '%' }) : null,
+          ph ? h('img', { src: ph, alt: '', class: 'pof', loading: 'lazy' }) : h('span', { class: 'pof', style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) }),
+          h('span', { class: 'pon', text: c.name }),
+          pct !== null ? h('span', { class: 'pop', text: pct + '%' }) : null
+        ]);
+      })),
+      h('div', { class: 'note', text: mine ? tot + (tot === 1 ? ' vote' : ' votes') + ' · tap your pick again to take it back' : 'Results show after you vote.' })
+    ]);
+  }
+  function locationsBlock(m) {
+    var items = (m.data.locations || []).map(function (l) { return String(l && l.name || '').trim(); }).filter(Boolean);
+    if (!items.length) return null;
+    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-loc' }, [
+      h('h2', { id: 'h-loc', text: 'Filmed in' }),
+      h('div', { class: 'chips' }, items.map(function (n) { return h('a', { class: 'chip lchip', href: 'https://www.openstreetmap.org/search?query=' + encodeURIComponent(n), target: '_blank', rel: 'noopener nofollow', text: n }); }))
+    ]);
+  }
+  function awardsBlock(m) {
+    var items = (m.data.awards || []).filter(function (a) { return a && String(a.award || '').trim(); });
+    if (!items.length) return null;
+    var won = items.filter(function (a) { return /^won/i.test(a.result || ''); });
+    items = won.concat(items.filter(function (a) { return !/^won/i.test(a.result || ''); }));
+    return h('section', { class: 'card side-x', 'aria-labelledby': 'h-aw' }, [
+      h('div', { class: 'sx-h' }, [h('h2', { id: 'h-aw', text: 'Awards' }), h('span', { class: 'note', text: [won.length ? won.length + (won.length === 1 ? ' win' : ' wins') : '', items.length - won.length ? (items.length - won.length) + (items.length - won.length === 1 ? ' nomination' : ' nominations') : ''].filter(Boolean).join(' · ') })]),
+      h('ul', { class: 'awards' }, items.map(function (a) {
+        var w = /^won/i.test(a.result || '');
+        return h('li', {}, [h('span', { class: 'adot' + (w ? ' w' : ''), 'aria-hidden': 'true' }), h('span', {}, [
+          h('b', { text: String(a.award).trim() + (a.year ? ' ' + String(a.year).trim() : '') }), a.category ? ' · ' + String(a.category).trim() : '',
+          h('span', { class: 'note', style: 'display:block', text: [w ? 'Won' : 'Nominated', String(a.person || '').trim()].filter(Boolean).join(' · ') })])]);
+      }))
+    ]);
+  }
   // News: headline, publisher and date only; each item links out to the publisher.
   function newsBlock(m) {
     var items = (m.data.news || []).filter(function (n) { return n && n.title && safeUrl(n.url); }).slice().sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });

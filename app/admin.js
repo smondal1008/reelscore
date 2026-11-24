@@ -1880,7 +1880,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(prev);
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (av ? ' cast' : '') }, cells));
+        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells));
       });
     }
     draw();
@@ -2119,6 +2119,9 @@ window.ReelAdmin = function (env) {
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
 
+    main.appendChild(listEditor('Did you know? (trivia)', 'trivia', [{ k: 'text', label: 'Fact, in our own words, no spoilers' }, { k: 'source', label: 'Source link' }], 'No facts yet. Write each one in our own words and add the link it came from.'));
+    main.appendChild(listEditor('Filmed in', 'locations', [{ k: 'name', label: 'Place, e.g. Leh, Ladakh' }], 'No filming locations yet.'));
+    main.appendChild(listEditor('Awards', 'awards', [{ k: 'award', label: 'Award, e.g. Filmfare' }, { k: 'category', label: 'Category' }, { k: 'result', label: 'Result', options: ['Won', 'Nominated'] }, { k: 'person', label: 'Who' }, { k: 'year', label: 'Year' }], 'No awards yet. The card only shows on the title page when there are some.'));
     main.appendChild(listEditor('News', 'news', [{ k: 'topic', label: 'Topic', options: ['Box office', 'Release & OTT', 'Cast', 'Other'] }, { k: 'title', label: 'Headline, as published' }, { k: 'url', label: 'Link to the article' }, { k: 'source', label: 'Publisher' }, { k: 'date', label: 'Date (2026-11-24)' }], 'No news yet. Add a headline and its link; the title page links out to the publisher.'));
 
     // home banner clip: optional, so it comes last
