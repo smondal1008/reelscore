@@ -2013,10 +2013,10 @@
     if (g.id === 'trailers') {
       var cur = playing ? pl : (g.idx.indexOf(S.vsel[key]) !== -1 ? S.vsel[key] : g.idx[0]);
       kids = kids.concat(vidStage(m, items, cur, playing, null));
-      if (g.idx.length > 1) kids.push(h('div', { class: 'vrow' }, g.idx.map(function (i) {
+      if (g.idx.length > 1) kids.push(h('div', { class: 'vgrid' }, g.idx.map(function (i) {
         var y = items[i], sel = i === cur, can = !!(y.yt || y.clip), u = vurl(y);
-        return h(u ? 'a' : 'button', { class: 'vcard sm', href: u || null, type: u ? null : 'button', 'aria-current': sel ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i); } } }, [
-          h('span', { class: 'th' }, [vThumb(m, y, 320), sel && playing ? h('span', { class: 'pl', text: 'Playing' }) : null]),
+        return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': sel ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i); } } }, [
+          h('span', { class: 'th' }, [vThumb(m, y, 640), sel && playing ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
         ]);
       })));
