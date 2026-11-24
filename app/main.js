@@ -461,6 +461,7 @@
     else if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)(\/(?:trailer|song|episode|video)(?:\/[a-z0-9-]+)?)$/i))) { S.route = 'video'; S.param = mm[1].toLowerCase(); S.vpath = mm[2].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
+    else if (path === '/tonight') { S.route = 'tonight'; S.param = null; }
     else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
@@ -502,6 +503,7 @@
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
     else if (S.route === 'about') document.title = 'About Reelscore & How Scores Work';
+    else if (S.route === 'tonight') document.title = 'Tonight: what to watch now | Reelscore';
     else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
@@ -511,7 +513,7 @@
     S.lastPath = location.pathname; S.lastSearch = location.search;
     if (S.route === 'notfound') setNoindex(true);
     else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') setNoindex(false);
-    if (S.route === 'list' || S.route === 'admin') setCanonical(null);
+    if (S.route === 'list' || S.route === 'admin' || S.route === 'tonight') setCanonical(null);
     else if (S.route === 'browse' || S.route === 'people' || S.route === 'genre' || S.route === 'year') setCanonical(listCanonical());
     else if (S.route === 'movies' || S.route === 'tvshows') setCanonical(catCanonical());
     else if (S.route === 'notfound') setCanonical(null);
@@ -605,6 +607,7 @@
     if (S.route === 'home') { drawHome(); if (S.restoreHome) { S.restoreHome = false; restoreHomeSpot(); } }
     else if (S.route === 'title') drawTitle();
     else if (S.route === 'list') drawList();
+    else if (S.route === 'tonight') drawTonight();
     else if (S.route === 'browse') drawBrowse();
     else if (S.route === 'movies') drawCatalog('movies');
     else if (S.route === 'tvshows') drawCatalog('tv');
@@ -812,6 +815,218 @@
     };
     return becauseListSection.draw();
   }
+  // ---------- Tonight: three picks for right now ----------
+  // My apps: the streaming apps a viewer pays for. Kept on this device, and in the profile doc when signed in.
+  var TN_APPS = [['Netflix', /netflix/i], ['Prime Video', /prime video|amazon prime/i], ['JioHotstar', /hotstar|jiocinema|voot/i], ['ZEE5', /zee5/i],
+    ['SonyLIV', /sony ?liv/i], ['aha', /\baha\b/i], ['Sun NXT', /sun ?nxt/i], ['ManoramaMAX', /manorama ?max/i], ['Hoichoi', /hoichoi/i],
+    ['MX Player', /mx player/i], ['ALTT', /\baltt\b|altbalaji/i], ['YouTube', /youtube/i]];
+  var TN_MOODS = [['thrill', 'Thrill', /thriller|crime|action|mystery|suspense|heist|spy|gangster|psychological|war/],
+    ['laugh', 'Laugh', /comedy|satire|comic/], ['feel', 'Feel-good', /romantic|romance|family|musical|music|coming-of-age|feel-good|slice/],
+    ['think', 'Think', /drama|political|social|biograph|historical|history|period|legal|documentary|sports?\b/],
+    ['family', 'With family', /family|animated|animation|children|kids|devotional/], ['scare', 'Scare', /horror|supernatural/]];
+  var TN_LANGS = ['Hindi', 'Tamil', 'Telugu', 'Malayalam', 'Kannada'], TN_MORE_LANGS = ['Marathi', 'Bengali', 'Punjabi', 'Gujarati', 'English'];
+  function myApps() {
+    if (S.uid && Array.isArray(S.mine.apps)) return S.mine.apps.slice();
+    try { var a = JSON.parse(localStorage.getItem('rs_apps') || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  function setApps(list) {
+    try { localStorage.setItem('rs_apps', JSON.stringify(list)); } catch (e) {}
+    if (S.uid && S.mineLoaded) { S.mine.apps = list.slice(); saveMine(null); }
+  }
+  function appsOf(d) { var p = String(d.platform || ''); return TN_APPS.filter(function (a) { return a[1].test(p); }).map(function (a) { return a[0]; }); }
+  function runtimeMin(d) { var r = String(d.runtime || ''), hh = r.match(/(\d+)\s*h/i), mm = r.match(/(\d+)\s*m/i); var t = (hh ? +hh[1] * 60 : 0) + (mm ? +mm[1] : 0); if (!t && /^\d+$/.test(r)) t = +r; return t || 0; }
+  function daysSince(iso) { if (!iso || iso.length < 10) return 9999; return Math.floor((Date.parse(today()) - Date.parse(iso.slice(0, 10))) / 864e5); }
+  // State: answers persist on this device; titles passed over with "None of these" are only dropped for the session.
+  function tnState() {
+    if (!S.tonight) {
+      var saved = {}; try { saved = JSON.parse(localStorage.getItem('rs_tonight') || '{}') || {}; } catch (e) {}
+      S.tonight = { where: saved.where === 'out' ? 'out' : 'home', time: saved.time === 'short' ? 'short' : 'any',
+        mood: TN_MOODS.some(function (x) { return x[0] === saved.mood; }) ? saved.mood : 'thrill',
+        langs: Array.isArray(saved.langs) ? saved.langs : [], seen: [], step: 'ask', allLangs: false };
+    }
+    return S.tonight;
+  }
+  function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, mood: t.mood, langs: t.langs })); } catch (e) {} }
+  // Taste profile from the watchlist and verdicts (same weights as "Because it's on your list").
+  function tasteModel() {
+    var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
+    var ck = (S.mine.watchlist || []).join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length;
+    if (tasteModel.ck === ck) return tasteModel.m;
+    var seeds = {}, add = function (id, w, why) { if (!S.byId[id]) return; var s = seeds[id]; if (!s || Math.abs(w) > Math.abs(s.w)) seeds[id] = { w: w, why: why }; };
+    (S.mine.watchlist || []).forEach(function (id) { add(id, 1, 'saved'); });
+    Object.keys(vv).forEach(function (id) { var x = vv[id]; add(id, x === 'a' ? 1.5 : x === 'b' ? 0.5 : -1, x === 'a' ? 'loved' : x === 'c' ? 'skip' : 'rated'); });
+    var ids = Object.keys(seeds), W = 0, pg = {}, pl = {}, pp = {}, feat = {};
+    ids.forEach(function (id) {
+      var s = seeds[id], f = feat[id] = tasteFeatures(S.byId[id]); if (s.w > 0) W += s.w;
+      Object.keys(f.g).forEach(function (k) { pg[k] = (pg[k] || 0) + s.w; });
+      Object.keys(f.l).forEach(function (k) { pl[k] = (pl[k] || 0) + s.w; });
+      Object.keys(f.p).forEach(function (k) { pp[k] = (pp[k] || 0) + s.w; });
+    });
+    var pos = ids.filter(function (id) { return seeds[id].w > 0; });
+    var model = {
+      vv: vv,
+      score: function (m) {
+        if (!W) return 0;
+        var f = tasteFeatures(m), gs = 0, ls = 0, ps = 0, gk = Object.keys(f.g);
+        gk.forEach(function (k) { gs += (pg[k] || 0) / W; }); if (gk.length) gs = gs / Math.sqrt(gk.length);
+        Object.keys(f.l).forEach(function (k) { ls = Math.max(ls, (pl[k] || 0) / W); });
+        Object.keys(f.p).forEach(function (k) { ps += pp[k] || 0; });
+        return gs * 3 + ls * 2 + Math.max(-3, Math.min(3, ps)) * 2;
+      },
+      // The saved or rated title this one is most like, when the link is real (a shared person, or two shared genres).
+      reason: function (m) {
+        var f = tasteFeatures(m), best = null, bw = 0;
+        pos.forEach(function (id) {
+          var g = feat[id], sp = 0, sg = 0;
+          Object.keys(f.p).forEach(function (k) { if (g.p[k]) sp++; });
+          Object.keys(f.g).forEach(function (k) { if (g.g[k]) sg++; });
+          var sw = (sp * 2 + sg) * seeds[id].w; if ((sp || sg >= 2) && sw > bw) { bw = sw; best = id; }
+        });
+        if (!best) return '';
+        return (seeds[best].why === 'loved' ? 'Because you loved ' : seeds[best].why === 'rated' ? 'Because you rated ' : 'Because you saved ') + S.byId[best].data.title;
+      }
+    };
+    tasteModel.ck = ck; tasteModel.m = model;
+    return model;
+  }
+  function tnPool(t) {
+    var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel();
+    var out = [];
+    S.movies.forEach(function (m) {
+      var d = m.data;
+      if (d.published === false || !released(m) || inList(m.id) || tm.vv[m.id] || t.seen.indexOf(m.id) !== -1) return;
+      var np = nowPlayingOf(d), sec = npSection(d);
+      if (t.where === 'out') { if (sec !== 'In theatres' && np !== 'theatres') return; }
+      else {
+        if (sec === 'In theatres' || np === 'theatres' || !d.platform) return;
+        var mine = appsOf(d); if (apps.length && !mine.some(function (a) { return apps.indexOf(a) !== -1; })) return;
+        if (isTv(m) && t.time === 'short') return;
+      }
+      if (t.langs.length && !langsOf(d).some(function (l) { return t.langs.indexOf(l) !== -1; })) return;
+      var g = String(d.genre || '').toLowerCase(), cert = String(d.certificate || '').toUpperCase();
+      // Mood fit: how many of the title's genres match, with extra weight when its first (main) genre does.
+      var gl = g.split(/,|\//).map(function (x) { return x.trim(); }).filter(Boolean), fit = gl.filter(function (x) { return mood[2].test(x); }).length;
+      if (t.mood === 'family') { if (cert === 'A' || /horror|erotic|adult|crime/.test(g)) return; if (!fit && cert === 'U' && /comedy|fantasy|adventure/.test(g)) fit = 1; }
+      if (!fit) return;
+      var moodW = fit * 1.2 + (gl[0] && mood[2].test(gl[0]) ? 1.5 : 0);
+      var rt = runtimeMin(d); if (t.time === 'short' && rt > 120) return;
+      var sc = score(m.id), pct = shownPct(sc), age = daysSince(t.where === 'out' ? d.releaseDate : (d.ottReleaseDate || d.releaseDate));
+      var taste = tm.score(m), fresh = age <= 30 ? 1.5 : age <= 90 ? 0.8 : age <= 365 ? 0.3 : 0;
+      var w = moodW + taste + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && t.time === 'short' ? 0.3 : 0);
+      out.push({ m: m, w: w, taste: taste, pct: pct, age: age, rt: rt, cert: cert });
+    });
+    out.sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    return out;
+  }
+  function tnReason(o, t) {
+    var d = o.m.data, r = o.taste > 1.5 ? tasteModel().reason(o.m) : '';
+    if (r) return r;
+    if (o.pct !== null && o.pct >= 70) return o.pct + '% say it’s worth it';
+    if (o.age <= 30) return t.where === 'out' ? 'New in cinemas' : 'New on ' + (appsOf(d)[0] || String(d.platform).split('/')[0].trim());
+    if (t.mood === 'family' && o.cert === 'U') return 'U certificate';
+    if (t.time === 'short' && o.rt) return 'Under 2 hrs';
+    return 'Matches ' + TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1];
+  }
+  function tnCta(m, t) {
+    var d = m.data;
+    if (t.where === 'out') return bookBtn(m, 'btn small primary tncta') || h('a', { class: 'btn small tncta', href: movieUrl(m), text: 'See showtimes' });
+    var url = safeUrl(d.platformUrl), app = appsOf(d)[0] || String(d.platform || '').split('/')[0].trim();
+    return url ? h('a', { class: 'btn small primary tncta', href: url, target: '_blank', rel: 'noopener' }, [platLogo(d.platform), h('span', { text: 'Watch on ' + app })])
+      : h('a', { class: 'btn small tncta', href: movieUrl(m), text: 'Where to watch' });
+  }
+  function tnSummary(t) {
+    return [t.where === 'out' ? 'Going out' : 'At home', t.time === 'short' ? 'Under 2 hrs' : 'Any length', TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1], t.langs.length ? t.langs.join(' or ') : 'Any language'].join(' · ');
+  }
+  // The four questions. onChange redraws whatever holds them.
+  function tnQuestions(t, onChange) {
+    var set = function (k, v) { t[k] = v; t.seen = []; tnSave(); onChange(); };
+    var group = function (label, kids) { return h('div', { class: 'tnq', role: 'group', 'aria-label': label }, [h('div', { class: 'tnql', text: label }), h('div', { class: 'tnopts' }, kids)]); };
+    var opt = function (k, v, label) { return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(t[k] === v), text: label, on: { click: function () { set(k, v); } } }); };
+    var langs = TN_LANGS.concat(t.allLangs ? TN_MORE_LANGS : []);
+    return [
+      group('Where are you watching?', [opt('where', 'home', 'At home'), opt('where', 'out', 'Going out')]),
+      group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
+      group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1]); })),
+      group('Languages (pick any)', [h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(!t.langs.length), text: 'Any', on: { click: function () { set('langs', []); } } })]
+        .concat(langs.map(function (l) { var on = t.langs.indexOf(l) !== -1; return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(on), text: l, on: { click: function () { set('langs', on ? t.langs.filter(function (y) { return y !== l; }) : t.langs.concat([l])); } } }); }))
+        .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
+    ];
+  }
+  function tnPicks(t, onChange) {
+    var pool = tnPool(t), picks = pool.slice(0, 3);
+    var kids = picks.map(function (o) {
+      var m = o.m, d = m.data, pa = artLazy(m, 'poster');
+      var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
+      return h('article', { class: 'tnpick' }, [
+        h('a', { class: 'tnart art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]),
+        h('div', { class: 'tnbody' }, [
+          h('a', { class: 'tnt', href: movieUrl(m), text: d.title }),
+          h('div', { class: 'tnm', text: meta }),
+          h('div', { class: 'tnwhy', text: tnReason(o, t) }),
+          tnCta(m, t)
+        ])
+      ]);
+    });
+    var again = function () { t.seen = t.seen.concat(picks.map(function (o) { return o.m.id; })); onChange(); };
+    var empty = !picks.length ? h('div', { class: 'tnempty' }, [
+      t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages or Any length' + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
+      t.seen.length ? h('button', { type: 'button', class: 'linkbtn', text: 'see the first picks again', on: { click: function () { t.seen = []; onChange(); } } }) : null,
+      t.seen.length ? '.' : null]) : null;
+    return { list: h('div', { class: 'tngrid' }, kids), empty: empty, thin: picks.length && picks.length < 3 ? h('div', { class: 'note', text: 'Only ' + picks.length + ' match right now. Loosen an answer for more.' }) : null,
+      again: picks.length ? h('button', { type: 'button', class: 'btn', text: 'None of these', on: { click: again } }) : null };
+  }
+  function tnAppsLine() {
+    var a = myApps();
+    return h('div', { class: 'tnapps' }, [h('span', { text: a.length ? 'Your apps: ' + a.join(' · ') : 'Showing every streaming app.' }), ' ',
+      h('button', { type: 'button', class: 'linkbtn', text: a.length ? 'Edit' : 'Pick your apps', on: { click: function () { appsPicker(); } } })]);
+  }
+  function appsPicker() {
+    var picked = myApps();
+    modal('My apps', function (close) {
+      var grid = h('div', { class: 'citygrid tnappgrid' }, TN_APPS.map(function (a) {
+        return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(picked.indexOf(a[0]) !== -1), text: a[0], on: { click: function (e) {
+          var i = picked.indexOf(a[0]); if (i === -1) picked.push(a[0]); else picked.splice(i, 1); e.currentTarget.setAttribute('aria-pressed', String(i === -1)); } } });
+      }));
+      return [h('h2', { text: 'My apps' }), h('p', { class: 'note', text: 'Tick the apps you pay for. Tonight will only suggest what you can press play on. Leave all unticked to see every app.' }), grid,
+        h('div', { style: 'display:flex;gap:8px;margin-top:16px' }, [
+          h('button', { type: 'button', class: 'btn primary', text: 'Save', on: { click: function () { setApps(picked); close(); tnRedraw(); } } }),
+          h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: close } })])];
+    });
+  }
+  function tnRedraw() { var el = $('tonight'); if (el && S.route === 'home') el.replaceWith(tonightSection()); else if (S.route === 'tonight') drawTonight(); }
+  // Home: on wide screens the questions and live picks sit side by side; on phones a card opens /tonight.
+  function tonightSection() {
+    var t = tnState(), redraw = function () { tnRedraw(); }, p = tnPicks(t, redraw);
+    var sec = h('section', { class: 'sect tonight', id: 'tonight', 'aria-label': 'Tonight' }, [
+      h('div', { class: 'tnwide' }, [
+        h('div', { class: 'tnleft' }, [h('div', { class: 'tnkick', text: 'TONIGHT' }), h('h2', { class: 'tnh', text: 'What should I watch?' })].concat(tnQuestions(t, redraw))),
+        h('div', { class: 'tnright' }, [
+          h('div', { class: 'tnhead' }, [h('h3', {}, ['Your 3 for tonight ', h('span', { class: 'sub', text: '· ' + tnSummary(t) })]), p.again]),
+          p.empty || p.list, p.thin, tnAppsLine()])
+      ]),
+      h('div', { class: 'tnnarrow' }, [
+        h('div', { class: 'tnkick', text: 'TONIGHT' }), h('h2', { class: 'tnh', text: 'What should I watch?' }),
+        h('p', { class: 'note', text: 'Three picks for your apps, your time and your mood.' }),
+        h('a', { class: 'btn primary tngo', href: '/tonight', text: 'Pick for me' }), tnAppsLine()])
+    ]);
+    return sec;
+  }
+  // /tonight (mainly phones): questions first, then three picks.
+  function drawTonight() {
+    var v = $('view-tonight'); v.innerHTML = ''; var t = tnState();
+    var w = h('div', { class: 'wrapx tnpage' }); v.appendChild(w);
+    w.appendChild(h('h1', { class: 'display', style: 'font-size:40px;margin:6px 0 14px', text: 'Tonight' }));
+    if (t.step !== 'picks') {
+      tnQuestions(t, drawTonight).forEach(function (q) { w.appendChild(q); });
+      w.appendChild(tnAppsLine());
+      w.appendChild(h('button', { type: 'button', class: 'btn primary tngo', text: 'Show my 3 picks', on: { click: function () { t.step = 'picks'; t.seen = []; drawTonight(); window.scrollTo(0, 0); } } }));
+      return;
+    }
+    var p = tnPicks(t, drawTonight);
+    w.appendChild(h('div', { class: 'note', style: 'margin-bottom:12px', text: tnSummary(t) }));
+    w.appendChild(p.empty || p.list); if (p.thin) w.appendChild(p.thin);
+    w.appendChild(h('div', { class: 'tnfoot' }, [p.again, h('button', { type: 'button', class: 'btn ghost', text: 'Change answers', on: { click: function () { t.step = 'ask'; drawTonight(); } } })]));
+  }
   function rowSection(title, items, opts, link) {
     if (!items.length) return null;
     if (opts && opts.max && items.length > opts.max) items = items.slice(0, opts.max);
@@ -877,6 +1092,7 @@
     var langNote = S.navLang ? h('div', { class: 'sect-h', style: 'margin-top:18px' }, [h('span', { class: 'sub' }, ['Showing ' + S.navLang + ' titles · ', h('a', { href: '#', on: { click: function (e) { e.preventDefault(); setNavLang(''); } }, text: 'Show all languages' })])]) : null;
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
     [langNote, none,
+      tonightSection(),
       mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
       becauseListSection(),
       trailerSection(),
@@ -3735,6 +3951,7 @@
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
       S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice() };
+      if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; render();
     }, function () {});
   }).catch(function () { clearTimeout(timer); S.loadMsg = 'The catalogue is unavailable in this view.'; render(true); });

@@ -953,7 +953,7 @@ async function main() {
     '## Optional', '', '- [Sitemap](' + SITE + '/sitemap.xml): every title and person page', ''
   ].join('\n'));
 
-  write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
+  write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /tonight', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
 
   // ----- fingerprinted assets: /assets/<name>.<hash>.<ext>, cached for a year (vercel.json) -----
   // Every HTML page points at the hashed copies, so a deploy changes the URLs and browsers never run stale code.

@@ -1026,3 +1026,46 @@ a.lead:hover .ln { text-decoration: underline; }
 .bl-ov { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); } .bl-ov b { color: var(--text); }
 
 #bocoll > .tsec-h + .bo-blk { margin-top: 8px; }
+
+  /* Tonight */
+  body.r-tonight #view-tonight { display: block; }
+  .tonight { margin: 18px 28px 0; padding: 24px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line2); }
+  .tnkick { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; color: var(--accent); }
+  .tnh { margin: 6px 0 4px; font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 36px; line-height: 1.02; text-transform: uppercase; }
+  .tnwide { display: flex; gap: 32px; }
+  .tnleft { width: 340px; flex-shrink: 0; display: flex; flex-direction: column; gap: 14px; }
+  .tnright { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+  .tnnarrow { display: none; }
+  .tnq { display: flex; flex-direction: column; gap: 8px; }
+  .tnql { font-size: 13px; font-weight: 700; color: var(--muted); }
+  .tnopts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tnchip { height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; }
+  .tnhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+  .tnhead h3 { margin: 0; font-size: 18px; }
+  .tnhead .sub { font-size: 14px; font-weight: 500; color: var(--muted); }
+  .tngrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .tnpick { display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+  .tnart { position: relative; display: block; aspect-ratio: 16 / 10; border-radius: 10px; background-size: cover; background-position: center; overflow: hidden; }
+  .tnart .ptitle { position: absolute; left: 8px; right: 8px; bottom: 8px; font-family: Anton, Impact, sans-serif; font-size: 18px; line-height: 1; text-transform: uppercase; text-shadow: 0 1px 6px rgba(0,0,0,.8); }
+  .tnbody { flex: 1; display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .tnt { font-size: 16px; font-weight: 700; line-height: 1.25; color: var(--text); text-decoration: none; }
+  .tnm { font-size: 12px; color: var(--muted); }
+  .tnwhy { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--accent); padding: 3px 8px; border-radius: 10px; border: 1px solid #5A4520; }
+  .tncta { margin-top: auto; width: 100%; }
+  .tnempty { padding: 18px; border-radius: 14px; border: 1px dashed var(--line2); font-size: 14px; line-height: 1.5; color: var(--muted); }
+  .tnapps { font-size: 13px; color: var(--muted); }
+  .linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+  .tnappgrid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .tnpage { max-width: 720px; display: flex; flex-direction: column; gap: 18px; padding-bottom: 60px; }
+  .tnpage .tngrid { grid-template-columns: 1fr; }
+  .tnpage .tnpick { flex-direction: row; }
+  .tnpage .tnart { width: 96px; aspect-ratio: 2 / 3; flex-shrink: 0; }
+  .tnpage .tnart .ptitle { font-size: 13px; }
+  .tngo { height: 50px; font-size: 16px; }
+  .tnfoot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 899px) {
+    .tonight { margin: 16px 16px 0; padding: 20px; }
+    .tnwide { display: none; }
+    .tnnarrow { display: flex; flex-direction: column; gap: 10px; }
+    .tnh { font-size: 32px; }
+  }

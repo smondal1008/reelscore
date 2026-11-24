@@ -123,7 +123,7 @@ function main() {
   if (unreachable.length) add('Technical SEO', unreachable.length > content.length / 2 ? 'High' : 'Medium', 'unreachable-without-js', unreachable.length + ' of ' + content.length + ' pages cannot be reached from the home page through plain links', 'Click-depth check over the static HTML (no JavaScript).', sample(unreachable));
   else if (deep.length) add('Technical SEO', 'Medium', 'deep-pages', deep.length + ' pages are more than ' + T.maxDepth + ' clicks from the home page', '', sample(deep));
   // broken internal links (static)
-  const routes = /^\/(browse(\/[a-z-]+)?|people|my-list|admin(\/.*)?)$/;
+  const routes = /^\/(browse(\/[a-z-]+)?|people|my-list|tonight|admin(\/.*)?)$/;
   const broken = new Map();
   for (const p of pages.values()) for (const l of p.links) { const k = l.split('?')[0]; if (!pages.has(k) && !routes.test(k) && !fs.existsSync(path.join(DIST, k))) broken.set(k, (broken.get(k) || 0) + 1); }
   if (broken.size) add('Technical SEO', 'Medium', 'broken-links', broken.size + ' internal link targets have no page', 'They may still work through the app, but crawlers without JavaScript get the empty shell.', [...broken.keys()].slice(0, 5));

@@ -101,6 +101,10 @@
       "destination": "/"
     },
     {
+      "source": "/tonight",
+      "destination": "/"
+    },
+    {
       "source": "/admin",
       "destination": "/"
     },
