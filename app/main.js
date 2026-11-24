@@ -491,6 +491,7 @@
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== (S.heroCtx || 'home') && S.play) leaveHero();
     document.body.className = 'r-' + S.route;
+    stopHiddenMedia();
     document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route ? 'page' : 'false'); });
     if (S.route === 'browse') document.title = S.browse.landing ? S.browse.landing.title : (BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All);
     else if (S.route === 'movies') document.title = S.cat.movies.status === 'All' ? MOVIES_TITLE : (BROWSE_TITLES[S.cat.movies.status] || MOVIES_TITLE);
@@ -1356,6 +1357,17 @@
     S.feat = feat; S.heroBoxId = boxId;
   }
   // Stop a playing banner video and empty its box, so a YouTube player in a page that is no longer shown stops too.
+  // Leaving a page stops its trailer or song: YouTube players in hidden pages are removed and sound-on clips paused,
+  // and the title and video pages forget what was playing, so going back shows the video ready to play again.
+  function stopHiddenMedia() {
+    if (S.route !== 'title' && (S.vplay || S.vKeep)) { if (S.vKeep && S.vKeep.parentNode) S.vKeep.parentNode.removeChild(S.vKeep); S.vplay = null; S.vKeep = null; S.vIdle = null; }
+    if (S.route !== 'video') S.vpKey = null;
+    document.querySelectorAll('.view').forEach(function (v) {
+      if (getComputedStyle(v).display !== 'none') return;
+      v.querySelectorAll('iframe').forEach(function (f) { if (/youtube/.test(f.src || '')) f.remove(); });
+      v.querySelectorAll('video').forEach(function (x) { if (!x.muted && !x.paused) try { x.pause(); } catch (e) {} });
+    });
+  }
   function leaveHero() {
     try { S.heroVideo && S.heroVideo.pause && S.heroVideo.pause(); } catch (e) {}
     var b = S.heroNode && S.heroNode.parentNode; if (b) b.innerHTML = '';
