@@ -830,3 +830,30 @@ a.lead:hover .ln { text-decoration: underline; }
   .vstrip .vs-mine .vbtns { display: flex; align-self: auto; }
   .vstrip > .vs-sep { width: auto; height: 1px; }
 }
+
+/* Before release: countdown, your plan, buzz */
+.vstrip.pre .cd { display: flex; gap: 8px; align-self: end; }
+.vstrip.pre .cd > span { display: flex; flex-direction: column; align-items: center; min-width: 62px; padding: 8px 6px 6px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); }
+.vstrip.pre .cd b { font-family: Anton, Impact, sans-serif; font-weight: 400; font-size: 34px; line-height: 1; color: var(--accent); font-variant-numeric: tabular-nums; }
+.vstrip.pre .cd small { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); margin-top: 4px; }
+.vstrip.pre .tlw { align-self: center; }
+.vstrip.pre .tl { display: flex; align-items: center; }
+.vstrip.pre .tl i { width: 10px; height: 10px; border-radius: 5px; background: var(--line2); flex: none; }
+.vstrip.pre .tl em { flex: 1; height: 2px; background: var(--line2); }
+.vstrip.pre .tl .d { background: var(--accent); }
+.vstrip.pre .tll { display: flex; justify-content: space-between; gap: 6px; margin-top: 6px; font-size: 11px; color: var(--dim); }
+.vstrip.pre .tll .on { color: var(--text); }
+.vstrip.pre .pre-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.vstrip.pre .pre-acts .btn { gap: 7px; }
+.vstrip.pre .pre-plan .vbtns { grid-row: span 2; }
+.vstrip.pre .pre-fr { display: flex; align-items: center; gap: 8px; }
+.vstrip.pre .pre-fr .faces img { width: 24px; height: 24px; margin-left: -6px; }
+.vstrip.pre .pre-fr .faces img:first-child { margin-left: 0; }
+.vstrip.pre .rank { color: var(--text); }
+.vstrip.pre .pre-empty { background: repeating-linear-gradient(90deg, var(--line) 0 10px, var(--panel2) 10px 14px); }
+.vstrip.pre .sw { width: 9px; height: 9px; border-radius: 2px; flex: none; }
+@media (max-width: 900px) {
+  .vstrip.pre .cd { align-self: stretch; }
+  .vstrip.pre .cd > span { flex: 1 1 0; min-width: 0; }
+  .vstrip.pre .tlw { align-self: stretch; }
+}

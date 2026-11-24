@@ -776,7 +776,7 @@
   }
   function listBtn(m) {
     var on = inList(m.id);
-    return h('button', { type: 'button', class: 'btn lg glass', 'aria-pressed': String(on), on: { click: function () { toggleList(m.id); } } }, [on ? '✓  In my watchlist' : '+  Watchlist']);
+    return h('button', { type: 'button', class: 'btn lg glass listbtn', 'aria-pressed': String(on), on: { click: function () { toggleList(m.id); } } }, [on ? '✓  In my watchlist' : '+  Watchlist']);
   }
 
   // ---------- home ----------
@@ -1859,6 +1859,8 @@
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    bell: '<path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10.3 20a2 2 0 003.4 0"/>',
+    cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
     thumb: '<path d="M7 10v10H4V10zM7 10l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/>'
   };
@@ -1870,8 +1872,140 @@
   function vIconName(m, k) { return k === 'c' ? 'skip' : isOtt(m) || isTv(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
   var SPLITCOL = { a: 'var(--accent)', b: '#7FB2FF', c: '#6B6577' };
 
+  // ---------- before release: countdown, your plan, buzz ----------
+  // Plans live in each person's public verdicts doc (bo map, key "<id>:plan" = a / b / c), like the box office call and fan poll.
+  var MIN_PLANS = 5;
+  function relAt(m) { var d = m.data.releaseDate || ''; return /^\d{4}-\d{2}-\d{2}$/.test(d) ? new Date(d + 'T00:00:00') : null; }
+  function cdParts(m) {
+    var t = relAt(m); if (!t) return null;
+    var mins = Math.floor((t - Date.now()) / 6e4); if (mins <= 0) return null;
+    return [Math.floor(mins / 1440), Math.floor(mins / 60) % 24, mins % 60];
+  }
+  function streamFirst(m) { return isOtt(m) || isTv(m); }
+  function planSet(m) {
+    var o = streamFirst(m);
+    return [['a', o ? 'Day one' : 'First weekend', o ? 'Watch when it drops' : 'Catch it in theatres'], ['b', o ? 'Later' : 'On OTT', o ? 'Save it for later' : 'Wait for streaming'], ['c', 'Not for me', 'Stop reminders']];
+  }
+  function planIcon(m, k) { return k === 'c' ? 'skip' : streamFirst(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
+  function planKey(id) { return id + ':plan'; }
+  function myPlan(id) { return S.uid && S.verdicts[S.uid] ? (S.verdicts[S.uid].bo || {})[planKey(id)] : null; }
+  function planCounts(id, onlyUids) {
+    var n = { a: 0, b: 0, c: 0, tot: 0, who: [] }, k = planKey(id);
+    Object.keys(S.verdicts).forEach(function (u) {
+      if (onlyUids && onlyUids.indexOf(u) === -1) return;
+      var x = (S.verdicts[u].bo || {})[k]; if (n[x] !== undefined) { n[x]++; n.tot++; n.who.push([u, x]); }
+    });
+    return n;
+  }
+  // Rank by people planning to watch (first weekend or OTT), among unreleased titles out the same month.
+  function buzzRank(m) {
+    var mo = String(m.data.releaseDate || '').slice(0, 7); if (!/^\d{4}-\d{2}$/.test(mo)) return null;
+    var cnt = {};
+    Object.keys(S.verdicts).forEach(function (u) {
+      var bo = S.verdicts[u].bo || {};
+      Object.keys(bo).forEach(function (k) { if (/:plan$/.test(k) && (bo[k] === 'a' || bo[k] === 'b')) { var id = k.slice(0, -5); cnt[id] = (cnt[id] || 0) + 1; } });
+    });
+    var mine = cnt[m.id] || 0; if (mine < MIN_PLANS) return null;
+    var n = 1 + S.movies.filter(function (x) { return x.id !== m.id && !released(x) && String(x.data.releaseDate || '').slice(0, 7) === mo && (cnt[x.id] || 0) > mine; }).length;
+    if (n > 10) return null;
+    var dt = new Date(mo + '-01T00:00:00'), when = dt.toLocaleDateString('en-IN', { month: 'long' }) + (dt.getFullYear() !== new Date().getFullYear() ? ' ' + dt.getFullYear() : '');
+    return { n: n, when: when };
+  }
+  function setPlan(mid, val) {
+    if (!needUser() || writing.v) return;
+    var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
+    var k = planKey(mid), off = cur.bo[k] === val;
+    if (off) delete cur.bo[k]; else cur.bo[k] = val;
+    cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur;
+    // First weekend / Day one sets the release-day reminder; either plan to watch saves it to the watchlist; Not for me turns the reminder off.
+    if (!off) {
+      S.mine.reminders = S.mine.reminders || [];
+      var ri = S.mine.reminders.indexOf(mid), wi = S.mine.watchlist.indexOf(mid), msg = '';
+      if (val === 'a' && ri === -1) { S.mine.reminders.push(mid); msg = 'Reminder set for release day'; }
+      if (val !== 'c' && wi === -1) { S.mine.watchlist.push(mid); msg = msg ? msg + ' and added to your watchlist' : 'Added to your watchlist'; }
+      if (val === 'c' && ri !== -1) { S.mine.reminders.splice(ri, 1); msg = 'Reminder turned off'; }
+      if (msg) saveMine(msg);
+    }
+    if (!patchTitleBits()) render();
+    writing.v = true;
+    guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
+  }
+  function icsEsc(t) { return String(t).replace(/[\;,]/g, function (c) { return '\\' + c; }).replace(/\n/g, '\\n'); }
+  function addToCalendar(m) {
+    var t = relAt(m); if (!t) return;
+    var ymd = function (x) { return x.getFullYear() + String(x.getMonth() + 1).padStart(2, '0') + String(x.getDate()).padStart(2, '0'); };
+    var end = new Date(t.getTime()); end.setDate(end.getDate() + 1);
+    var stamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d+/, '');
+    var where = streamFirst(m) ? 'Streams on ' + (m.data.platform || 'OTT') : 'In theatres';
+    var ics = ['BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//Reelscore//EN', 'BEGIN:VEVENT', 'UID:' + m.id + '-release@reelscore', 'DTSTAMP:' + stamp,
+      'DTSTART;VALUE=DATE:' + ymd(t), 'DTEND;VALUE=DATE:' + ymd(end), 'SUMMARY:' + icsEsc(m.data.title + ' · ' + where), 'URL:' + location.origin + movieUrl(m), 'END:VEVENT', 'END:VCALENDAR'].join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([ics], { type: 'text/calendar' })); a.download = slugify(m.data.title) + '-release.ics';
+    document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+  function cdTiles(cd) {
+    return [['days', cd[0]], ['hrs', cd[1]], ['min', cd[2]]].map(function (x, i) { return h('span', {}, [h('b', { text: i ? String(x[1]).padStart(2, '0') : String(x[1]) }), h('small', { text: x[0] })]); });
+  }
+  // Keep the countdown ticking without redrawing the page; redraw once the title is out.
+  setInterval(function () {
+    var el = document.querySelector('.cd[data-cd]'); if (!el || document.hidden) return;
+    var m = S.byId[el.getAttribute('data-cd')]; if (!m) return;
+    var cd = cdParts(m); if (!cd) { render(); return; }
+    el.querySelectorAll('b').forEach(function (b, i) { b.textContent = i ? String(cd[i]).padStart(2, '0') : String(cd[i]); });
+    el.setAttribute('aria-label', cd[0] + ' days, ' + cd[1] + ' hours and ' + cd[2] + ' minutes to release');
+  }, 30000);
+  function preStrip(m) {
+    var d = m.data, o = streamFirst(m), t = relAt(m), cd = cdParts(m), my = myPlan(m.id), ps = planSet(m), pc = planCounts(m.id);
+    var wk = t ? t.toLocaleDateString('en-IN', { weekday: 'short' }) + ' ' + fmtDate(d.releaseDate, true) : '';
+    var kick = o ? (t ? (isTv(m) ? 'Premieres' : 'Streams') + (d.platform ? ' on ' + d.platform : '') + ' · ' + wk : 'Release date TBA') : (t ? 'In theatres · ' + wk : 'Release date TBA');
+    var hasVid = (d.videos || []).some(function (v) { return safeUrl(v.url); });
+    var steps = o ? [['Announced', true], ['Trailer out', hasVid], [isTv(m) ? 'Premiere' : 'Streaming', false]]
+      : [['Announced', true], ['Trailer out', hasVid], ['Bookings open', hasBooking(d)], ['Release', false]];
+    var last = 0; steps.forEach(function (x, i) { if (x[1]) last = i; });
+    var line = h('div', { class: 'tl', role: 'img', 'aria-label': 'Done so far: ' + steps.filter(function (x) { return x[1]; }).map(function (x) { return x[0]; }).join(', ') }, []);
+    steps.forEach(function (x, i) { if (i) line.appendChild(h('em', { class: x[1] ? 'd' : '' })); line.appendChild(h('i', { class: x[1] ? 'd' : '' })); });
+    var left = h('div', { class: 'vs-score' }, [
+      h('div', { class: 'kicker', text: kick }),
+      cd ? h('div', { class: 'cd', 'data-cd': m.id, role: 'timer', 'aria-label': cd[0] + ' days, ' + cd[1] + ' hours and ' + cd[2] + ' minutes to release' }, cdTiles(cd))
+        : h('div', { class: 'vs-big' }, [h('span', { class: 'big', style: 'font-size:30px', text: /^\d{4}$/.test(d.releaseDate || '') ? 'Coming ' + d.releaseDate : 'Date TBA' })]),
+      h('div', { class: 'tlw' }, [line, h('div', { class: 'tll' }, steps.map(function (x, i) { return h('span', { class: i === last ? 'on' : '', text: x[0] }); }))]),
+      h('div', { class: 'pre-acts' }, [
+        h('button', { type: 'button', class: 'btn small' + (hasReminder(m.id) ? '' : ' primary'), 'aria-pressed': String(hasReminder(m.id)), title: hasReminder(m.id) ? 'Tap to cancel the reminder' : 'Get a reminder on release day', on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 15), hasReminder(m.id) ? 'Reminder set' : 'Remind me']),
+        t ? h('button', { type: 'button', class: 'btn small', on: { click: function () { addToCalendar(m); } } }, [icon('cal', 15), 'Add to calendar']) : null
+      ])
+    ]);
+    var fol = S.mine.following || [], fw = planCounts(m.id, fol).who.filter(function (x) { return x[1] !== 'c'; });
+    var foot = fw.length ? h('div', { class: 'note pre-fr' }, [h('span', { class: 'faces' }, fw.slice(0, 3).map(function (x) { return avatarEl(x[0], 24); })),
+      h('span', {}, [personEl(fw[0][0]), fw.length > 1 ? ' and ' + (fw.length - 1) + (fw.length > 2 ? ' others' : ' other') + ' you follow plan to watch it' : ', who you follow, plans to watch it'])])
+      : h('div', { class: 'note', text: my === 'a' ? 'Reminder set for release day · tap again to clear' : my === 'b' ? 'Saved to your watchlist · tap again to clear' : my === 'c' ? 'No reminders for this one · tap again to clear'
+        : (o ? 'Day one' : 'First weekend') + ' sets a release-day reminder; ' + (o ? 'Later' : 'On OTT') + ' saves it to your watchlist.' });
+    var mid = h('div', { class: 'vs-mine pre-plan', role: 'group', 'aria-label': 'Your plan' }, [
+      h('div', { class: 'kicker', text: 'Your plan · how will you watch it?' }),
+      h('div', { class: 'vbtns' }, ps.map(function (x) {
+        return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setPlan(m.id, x[0]); } } },
+          [h('span', { class: 'vi' }, [icon(planIcon(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
+      })),
+      foot
+    ]);
+    var shown = pc.tot >= MIN_PLANS, rk = shown ? buzzRank(m) : null, pctOf = function (k) { return Math.round(100 * pc[k] / pc.tot); };
+    var right = h('div', { class: 'vs-peer pre-buzz' }, [
+      h('div', { class: 'kicker', text: 'Buzz on Reelscore' }),
+      shown ? h('div', { class: 'vs-big' }, rk ? [h('span', { class: 'big rank', text: '#' + rk.n }), h('span', { class: 'vs-cap', text: 'most awaited in ' + rk.when })]
+          : [h('span', { class: 'big', text: pctOf('a') + '%' }), h('span', { class: 'vs-cap', text: 'plan to watch it ' + (o ? 'day one' : 'first weekend') })])
+        : h('div', { class: 'vs-big' }, [h('span', { class: 'big', style: 'font-size:30px;color:var(--text)', text: 'Be one of the first' })]),
+      shown ? h('div', { class: 'vs-bar', role: 'img', 'aria-label': ps.map(function (x) { return x[1] + ' ' + pctOf(x[0]) + '%'; }).join(', ') },
+          ps.map(function (x) { return h('span', { style: 'width:' + (100 * pc[x[0]] / pc.tot) + '%;background:' + SPLITCOL[x[0]] }); }))
+        : h('div', { class: 'vs-bar pre-empty', 'aria-hidden': 'true' }),
+      shown ? h('div', { class: 'vs-leg' }, ps.map(function (x) {
+          return h('span', {}, [h('i', { class: 'sw', style: 'background:' + SPLITCOL[x[0]] }), h('span', { class: 'note', text: x[1] + ' ' + pctOf(x[0]) + '%' })]);
+        }).concat([h('span', { class: 'note', text: pc.tot + ' plans' })]))
+        : h('div', { class: 'note', text: pc.tot ? pc.tot + (pc.tot === 1 ? ' plan' : ' plans') + ' so far · the split shows at ' + MIN_PLANS : 'The split shows once ' + MIN_PLANS + ' people have made a plan.' })
+    ]);
+    return h('section', { class: 'card vstrip pre', 'aria-label': 'Before release' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), right]);
+  }
+
   // Score, your verdict, and what people you follow said: one strip under the banner.
   function verdictStrip(m, rel) {
+    if (!rel) return preStrip(m);
     var d = m.data, sc = score(m.id), vs = vset(m), my = myVerdict(m.id), pct = shownPct(sc);
     var left = h('div', { class: 'vs-score' }, [
       h('div', { class: 'kicker', text: 'Reelscore verdict' }),
@@ -2113,6 +2247,8 @@
     var strip = v.querySelector('.vstrip'); if (!strip) return false;
     var sy = window.scrollY;
     strip.replaceWith(verdictStrip(m, released(m)));
+    var lb = v.querySelector('.listbtn'); if (lb) lb.replaceWith(listBtn(m));
+    fillNames();
     var poll = $('poll'), np = pollBlock(m); if (poll && np) poll.replaceWith(np);
     if (window.scrollY !== sy) window.scrollTo(0, sy);
     return true;
