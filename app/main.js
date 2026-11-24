@@ -2085,7 +2085,7 @@
     return h('section', { class: 'tsec', id: 'news', 'aria-labelledby': 'h-news' }, [
       h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-news', text: m.data.title + ' news' })]),
       h('div', { class: 'card news' }, show.map(function (n) {
-        return h('a', { class: 'nw', href: safeUrl(n.url), target: '_blank', rel: 'noopener nofollow' }, [
+        return h('a', { class: 'nwi', href: safeUrl(n.url), target: '_blank', rel: 'noopener nofollow' }, [
           h('span', { class: 'nm' }, [n.topic && n.topic !== 'Other' ? h('span', { class: 'ntag', text: n.topic }) : null, h('span', { class: 'note', text: [n.source || host(n.url), /^\d{4}-\d{2}-\d{2}$/.test(n.date || '') ? fmtDate(n.date, true) : ''].filter(Boolean).join(' · ') })]),
           h('span', { class: 'nt', text: n.title }), h('span', { class: 'na', 'aria-hidden': 'true', text: '↗' })
         ]);

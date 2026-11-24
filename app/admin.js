@@ -1232,7 +1232,7 @@ window.ReelAdmin = function (env) {
       } } })] : [label ? h('span', { class: 'sr', text: label }) : null]);
     }
     table.appendChild(h('thead', {}, [h('tr', {}, [
-      th(null, 'Poster', 'pc'), th('title', 'Title'), th('section', 'Section', 'c-sec'), th('release', 'Release'), h('th', { scope: 'col', class: 'c-lang', text: 'Language' }), th('complete', 'Complete', 'c-cpl'), th('updated', 'Edited', 'c-upd')
+      th(null, 'Poster', 'pc'), th('title', 'Title'), th('section', 'Section', 'c-sec'), th('release', 'Release'), h('th', { scope: 'col', class: 'c-lang', text: 'Language' }), th('complete', 'Info filled', 'c-cpl')
     ])]));
     var tb = h('tbody');
     slice.forEach(function (m) {
@@ -1251,8 +1251,7 @@ window.ReelAdmin = function (env) {
         h('td', { class: 'nw', text: fmtDate(d.releaseDate) }),
         h('td', { class: 'nw c-lang', text: langsOf(d).slice(0, 2).join(', ') + (langsOf(d).length > 2 ? ' +' + (langsOf(d).length - 2) : '') || '—' }),
         h('td', { class: 'c-cpl' }, [h('span', { class: 'cpl', title: miss.length ? 'Missing: ' + miss.map(function (r) { return r[1]; }).join(', ') : 'All key fields filled' }, [
-          h('span', { class: 'bar', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + p + '%' })]), p + '%'])]),
-        h('td', { class: 'nw c-upd', text: fmtAgo(d.updatedAt) })
+          h('span', { class: 'bar', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + p + '%' })]), p + '%'])])
       ]);
       tr.addEventListener('click', function (e) { if (e.target.closest('a')) return; go(href); });
       tb.appendChild(tr);
