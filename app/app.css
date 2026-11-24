@@ -737,7 +737,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .vstrip > div { flex: none; }
   .tpage .tp .poster { width: 132px; }
   .vbtns .vb2 { flex: 1 1 0; flex-direction: column; gap: 6px; padding: 10px 6px; text-align: center; }
-  .vb2 .vt { align-items: center; } .vb2 small { display: none; }
+  .vb2 .vt { align-items: center; }
   .tpage > .tp { order: 1; } .tpage > .vstrip { order: 2; } .tpage > .ptabs { order: 3; }
   .tpage > .tsec { order: 4; margin: 28px 16px 0; }
   .tpage > .tside { order: 5; float: none; width: auto; margin: 28px 16px 0; }
@@ -809,9 +809,12 @@ a.lead:hover .ln { text-decoration: underline; }
 .vstrip { display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.3fr) 1px minmax(0, 1fr); grid-template-rows: repeat(4, auto); column-gap: 28px; row-gap: 10px; align-items: start; }
 .vstrip > .vs-sep { grid-row: 1 / span 4; width: 1px; height: auto; align-self: stretch; }
 .vstrip > .vs-score, .vstrip > .vs-mine, .vstrip > .vs-peer { grid-row: 1 / span 4; display: grid; grid-template-rows: subgrid; row-gap: 10px; align-content: start; min-width: 0; }
-.vstrip .vs-mine .vbtns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-self: end; }
-.vstrip .vbtns .vb2 { min-width: 0; padding: 8px 10px 8px 8px; }
-.vstrip .vbtns .vb2 small { line-height: 1.25; }
+.vstrip .vs-mine .vbtns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; grid-row: span 3; align-self: start; }
+/* Verdict options as small tiles: icon, the word, and what it means */
+.vstrip .vbtns .vb2 { min-width: 0; flex-direction: column; justify-content: center; gap: 6px; padding: 12px 8px; text-align: center; }
+.vstrip .vbtns .vb2 .vt { align-items: center; }
+.vstrip .vbtns .vb2 b { font-size: 15px; }
+.vstrip .vbtns .vb2 small { display: block; line-height: 1.3; }
 .vstrip .vs-big { min-height: 56px; align-items: flex-end; align-self: end; }
 .bo-big { font-size: 32px; font-weight: 700; line-height: 1.1; }
 .vs-bofoot { display: flex; flex-direction: column; gap: 8px; }

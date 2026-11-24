@@ -1891,8 +1891,7 @@
       h('div', { class: 'vbtns' }, vs.map(function (x) {
         return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setVerdict(m.id, x[0]); } } },
           [h('span', { class: 'vi' }, [icon(vIconName(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
-      })),
-      my ? h('a', { href: '#reviews', class: 'vs-link', text: 'Add a review to your verdict →', on: { click: function (e) { var t = $('reviews'); if (!t) return; e.preventDefault(); t.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(function () { var ta = $('rvText'); if (ta) ta.focus({ preventScroll: true }); }, 400); } } }) : null
+      }))
     ]) : h('div', { class: 'vs-mine' }, [
       h('div', { class: 'kicker', text: 'Releases ' + fmtDate(d.releaseDate, true) }),
       h('button', { type: 'button', class: 'btn', 'aria-pressed': String(hasReminder(m.id)), on: { click: function () { toggleRemind(m.id); } } }, [hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me on release'])
