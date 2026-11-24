@@ -157,7 +157,7 @@
   .row.v.pst { grid-template-columns: 96px 130px minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 1fr) 190px 120px 44px 44px; }
   .vthumb.pthumb { width: 28px; height: 42px; margin: 0 18px; background-size: cover; background-position: center; }
   .row.v.intv { grid-template-columns: 96px minmax(0, 1.2fr) minmax(0, 1.2fr) minmax(0, 1fr) 96px 44px; }
-  .row.v.bod { grid-template-columns: 150px repeat(4, minmax(0, 1fr)) minmax(0, 1.4fr) 44px; }
+  .row.v.bod { grid-template-columns: 130px repeat(5, minmax(0, 1fr)) minmax(0, 1.6fr) 44px; }
   .row.v.xtra { grid-template-columns: 96px 170px minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) 76px 60px 44px; }
   .x.blurb { width: 60px; font-size: 13px; font-weight: 600; } .x.blurb.on { color: var(--accent); border-color: var(--accent); } .x.blurb:hover { color: var(--text); border-color: var(--line2); } .x.blurb.on:hover { color: var(--accent); border-color: var(--accent); }
   .row.v.awards { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 130px minmax(0, 1fr) 80px 44px; }
@@ -1012,3 +1012,4 @@ a.lead:hover .ln { text-decoration: underline; }
 .bostat.ok { background: #14301F; color: #7BD88F; } .bostat.warn { background: #3A2A10; color: #F5A524; } .bostat.dim { background: var(--panel2); color: var(--dim); } .bostat.bad { background: #3A1616; color: #FF7A6B; }
 .bd-bar.tl .bd-tip { left: 0; transform: none; } .bd-bar.tr .bd-tip { left: auto; right: 0; transform: none; }
 .bo-tbl td:first-child { white-space: nowrap; padding-right: 12px; }
+.bl-ov { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); } .bl-ov b { color: var(--text); }
