@@ -888,7 +888,9 @@ a.lead:hover .ln { text-decoration: underline; }
 .pib:hover { border-color: var(--text); }
 .psec .pchips { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
 .psec .pchips .n { opacity: .7; font-weight: 500; }
-.prow { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: thin; padding: 14px 2px 8px; margin-top: 2px; }
+.prow { display: flex; gap: 14px; overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none; -ms-overflow-style: none; padding: 14px 2px 8px; margin-top: 2px; }
+.prow::-webkit-scrollbar { display: none; }
+.pib:disabled { opacity: .35; cursor: default; border-color: var(--line2); }
 .pcard { flex: 0 0 230px; display: flex; flex-direction: column; gap: 2px; scroll-snap-align: start; min-width: 0; }
 .pth { position: relative; display: block; width: 100%; padding: 0; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; aspect-ratio: 2 / 3; background: var(--panel2); cursor: zoom-in; }
 .pth:hover { border-color: var(--line2); }

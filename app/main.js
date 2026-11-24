@@ -2316,11 +2316,18 @@
       ]);
     }));
     var scroll = function (dir) { track.scrollBy({ left: dir * Math.max(200, track.clientWidth * 0.8), behavior: 'smooth' }); };
+    // The row's scrollbar is hidden; the arrows grey out at either end instead.
+    var lBtn, rBtn, syncArr = function () {
+      if (!lBtn) return; var max = track.scrollWidth - track.clientWidth - 2;
+      lBtn.disabled = track.scrollLeft <= 2; rBtn.disabled = track.scrollLeft >= max;
+    };
+    track.addEventListener('scroll', syncArr, { passive: true });
+    setTimeout(syncArr, 0); window.addEventListener('resize', syncArr);
     var sec = h('section', { class: 'tsec psec', id: 'posters', 'aria-labelledby': 'h-posters' }, [
       h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-posters' }, [d.title + ' posters', ' ', h('span', { class: 'cnt', text: String(all.length) })]),
         h('span', { class: 'parr' }, [
-          h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters left', on: { click: function () { scroll(-1); } } }, ['‹']),
-          h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters right', on: { click: function () { scroll(1); } } }, ['›'])])]),
+          lBtn = h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters left', on: { click: function () { scroll(-1); } } }, ['‹']),
+          rBtn = h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters right', on: { click: function () { scroll(1); } } }, ['›'])])]),
       kinds.length > 1 ? h('div', { class: 'pchips', role: 'group', 'aria-label': 'Filter posters' }, ['All'].concat(kinds).map(function (k) {
         var n = k === 'All' ? all.length : all.filter(function (p) { return (p.kind || 'Poster') === k; }).length;
         return h('button', { type: 'button', class: 'chip' + (k === f ? ' on' : ''), 'aria-pressed': String(k === f), on: { click: function () {
