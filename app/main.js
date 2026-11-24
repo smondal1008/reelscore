@@ -1269,6 +1269,16 @@
     for (var i = 0; i < list.length; i++) if (list[i].id === m.id) return i + 1;
     return 0;
   }
+  // Banner line: the admin's one-line hook, else the synopsis's first sentence (the full synopsis belongs on the title page).
+  function heroLine(d) {
+    var hk = String(d.hook || '').trim();
+    if (hk) return hk;
+    var syn = String(d.synopsis || '').trim();
+    if (!syn) return '';
+    var m = syn.match(/^.{20,}?[.!?](?=\s|$)/);
+    var first = m ? m[0] : syn;
+    return first.length > 160 ? first.slice(0, 157).replace(/\s+\S*$/, '') + '…' : first;
+  }
   function drawHero() {
     var box = $(S.heroBoxId || 'heroBox'); if (!box || !S.feat || !S.feat.length) return;
     var feat = S.feat; if (S.slide >= feat.length) S.slide = 0;
@@ -1314,7 +1324,7 @@
         h(S.heroCtx && S.heroCtx !== 'home' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
         meta,
         songs && yt && yt.cat === 'songs' && !/^(official )?(video )?song$/i.test(String(yt.title || '').trim()) ? h('div', { class: 'songl' }, [h('span', { 'aria-hidden': 'true', text: '♪ ' }), yt.title]) : null,
-        d.synopsis ? h('p', { class: 'syn', text: d.synopsis }) : null,
+        heroLine(d) ? h('p', { class: 'syn', text: heroLine(d) }) : null,
         h('div', { class: 'btns' }, [
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])

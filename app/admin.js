@@ -1009,7 +1009,7 @@ window.ReelAdmin = function (env) {
   }
   function blank() {
     return { title: '', subtitle: '', section: 'Coming soon', platform: '', releaseDate: '', releaseNote: '', languages: '', genre: '',
-      runtime: '', certificate: '', director: '', synopsis: '', cast: [], videos: [], formats: '', posterId: '', posterUrl: '',
+      runtime: '', certificate: '', director: '', hook: '', synopsis: '', cast: [], videos: [], formats: '', posterId: '', posterUrl: '',
       bannerId: '', bannerUrl: '', published: false, order: movies.length ? Math.max.apply(null, movies.map(function (m) { return +m.data.order || 0; })) + 1 : 0, source: 'Added in admin' };
   }
 
@@ -1546,17 +1546,20 @@ window.ReelAdmin = function (env) {
       input = h('input', { id: id, class: 'in', type: opts.type || 'text', placeholder: opts.placeholder || '' });
       input.value = draft[key] || '';
     }
+    if (opts.max) input.maxLength = opts.max;
+    var count = opts.max ? h('span', { class: 'note', style: 'margin-left:auto', text: String(input.value.length) + ' / ' + opts.max }) : null;
     input.disabled = !canWrite;
     var pill = h('span', { class: 'miss', text: 'MISSING', hidden: !isMissing });
     input.addEventListener('input', function () {
       draft[key] = input.value; touch();
+      if (count) count.textContent = input.value.length + ' / ' + opts.max;
       pill.hidden = !(REQUIRED.some(function (r) { return r[0] === key; }) && !input.value);
       if (key === 'title') { var t = $('pvTitle'); if (t) t.textContent = input.value || 'Untitled'; setDirty(true); }
       if (key === 'section') renderEditor();
     });
     return h('div', { class: 'field' + (opts.wide ? ' wide' : '') }, [
       h('label', { class: 'l', for: id }, [label, pill]), input,
-      opts.note ? h('span', { class: 'note', text: opts.note }) : null
+      opts.note || count ? h('div', { style: 'display:flex;gap:12px;align-items:baseline' }, [opts.note ? h('span', { class: 'note', text: opts.note }) : null, count]) : null
     ]);
   }
 
@@ -2018,7 +2021,9 @@ window.ReelAdmin = function (env) {
       field('Certificate', 'certificate', { placeholder: 'U, UA 13+, A' }),
       field(tvEd ? 'Creator or director' : 'Director', 'director', { placeholder: 'Name' }),
       draft.section === 'On OTT' || tvEd ? null : field('Formats', 'formats', { placeholder: 'IMAX 3D · Hindi, 3D · Hindi', note: 'Comma-separated; shown as format choices in Book tickets.' }),
-      field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers.' })
+      field('Banner hook', 'hook', { wide: true, max: 90, placeholder: tvEd ? 'e.g. A family secret unravels over one long monsoon.' : 'e.g. One spy, one mission, no way back.',
+        note: 'One line, in our own words, shown on the Home, Movies and TV Shows banners. Empty: the banner uses the first sentence of the synopsis.' }),
+      field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers. Shown on the title page.' })
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
 
