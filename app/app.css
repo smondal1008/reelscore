@@ -700,7 +700,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .vcard:hover .tt, .vcard:focus-visible .tt { text-decoration: underline; }
 .vcard:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; border-radius: 12px; }
 .btn.more { align-self: center; }
-.story { margin: 0; font-size: 17px; line-height: 1.65; color: #D9D5DF; max-width: 780px; }
+.story { margin: 0; font-size: 17px; line-height: 1.65; color: #D9D5DF; }
 .leads { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .leads.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 .leads.three .lead .lf { width: 64px; height: 64px; font-size: 20px; }
@@ -710,8 +710,8 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .lbadge { align-self: flex-start; padding: 2px 8px; border-radius: 6px; background: rgba(245,165,36,.16); color: #FFD08A; font-size: 11px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
 .lead .ln { font-size: 18px; font-weight: 700; }
 a.lead:hover .ln { text-decoration: underline; }
-.crew.card { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 14px 18px; padding: 16px 18px; }
-.cr { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.crew.card { display: flex; flex-direction: row; flex-wrap: wrap; gap: 14px 48px; padding: 16px 18px; }
+.cr { display: flex; flex-direction: column; gap: 4px; min-width: 120px; max-width: 100%; }
 .crn { font-size: 15px; font-weight: 600; } .crn a { color: var(--text); text-decoration: none; } .crn a:hover { text-decoration: underline; }
 .card.news { padding: 2px 20px; gap: 0; }
 .nwi { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; padding: 14px 0; color: var(--text); text-decoration: none; }
