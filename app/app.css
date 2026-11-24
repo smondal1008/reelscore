@@ -938,15 +938,15 @@ a.lead:hover .ln { text-decoration: underline; }
 }
 
 /* Box office in detail: club tracker, day by day, week by week, by language */
-#boxoffice .bo-blk { margin-top: 26px; }
-#boxoffice .bo-bh { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
-#boxoffice .bo-bh h3 { margin: 0; font-size: 16px; }
-#boxoffice .bo-bh .note b { color: var(--text); }
-#boxoffice .bo-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
-#boxoffice .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 16px; overflow: hidden; }
-#boxoffice .seg button { height: 30px; padding: 0 12px; border: 0; border-left: 1px solid var(--line2); background: transparent; color: var(--muted); font: 600 12.5px Inter, sans-serif; cursor: pointer; }
-#boxoffice .seg button:first-child { border-left: 0; }
-#boxoffice .seg button.on { background: var(--text); color: #0B0A0F; }
+:is(#boxoffice, #bocoll) .bo-blk { margin-top: 26px; }
+:is(#boxoffice, #bocoll) .bo-bh { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+:is(#boxoffice, #bocoll) .bo-bh h3 { margin: 0; font-size: 16px; }
+:is(#boxoffice, #bocoll) .bo-bh .note b { color: var(--text); }
+:is(#boxoffice, #bocoll) .bo-card { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+:is(#boxoffice, #bocoll) .seg { display: inline-flex; border: 1px solid var(--line2); border-radius: 16px; overflow: hidden; }
+:is(#boxoffice, #bocoll) .seg button { height: 30px; padding: 0 12px; border: 0; border-left: 1px solid var(--line2); background: transparent; color: var(--muted); font: 600 12.5px Inter, sans-serif; cursor: pointer; }
+:is(#boxoffice, #bocoll) .seg button:first-child { border-left: 0; }
+:is(#boxoffice, #bocoll) .seg button.on { background: var(--text); color: #0B0A0F; }
 .bc { padding: 18px 44px 14px !important; }
 .bc-track { position: relative; height: 70px; }
 .bc-track::before { content: ''; position: absolute; left: 0; right: 0; top: 30px; height: 6px; border-radius: 3px; background: var(--line); }
@@ -982,7 +982,7 @@ a.lead:hover .ln { text-decoration: underline; }
 .bo-tbl th { font-size: 11.5px; letter-spacing: .06em; text-transform: uppercase; color: var(--dim); text-align: left; font-weight: 700; padding: 0 0 8px; }
 .bo-tbl td { padding: 10px 0; border-top: 1px solid var(--line); }
 .bo-tbl .n { text-align: right; font-variant-numeric: tabular-nums; }
-#boxoffice .bo-card .btn.more { margin-top: 10px; }
+:is(#boxoffice, #bocoll) .bo-card .btn.more { margin-top: 10px; }
 .bo-2col { display: grid; grid-template-columns: 1.4fr 1fr; gap: 16px; margin-top: 26px; align-items: start; }
 .bo-2col.one { grid-template-columns: 1fr; }
 .bl-bar { display: flex; height: 14px; border-radius: 7px; overflow: hidden; margin: 4px 0 12px; }
@@ -1013,3 +1013,5 @@ a.lead:hover .ln { text-decoration: underline; }
 .bd-bar.tl .bd-tip { left: 0; transform: none; } .bd-bar.tr .bd-tip { left: auto; right: 0; transform: none; }
 .bo-tbl td:first-child { white-space: nowrap; padding-right: 12px; }
 .bl-ov { display: flex; justify-content: space-between; gap: 12px; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); } .bl-ov b { color: var(--text); }
+
+#bocoll > .tsec-h + .bo-blk { margin-top: 8px; }

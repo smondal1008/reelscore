@@ -1493,7 +1493,7 @@
     put(verdictStrip(m, rel));
 
     var items = vidItems(m), groups = vidGroups(m, items);
-    var bo = boxOfficeBlock(m);
+    var bo = boxOfficeBlock(m), boc = boCollBlock(m);
     var act = actionBlock(m, rel, ott);
     var side = h('aside', { class: 'tside', 'aria-label': 'Where to watch and details' }, [act, factsBlock(m), planBlock(m), triviaBlock(m), pollBlock(m), locationsBlock(m), awardsBlock(m)]);
     var vsecs = groups.map(function (g) { return keep && keep.id === g.id && keep._mid === m.id ? keep : vidSection(m, g, items); });
@@ -1537,6 +1537,7 @@
       posters ? ['posters', 'Posters', postersOf(m).length] : null,
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
+      boc ? ['bocoll', 'Collections', 0] : null,
       reviews ? ['reviews', 'Reviews', nRev] : null,
       fan ? ['extras', 'Fan videos', fan._n || 0] : null,
       news ? ['news', 'News', 0] : null,
@@ -1547,7 +1548,7 @@
     put(bo);
     vsecs.forEach(put);
     put(posters);
-    put(story); put(cast); put(reviews); put(fan); put(news);
+    put(story); put(cast); put(boc); put(reviews); put(fan); put(news);
     if (rs) put(rs);
     if (rc) put(rc);
     if (r) put(r);
@@ -2138,7 +2139,7 @@
     var max = Math.max.apply(null, rows.map(function (r) { return r.nett; })), d0 = rows[0].day, d1 = last.day, span = d1 - d0 + 1;
     var sec;
     var toggle = h('span', { class: 'seg', role: 'group', 'aria-label': 'Show as' }, [['chart', 'Chart'], ['table', 'Table']].map(function (o) {
-      return h('button', { type: 'button', class: o[0] === view ? 'on' : '', 'aria-pressed': String(o[0] === view), text: o[1], on: { click: function () { S.boView[m.id] = o[0]; var b = $('boxoffice'); swapInPlace(b, boxOfficeBlock(m), '#boxoffice .seg .on'); } } });
+      return h('button', { type: 'button', class: o[0] === view ? 'on' : '', 'aria-pressed': String(o[0] === view), text: o[1], on: { click: function () { S.boView[m.id] = o[0]; swapInPlace($('bocoll'), boCollBlock(m), '#bocoll .seg .on'); } } });
     }));
     var body;
     if (view === 'chart') {
@@ -2169,7 +2170,7 @@
         h('tbody', {}, show.map(function (r) {
           return h('tr', {}, [h('td', {}, [h('b', { text: 'Day ' + r.day })]), h('td', { class: 'note', text: dmy(r) }), h('td', { class: 'n', text: crore(r.nett) })].concat(anyG ? [h('td', { class: 'n', text: r.dgross ? crore(r.dgross) : '–' })] : []).concat([h('td', { class: 'n' }, [chgEl(r.chg)])]).concat(running ? [h('td', { class: 'n', text: crore(run[r.day]) })] : []));
         }))]),
-        list.length > 7 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + list.length + ' days', on: { click: function () { S.boAll[m.id] = !all; swapInPlace($('boxoffice'), boxOfficeBlock(m), '#boxoffice .bo-card .btn.more'); } } }) : null]);
+        list.length > 7 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + list.length + ' days', on: { click: function () { S.boAll[m.id] = !all; swapInPlace($('bocoll'), boCollBlock(m), '#bocoll .bo-card .btn.more'); } } }) : null]);
     }
     // Quick stats: opening day, opening weekend (release day to the first Sunday), best day, Mon–Thu average in the latest week.
     var first = byDay[1], sun = 0; for (var k = 1; k <= 7; k++) { if (byDay[k] && byDay[k].wd === 0) { sun = k; break; } }
@@ -2234,9 +2235,16 @@
   }
   // With 2 or more days of figures: the club tracker, day by day, week by week and the language split.
   function boMore(m, bo) {
-    var rows = boDays(m); if (rows.length < 2) return bo ? [boClubs(m, bo, rows)] : [];
+    return bo ? [boClubs(m, bo, boDays(m))] : [];
+  }
+  // Box office collections (its own section, above Reviews): day by day, week by week and the language split. Needs 2 or more days.
+  function boCollBlock(m) {
+    if (isTv(m) || isOtt(m) || !released(m)) return null;
+    var bo = boData(m), rows = boDays(m); if (!bo || rows.length < 2) return null;
     var wk = boWeeks(rows), lg = boLangs(rows, bo);
-    return [boClubs(m, bo, rows), boDayByDay(m, rows), wk || lg ? h('div', { class: 'bo-2col' + (lg ? '' : ' one') }, [wk, lg]) : null];
+    return h('section', { class: 'tsec', id: 'bocoll', 'aria-labelledby': 'h-bocoll' }, [
+      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-bocoll', text: 'Box office collections' })]),
+      boDayByDay(m, rows), wk || lg ? h('div', { class: 'bo-2col' + (lg ? '' : ' one') }, [wk, lg]) : null]);
   }
   // The box office call in the verdict strip: will it reach the next club? Votes live in each person's public verdicts doc (bo).
   function boCall(m) {
