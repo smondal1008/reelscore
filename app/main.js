@@ -1954,7 +1954,7 @@
       h('div', { class: 'kicker' }, [h('span', { style: 'color:#7BD88F', text: '● ' }), 'Box office', bo.updated ? ' · as of ' + fmtDate(bo.updated) : '']),
       h('div', { class: 'vs-big' }, [h('span', { style: 'font-size:26px;font-weight:700', text: crore(bo.world) }), h('span', { class: 'note', text: 'worldwide' })]),
       next ? h('div', { class: 'vs-bar', style: 'height:6px' }, [h('span', { style: 'width:' + pctTo + '%;background:var(--accent)' })]) : null,
-      next ? h('div', { style: 'font-size:13px;color:#FFD08A', text: crore(Math.round((next - bo.world) * 10) / 10) + ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club' }) : h('div', { style: 'font-size:13px;color:#FFD08A', text: 'Past the ₹2,000 Cr club' }),
+      next ? h('div', { style: 'font-size:13px;color:#FFD08A', text: crore(next - bo.world) + ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club' }) : h('div', { style: 'font-size:13px;color:#FFD08A', text: 'Past the ₹2,000 Cr club' }),
       next ? h('div', { style: 'font-size:14px;font-weight:700;margin-top:2px', text: 'Will it get there?' }) : null,
       next ? h('div', { class: 'bocall' }, [['y', 'Yes, it will'], ['n', 'Falls short']].map(function (o) {
         return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(mine === o[0]), on: { click: function () { vote(o[0]); } } }, [o[1] + (mine && tot ? ' · ' + Math.round(100 * (o[0] === 'y' ? y : n) / tot) + '%' : '')]);
