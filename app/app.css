@@ -804,3 +804,4 @@ a.lead:hover .ln { text-decoration: underline; }
 .awards li { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; line-height: 1.45; }
 .adot { width: 8px; height: 8px; border-radius: 50%; background: #5A5466; flex: none; margin-top: 7px; } .adot.w { background: var(--accent); }
 .tside > .card + .card { margin-top: 0; }
+.bochg.dn { color: #F0776B; } .bochg.up { color: #7BD88F; }

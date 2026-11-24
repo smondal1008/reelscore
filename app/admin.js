@@ -2111,7 +2111,7 @@ window.ReelAdmin = function (env) {
     if (!tvEd) {
       var crN = function (label, key) { return field(label, key, { placeholder: 'e.g. 812.5', note: '₹ crore' }); };
       main.appendChild(h('section', { class: 'card', id: 'boxCard' }, [h('h2', {}, ['Box office ', h('span', { class: 'note', text: '(optional · shown on the title page)' })]),
-        h('div', { class: 'grid' }, [crN('India gross', 'boGross'), crN('India nett', 'boNett'), crN('Worldwide gross', 'boWorld'), crN('Latest day · India nett', 'boDay'),
+        h('div', { class: 'grid' }, [crN('India gross', 'boGross'), crN('India nett', 'boNett'), crN('Worldwide gross', 'boWorld'), crN('Latest day · India nett', 'boDay'), field('Change vs the day before (%)', 'boDayChg', { placeholder: 'e.g. -64.3', note: 'Minus for a drop' }),
           field('Figures as of', 'boUpdated', { type: 'date' }),
           field('Source', 'boSource', { placeholder: 'e.g. Producer announcement' }),
           field('Source link', 'boUrl', { placeholder: 'https://…', note: 'Shown as a link next to the source.' })])]));

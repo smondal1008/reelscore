@@ -1906,7 +1906,8 @@
   // Box office figures entered in Admin (₹ crore). null when none are set.
   function boData(m) {
     var d = m.data, n = function (v) { var x = parseFloat(String(v == null ? '' : v).replace(/[,₹\s]|cr(ore)?s?\.?$/ig, '')); return isFinite(x) && x > 0 ? x : null; };
-    var o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
+    var chg = parseFloat(String(d.boDayChg == null ? '' : d.boDayChg).replace(/[%\s]/g, ''));
+    var o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), chg: isFinite(chg) ? chg : null, updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
     return o.gross || o.nett || o.world || o.day ? o : null;
   }
   function crore(x) { return x == null ? '₹ — Cr' : '₹' + (Math.round(x * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }) + ' Cr'; }
@@ -1924,12 +1925,16 @@
     // Without figures: shown while it runs, and for a year after release.
     if (!bo && !live && !(/^\d{4}-\d{2}-\d{2}$/.test(dt) && (new Date(today()) - new Date(dt)) / 864e5 <= 365)) return null;
     var b = bo || {};
+    // Which day the latest figure is for: days from release to "Figures as of", counting release day as Day 1.
+    var dayN = b.updated && /^\d{4}-\d{2}-\d{2}$/.test(dt) ? Math.round((new Date(b.updated + 'T00:00:00') - new Date(dt + 'T00:00:00')) / 864e5) + 1 : 0;
+    var dayLab = dayN > 0 ? 'Day ' + dayN + ' · nett' : 'Latest day · nett';
+    var daySub = b.chg != null && b.chg !== 0 ? h('span', { class: 'note bochg ' + (b.chg < 0 ? 'dn' : 'up') }, [(b.chg < 0 ? '▼ ' : '▲ ') + Math.abs(b.chg) + '% vs ' + (dayN > 1 ? 'Day ' + (dayN - 1) : 'the day before')]) : 'India';
     var tiles = [['India gross', b.gross, 'before taxes'], ['India nett', b.nett, 'after taxes'], ['Worldwide gross', b.world, 'India + overseas'],
-      live || b.day ? ['Latest day · nett', b.day, 'India'] : ['Overseas gross', b.world && b.gross && b.world > b.gross ? b.world - b.gross : null, 'outside India']];
+      live || b.day ? [dayLab, b.day, daySub] : ['Overseas gross', b.world && b.gross && b.world > b.gross ? b.world - b.gross : null, 'outside India']];
     return h('section', { class: 'tsec', id: 'boxoffice', 'aria-labelledby': 'h-bo' }, [
       h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-bo' }, [m.data.title + ' box office']), bo ? null : h('span', { class: 'soon', text: 'Coming soon' })]),
       h('div', { class: 'bo-tiles' }, tiles.map(function (t) {
-        return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v' + (t[1] == null ? '' : ' on'), text: crore(t[1]) }), h('span', { class: 'note', text: t[2] })]);
+        return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v' + (t[1] == null ? '' : ' on'), text: crore(t[1]) }), typeof t[2] === 'string' ? h('span', { class: 'note', text: t[2] }) : t[2]]);
       })),
       bo ? boSourceLine(bo) : h('div', { class: 'note', text: live ? 'Collections will show here while it runs in theatres.' : 'Collections will show here.' })
     ]);
