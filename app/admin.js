@@ -2,7 +2,7 @@
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
   var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis'];
-  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
+  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
   // A poster shows on the site only once one of the last two is picked.
@@ -1907,7 +1907,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [pgrip, pprev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#posters' + i + 'url'); if (u) u.addEventListener('change', function () { pv.setAttribute('style', bgUrl(u.value)); }); }, 0); })(pprev);
         }
-        if (key === 'videos' || key === 'extras') {
+        if (key === 'videos' || key === 'extras' || key === 'interviews') {
           var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
             title: 'Click for a larger preview' + (item.thumbUrl ? (item.thumbHd ? ' (HD)' : ' (small only)') : ''), style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '',
             on: { click: function () { var u = rows.querySelector('#' + key + i + 'url'); thumbPreview(ytIdOf(u ? u.value : item.url), item); } } });
@@ -1923,8 +1923,8 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
-        if (key === 'videos' || key === 'extras' || key === 'posters') dragRow(rowEl, i);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
+        if (key === 'videos' || key === 'extras' || key === 'interviews' || key === 'posters') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
     }
@@ -1955,7 +1955,7 @@ window.ReelAdmin = function (env) {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
     var bname = draft.section === 'TV shows' ? 'TV Shows' : 'Movies';
-    var ytBtn = key === 'videos' || key === 'extras' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: key === 'extras' ? 'Fill lengths from YouTube' : 'Fill lengths & singers from YouTube', on: { click: function () {
+    var ytBtn = key === 'videos' || key === 'extras' || key === 'interviews' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: key !== 'videos' ? 'Fill lengths from YouTube' : 'Fill lengths & singers from YouTube', on: { click: function () {
       var k = ytKey(true); if (!k) return; setStatus('Fetching from YouTube…');
       fillYt(draft[key], k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
         .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
@@ -1977,7 +1977,7 @@ window.ReelAdmin = function (env) {
           .catch(function (e) { setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
       });
     }
-    var hint = key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Cast interviews go in Trailers & songs with the type Interview. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'interviews' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Cast interviews, after Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. “Who’s in it” shows under each video, with its length. Official channels only.' }) : key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, upBtn, extra, add])]), rows, hint]);
   }
 
@@ -2124,6 +2124,7 @@ window.ReelAdmin = function (env) {
     ]));
 
     main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'artists', label: 'Singers / people' }, { k: 'dur', label: 'Length 3:45' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+    main.appendChild(listEditor('Cast interviews', 'interviews', [{ k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'artists', label: 'Who’s in it' }, { k: 'dur', label: 'Length 12:30' }], 'No interviews yet. Add the YouTube link for each cast or crew interview.'));
     main.appendChild(listEditor('Posters', 'posters', [{ k: 'kind', label: 'Type', options: POSTER_KINDS }, { k: 'label', label: 'Label, e.g. Hindi poster' }, { k: 'url', label: 'Image URL' }, { k: 'credit', label: 'Credit, e.g. the studio' }, { k: 'permission', label: 'Permission', options: POSTER_PERMS }, { k: 'date', label: 'Released 2026-10-02' }], 'No posters yet. Upload official posters, or add an image link.'));
     main.appendChild(listEditor('Fan videos', 'extras', [{ k: 'kind', label: 'Type', options: EXTRA_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'channel', label: 'Channel' }, { k: 'dur', label: 'Length 3:45' }], 'None yet. Add the YouTube link for an announcement, a trailer breakdown or a post-credit scene video.'));
 
@@ -2305,11 +2306,13 @@ window.ReelAdmin = function (env) {
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     body.extras = (body.extras || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    body.interviews = (body.interviews || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    if (!body.interviews.length) delete body.interviews;
     body.posters = (body.posters || []).filter(function (p) { return String(p.url || '').trim(); });
     if (!body.posters.length) delete body.posters;
     if (!body.extras.length) delete body.extras;
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
-    return fillThumbs(body.videos).then(function () { return fillThumbs(body.extras || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
+    return fillThumbs(body.videos).then(function () { return fillThumbs(body.extras || []); }).then(function () { return fillThumbs(body.interviews || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).then(function () { return fillYt(body.interviews || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();

@@ -1126,7 +1126,7 @@
       var aa = !a.data.endYear || String(a.data.endYear) >= thisYear ? 1 : 0, bb = !b.data.endYear || String(b.data.endYear) >= thisYear ? 1 : 0;
       return bb - aa || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '');
     });
-    shows.forEach(function (m) { var vs = vidItems(m).filter(function (x) { return (x.yt || x.clip) && x.cat !== 'extras'; }); (all ? vs : vs.slice(0, 2)).forEach(function (x) { picks.push({ m: m, x: x }); }); });
+    shows.forEach(function (m) { var vs = vidItems(m).filter(function (x) { return (x.yt || x.clip) && x.cat !== 'extras' && x.cat !== 'interviews'; }); (all ? vs : vs.slice(0, 2)).forEach(function (x) { picks.push({ m: m, x: x }); }); });
     return pinPicks(picks, rowPins('tvpromos'));
   }
   function tvPromoCard(p, i, arr) {
@@ -1428,7 +1428,7 @@
   }
   // The hero's YouTube trailer: the first trailer/teaser with a YouTube link, else any YouTube video of the title.
   function heroYt(m) {
-    var it = vidItems(m).filter(function (x) { return x.yt && x.cat !== 'extras'; });
+    var it = vidItems(m).filter(function (x) { return x.yt && x.cat !== 'extras' && x.cat !== 'interviews'; });
     return it.filter(function (x) { return x.cat === 'trailers'; })[0] || it[0] || null;
   }
   function safePlay(el, onFail) { try { var p = el.play(); if (p && p.catch) p.catch(function () { if (onFail) onFail(); }); } catch (e) { if (onFail) onFail(); } }
@@ -1596,7 +1596,7 @@
     var playBtn = playing
       ? h('button', { type: 'button', class: 'btn lg primary', id: 'tPlay', on: { click: toggleTitlePause } }, ['❚❚  Pause'])
       : clip ? h('button', { type: 'button', class: 'btn lg primary', on: { click: function () { startTitleTrailer(m.id); } } }, ['▶  Watch trailer'])
-      : vidItems(m).some(function (x) { return x.yt && x.cat !== 'extras'; }) ? h('button', { type: 'button', class: 'btn lg primary', on: { click: function () { var it = vidItems(m), k = -1; it.some(function (x, i) { if (x.yt && x.cat === 'trailers') { k = i; return true; } }); if (k < 0) it.some(function (x, i) { if (x.yt && x.cat !== 'extras') { k = i; return true; } }); playVid(m.id, k, true); } } }, ['▶  Watch trailer'])
+      : vidItems(m).some(function (x) { return x.yt && x.cat !== 'extras' && x.cat !== 'interviews'; }) ? h('button', { type: 'button', class: 'btn lg primary', on: { click: function () { var it = vidItems(m), k = -1; it.some(function (x, i) { if (x.yt && x.cat === 'trailers') { k = i; return true; } }); if (k < 0) it.some(function (x, i) { if (x.yt && x.cat !== 'extras' && x.cat !== 'interviews') { k = i; return true; } }); playVid(m.id, k, true); } } }, ['▶  Watch trailer'])
       : trailerBtn(m);
     var node = h('section', { class: 'tp art' + (playing ? ' playing' : ''), style: art(m, 'banner', 1920) }, [
       video,
@@ -1739,6 +1739,12 @@
         artists: String(x.artists || '').trim().slice(0, 120), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
     });
     // Announcements and trailer breakdowns (Admin > their own card) come after, so the indexes above stay the same.
+    // Cast interviews (Admin > Cast interviews card).
+    (d.interviews || []).forEach(function (x) {
+      var u = safeUrl(x.url), id = ytId(u); if (!u) return;
+      out.push({ title: x.title || 'Interview', kind: 'Interview', url: u, yt: id, cat: 'interviews', thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
+        artists: String(x.artists || '').trim().slice(0, 120), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
+    });
     (d.extras || []).forEach(function (x) {
       var u = safeUrl(x.url), id = ytId(u); if (!u) return;
       out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: 'extras', spoil: /post.?credit/i.test(x.kind || ''), blur: !!x.blur, thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
@@ -2130,7 +2136,7 @@
   function vidGroups(m, items) {
     var g = { trailers: [], songs: [], extras: [], interviews: [], episodes: [] };
     items.forEach(function (x, i) {
-      var k = x.cat === 'extras' ? 'extras' : /interview/i.test(x.kind) ? 'interviews' : x.cat === 'songs' ? 'songs' : x.cat === 'episodes' ? 'episodes' : 'trailers';
+      var k = x.cat === 'extras' ? 'extras' : x.cat === 'interviews' || /interview/i.test(x.kind) ? 'interviews' : x.cat === 'songs' ? 'songs' : x.cat === 'episodes' ? 'episodes' : 'trailers';
       g[k].push(i);
     });
     return [['trailers', isTv(m) ? 'Trailers & promos' : 'Trailers'], ['songs', 'Songs'], ['interviews', 'Cast interviews'], ['extras', 'Fan videos'], ['episodes', 'Episodes']]
