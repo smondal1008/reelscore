@@ -1376,7 +1376,7 @@
   // What the TV Shows banner's play button says: the kind of video it plays.
   function heroVidLabel(x) {
     var k = String(x.kind || '').toLowerCase();
-    if (x.cat === 'songs') return 'Song';
+    if (x.cat === 'songs') return /soundtrack|score|bgm|\bost\b|theme/.test(k) ? 'Soundtrack' : 'Song';
     return /teaser/.test(k) ? 'Teaser' : /trailer/.test(k) ? 'Trailer' : /promo|precap|glimpse/.test(k) ? 'Promo' : /episode/.test(k) ? 'Episode' : /clip/.test(k) ? 'Clip' : x.cat === 'trailers' ? 'Trailer' : 'Play video';
   }
   // TV Shows banner: shows with a banner image and a video. Pinned TV promotionals (Admin > Home rows) first, then shows
@@ -1745,7 +1745,7 @@
     var mm = u.match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
     return mm ? mm[1] : '';
   }
-  function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
+  function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio|soundtrack|score|bgm|\bost\b|theme/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
   function vidItems(m) {
     var d = m.data, out = [], clip = safeUrl(d.trailerFileUrl);
     if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
@@ -1813,7 +1813,7 @@
     var d = m.data, here = movieUrl(m) + cur.path, x = cur.x, tv = isTv(m);
     if (location.pathname !== here) history.replaceState(null, '', here);
     document.title = videoTitleTag(m, cur); setCanonical(here); setNoindex(false);
-    var kindName = cur.seg === 'song' ? 'Song' : (x.kind || 'Video');
+    var kindName = cur.seg === 'song' ? (/soundtrack/i.test(x.kind || '') ? 'Soundtrack' : 'Song') : (x.kind || 'Video');
     w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb', style: 'margin-bottom:12px' }, [h('a', { href: '/', text: 'Home' }), ' › ',
       h('a', { href: tv ? '/browse/tv-shows' : '/browse', text: tv ? 'TV shows' : 'Movies' }), ' › ', h('a', { href: movieUrl(m), text: d.title }), ' › ', kindName]));
     var stage = h('div', { class: 'vstage', style: 'background-image:url("https://i.ytimg.com/vi/' + cur.yt + '/hqdefault.jpg")' });
@@ -1829,7 +1829,7 @@
     w.appendChild(h('div', { class: 'vhead' }, [
       h('div', { style: 'min-width:0' }, [
         h('h1', { class: 'display', text: videoName(m, cur) }),
-        h('p', { class: 'note', text: [cur.seg === 'song' ? 'Song from ' + d.title : kindName, langOf(d), tv ? (d.platform || 'TV series') : (released(m) ? y : d.releaseDate ? 'Releases ' + fmtDate(d.releaseDate) : y)].filter(Boolean).join(' · ') })
+        h('p', { class: 'note', text: [cur.seg === 'song' ? kindName + ' from ' + d.title : kindName, langOf(d), tv ? (d.platform || 'TV series') : (released(m) ? y : d.releaseDate ? 'Releases ' + fmtDate(d.releaseDate) : y)].filter(Boolean).join(' · ') })
       ]),
       h('div', { class: 'vacts' }, [
         h('button', { type: 'button', class: 'btn primary', text: navigator.share ? 'Share' : 'Copy link', on: { click: function () { shareVideo(m, cur, here); } } }),
@@ -1843,7 +1843,7 @@
       w.appendChild(h('div', { class: 'vgrid' }, others.map(function (p) {
         return h('a', { class: 'tcard', href: movieUrl(m) + p.path }, [
           h('span', { class: 'th' }, [h('img', { src: 'https://i.ytimg.com/vi/' + p.yt + '/hqdefault.jpg', alt: '', width: 480, height: 360, loading: 'lazy' }),
-            h('span', { class: 'kb', text: (p.seg === 'song' ? 'Song' : p.x.kind || 'Video').toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+            h('span', { class: 'kb', text: (p.seg === 'song' ? (/soundtrack/i.test(p.x.kind || '') ? 'Soundtrack' : 'Song') : p.x.kind || 'Video').toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
           h('span', { class: 'tt', text: p.x.title || p.x.kind }),
           h('span', { class: 'note', text: d.title })
         ]);

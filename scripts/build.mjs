@@ -80,7 +80,7 @@ function clip(s, n) { s = String(s || '').replace(/\s+/g, ' ').trim(); if (s.len
 function list(names) { return names.length < 2 ? names.join('') : names.slice(0, -1).join(', ') + ' and ' + names[names.length - 1]; }
 // YouTube videos of a title, same parsing and categories as app/main.js (ytId, vidCat).
 function ytId(u) { const mm = String(u || '').match(/(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/); return mm ? mm[1] : ''; }
-function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
+function vidCat(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio|soundtrack|score|bgm|\bost\b|theme/.test(k) ? 'songs' : /episode/.test(k) ? 'episodes' : 'more'; }
 function ytVideos(d) { return (d.videos || []).map(x => ({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', yt: ytId(safeUrl(x.url)), cat: vidCat(x.kind), addedAt: x.addedAt || '', publishedAt: /^\d{4}-\d{2}-\d{2}/.test(x.publishedAt || '') ? x.publishedAt.slice(0, 10) : '' })).filter(x => x.yt); }
 // Same rule as app/main.js: ask Cloudinary for a sized, compressed copy instead of the uploaded original.
 function cld(u, w) {

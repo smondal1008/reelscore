@@ -2,7 +2,7 @@
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
   var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing synopsis'];
-  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip'];
+  var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Soundtrack', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
   // A poster shows on the site only once one of the last two is picked.
@@ -541,7 +541,7 @@ window.ReelAdmin = function (env) {
   function rowInfo(key) { return ROWS.filter(function (r) { return r[0] === key; })[0]; }
   function ytOk(u) { return /(?:youtube(?:-nocookie)?\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/|live\/)|youtu\.be\/)[A-Za-z0-9_-]{11}/.test(String(u || '')); }
   // Same video categories as the site (app/main.js vidCat).
-  function vidKind(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio/.test(k) ? 'songs' : 'other'; }
+  function vidKind(k) { k = String(k || '').toLowerCase(); return /trailer|teaser|promo|glimpse/.test(k) ? 'trailers' : /song|lyric|music|jukebox|audio|soundtrack|score|bgm|\bost\b|theme/.test(k) ? 'songs' : 'other'; }
   function hasVid(d, cat) {
     if ((cat === 'trailers' || cat === 'any') && safeUrl(d.trailerFileUrl)) return true;
     return (d.videos || []).some(function (x) { return ytOk(safeUrl(x.url)) && (cat === 'any' || vidKind(x.kind) === cat); });
@@ -887,7 +887,7 @@ window.ReelAdmin = function (env) {
   // Only empty boxes are filled. Trailers, teasers and promos get the house style ("Official trailer"); songs get the song's name.
   function ytMeta(id) { return fetch('/api/yt?id=' + id).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
   function ytKindOf(t) {
-    return /lyric|video song|full song|audio song|\bsong\b|jukebox|\(video\)|music video/i.test(t) ? 'Song' : /teaser/i.test(t) ? 'Teaser' : /trailer/i.test(t) ? 'Trailer' : /\bpromo\b/i.test(t) ? 'Promo' : /\bepisode\b|\bep\.? ?\d/i.test(t) ? 'Episode' : '';
+    return /soundtrack|\bost\b|background score|\bbgm\b|theme music/i.test(t) ? 'Soundtrack' : /lyric|video song|full song|audio song|\bsong\b|jukebox|\(video\)|music video/i.test(t) ? 'Song' : /teaser/i.test(t) ? 'Teaser' : /trailer/i.test(t) ? 'Trailer' : /\bpromo\b/i.test(t) ? 'Promo' : /\bepisode\b|\bep\.? ?\d/i.test(t) ? 'Episode' : '';
   }
   function cleanYtTitle(t) { return String(t || '').replace(/#[\wऀ-෿]+/g, '').replace(/\s{2,}/g, ' ').replace(/[\s|｜\-–—:]+$/, '').trim().slice(0, 140); }
   var YT_NOISE = /^(full|official|lyrical|lyric|lyrics|video|audio|music|song|songs|4k|hd|uhd|new|latest|hindi|tamil|telugu|malayalam|kannada|punjabi|bengali|marathi)$/i;
@@ -919,7 +919,7 @@ window.ReelAdmin = function (env) {
         if (key === 'videos') {
           var ks = rows.querySelector('#videos' + i + 'kind'), kind = item.kind || (ks ? ks.value : 'Trailer'), guess = ytKindOf(j.title);
           if (guess && guess !== kind && (!item.kind || (fresh && !KIND_PICKED.has(item)))) { kind = guess; item.kind = kind; if (ks) ks.value = kind; filled.push('type'); }
-          if (set('title', /^song$/i.test(kind) ? songName(j.title, draft.title) : /^(trailer|teaser|promo)$/i.test(kind) ? 'Official ' + kind.toLowerCase() : cleanYtTitle(j.title))) filled.push('title');
+          if (set('title', /^(song|soundtrack)$/i.test(kind) ? songName(j.title, draft.title) : /^(trailer|teaser|promo)$/i.test(kind) ? 'Official ' + kind.toLowerCase() : cleanYtTitle(j.title))) filled.push('title');
         } else {
           if (key === 'extras') {
             var xs = rows.querySelector('#extras' + i + 'kind'), xg = extraKindOf(j.title);
@@ -1276,9 +1276,9 @@ window.ReelAdmin = function (env) {
   }).catch(function () {});
   function missingSynopsis(d, id) { return !String(d.synopsis || '').trim() && !synFile[id]; }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
-  function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
+  function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|soundtrack|episode)$/i.test((v.kind || '').trim()); }); }
   // Films only: TV shows rarely have songs. Cast: no actor listed (crew such as the director doesn't count).
-  function missingSongs(d) { return d.section !== 'TV shows' && !(d.videos || []).some(function (v) { return (v.url || '').trim() && /^song$/i.test((v.kind || '').trim()); }); }
+  function missingSongs(d) { return d.section !== 'TV shows' && !(d.videos || []).some(function (v) { return (v.url || '').trim() && /^(song|soundtrack)$/i.test((v.kind || '').trim()); }); }
   function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
   function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
