@@ -684,7 +684,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .bo-tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .bo-v { font-size: 24px; font-weight: 700; color: var(--dim); }
 .bo-v.on { color: var(--text); }
-.bocall { display: flex; gap: 8px; } .bocall .chip { flex: 1 1 0; height: 38px; }
+
 .vsec .stage { box-shadow: none; }
 .stage .vt2 { font-size: 22px; font-weight: 700; color: var(--text); }
 .vrow { display: flex; gap: 14px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
@@ -805,3 +805,25 @@ a.lead:hover .ln { text-decoration: underline; }
 .adot { width: 8px; height: 8px; border-radius: 50%; background: #5A5466; flex: none; margin-top: 7px; } .adot.w { background: var(--accent); }
 .tside > .card + .card { margin-top: 0; }
 .bochg.dn { color: #F0776B; } .bochg.up { color: #7BD88F; }
+/* Verdict strip: three columns on a shared 4-row grid (label · headline · bar · footer) so their rows line up */
+.vstrip { display: grid; grid-template-columns: minmax(0, 1fr) 1px minmax(0, 1.3fr) 1px minmax(0, 1fr); grid-template-rows: repeat(4, auto); column-gap: 28px; row-gap: 10px; align-items: start; }
+.vstrip > .vs-sep { grid-row: 1 / span 4; width: 1px; height: auto; align-self: stretch; }
+.vstrip > .vs-score, .vstrip > .vs-mine, .vstrip > .vs-peer { grid-row: 1 / span 4; display: grid; grid-template-rows: subgrid; row-gap: 10px; align-content: start; min-width: 0; }
+.vstrip .vs-mine .vbtns { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; align-self: end; }
+.vstrip .vbtns .vb2 { min-width: 0; padding: 8px 10px 8px 8px; }
+.vstrip .vbtns .vb2 small { line-height: 1.25; }
+.vstrip .vs-big { min-height: 56px; align-items: flex-end; align-self: end; }
+.bo-big { font-size: 32px; font-weight: 700; line-height: 1.1; }
+.vs-bofoot { display: flex; flex-direction: column; gap: 8px; }
+.bogap { font-size: 13px; color: #FFD08A; }
+.bocall { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.bocall .boq { font-size: 13px; font-weight: 700; margin-right: 2px; }
+.bocall .chip { height: 30px; }
+@media (max-width: 900px) {
+  .vstrip { display: flex; flex-direction: column; align-items: stretch; }
+  .vstrip .vbtns .vb2 { flex: 1 1 0; }
+  .vstrip > .vs-score, .vstrip > .vs-mine, .vstrip > .vs-peer { display: flex; flex-direction: column; gap: 10px; }
+  .vstrip .vs-big { min-height: 0; align-self: auto; }
+  .vstrip .vs-mine .vbtns { display: flex; align-self: auto; }
+  .vstrip > .vs-sep { width: auto; height: 1px; }
+}
