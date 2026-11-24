@@ -1864,6 +1864,12 @@ window.ReelAdmin = function (env) {
               draft.bannerVideo = star ? '' : item.url; touch(); draw();
             } } }));
         }
+        // Extras: blur the thumbnail on the title page until played (for spoilers). Off unless switched on here.
+        if (key === 'extras') {
+          cells.push(h('button', { type: 'button', class: 'x blurb' + (item.blur ? ' on' : ''), 'aria-pressed': String(!!item.blur), disabled: !canWrite,
+            'aria-label': (item.blur ? 'Stop blurring' : 'Blur') + ' the thumbnail of video ' + (i + 1), title: item.blur ? 'Thumbnail is blurred until played. Click to show it.' : 'Blur the thumbnail until played (spoilers)',
+            text: 'Blur', on: { click: function () { if (item.blur) delete item.blur; else item.blur = true; touch(); draw(); } } }));
+        }
         // Cast: ★ marks a lead; leads show large at the top of Cast & crew on the title page.
         if (key === 'cast') {
           var crewRow = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i.test(item.role || '');
@@ -1927,7 +1933,7 @@ window.ReelAdmin = function (env) {
       fillYt(draft[key], k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
         .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
     } } }) : null;
-    var hint = key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page in their own section, under Trailers and Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label and a blurred thumbnail until clicked.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page in their own section, under Trailers and Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, extra, add])]), rows, hint]);
   }
 
