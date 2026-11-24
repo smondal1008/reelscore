@@ -1501,6 +1501,7 @@
     var fan = null; vsecs = vsecs.filter(function (s) { if (s && s.id === 'extras') { fan = s; return false; } return true; });
     if (fan) groups.forEach(function (g) { if (g.id === 'extras') fan._n = g.idx.length; });
     var story = storyBlock(m), cast = castBlock(m), reviews = rel ? reviewsBlock(m, rel) : null, news = newsBlock(m);
+    var posters = postersBlock(m);
     if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
     var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
@@ -1533,6 +1534,7 @@
     put(pageTabs([
       bo ? ['boxoffice', 'Box office', 0] : null
     ].concat(groups.filter(function (g) { return g.id !== 'extras'; }).map(function (g) { return [g.id, g.label, g.idx.length]; })).concat([
+      posters ? ['posters', 'Posters', postersOf(m).length] : null,
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
       reviews ? ['reviews', 'Reviews', nRev] : null,
@@ -1544,6 +1546,7 @@
     put(side);
     put(bo);
     vsecs.forEach(put);
+    put(posters);
     put(story); put(cast); put(reviews); put(fan); put(news);
     if (rs) put(rs);
     if (rc) put(rc);
@@ -2276,6 +2279,102 @@
     if (window.scrollY !== sy) window.scrollTo(0, sy);
     var f = focusSel && document.querySelector(focusSel); if (f) f.focus({ preventScroll: true });
   }
+  // ---------- posters: one scrolling row, filter chips, and a full-screen viewer ----------
+  // Only posters with a permission picked in Admin are shown (distributor permission, or official art re-hosted).
+  var POSTER_PERM = /^(distributor permission|official art, re-hosted)$/i;
+  function postersOf(m) {
+    return (m.data.posters || []).filter(function (p) { return p && safeUrl(p.url) && POSTER_PERM.test(String(p.permission || '').trim()); });
+  }
+  // Posters stay the studio's: no right-click menu, no dragging the image out, no long-press save.
+  function guardImg(el) {
+    el.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    el.addEventListener('dragstart', function (e) { e.preventDefault(); });
+    return el;
+  }
+  function posterImg(p, w, alt) {
+    var img = h('img', { src: cld(p.url, w), alt: alt, loading: 'lazy', draggable: 'false', width: 400, height: 600 });
+    return guardImg(img);
+  }
+  function postersBlock(m) {
+    var all = postersOf(m); if (all.length < 2) return null;
+    var d = m.data; S.pfilt = S.pfilt || {};
+    var kinds = []; all.forEach(function (p) { var k = p.kind || 'Poster'; if (kinds.indexOf(k) === -1) kinds.push(k); });
+    var f = kinds.indexOf(S.pfilt[m.id]) !== -1 ? S.pfilt[m.id] : 'All';
+    var list = all.map(function (p, i) { return { p: p, i: i }; }).filter(function (x) { return f === 'All' || (x.p.kind || 'Poster') === f; });
+    var track = h('div', { class: 'prow', role: 'list' }, list.map(function (x) {
+      var p = x.p, name = p.label || (p.kind || 'Poster');
+      return h('div', { role: 'listitem', class: 'pcard' }, [
+        h('button', { type: 'button', class: 'pth', 'aria-label': 'Open ' + name + ' larger', on: { click: function () { openPosterViewer(m, x.i); } } }, [
+          posterImg(p, 400, d.title + ' ' + name.toLowerCase()), p.kind ? h('span', { class: 'ptag', text: p.kind }) : null]),
+        h('span', { class: 'pcap', text: name }), h('span', { class: 'note psub', text: [p.kind, p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? fmtDate(p.date, true) : ''].filter(Boolean).join(' · ') })
+      ]);
+    }));
+    var scroll = function (dir) { track.scrollBy({ left: dir * Math.max(200, track.clientWidth * 0.8), behavior: 'smooth' }); };
+    var sec = h('section', { class: 'tsec psec', id: 'posters', 'aria-labelledby': 'h-posters' }, [
+      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-posters' }, [d.title + ' posters', ' ', h('span', { class: 'cnt', text: String(all.length) })]),
+        h('span', { class: 'parr' }, [
+          h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters left', on: { click: function () { scroll(-1); } } }, ['‹']),
+          h('button', { type: 'button', class: 'pib', 'aria-label': 'Scroll posters right', on: { click: function () { scroll(1); } } }, ['›'])])]),
+      kinds.length > 1 ? h('div', { class: 'pchips', role: 'group', 'aria-label': 'Filter posters' }, ['All'].concat(kinds).map(function (k) {
+        var n = k === 'All' ? all.length : all.filter(function (p) { return (p.kind || 'Poster') === k; }).length;
+        return h('button', { type: 'button', class: 'chip' + (k === f ? ' on' : ''), 'aria-pressed': String(k === f), on: { click: function () {
+          S.pfilt[m.id] = k; swapInPlace(sec, postersBlock(m), '#posters .pchips .chip.on');
+        } } }, [k, ' ', h('span', { class: 'n', text: String(n) })]);
+      })) : null,
+      track
+    ]);
+    return sec;
+  }
+  function openPosterViewer(m, start) {
+    var all = postersOf(m); if (!all.length) return;
+    var d = m.data, i = Math.max(0, Math.min(start, all.length - 1)), back = document.activeElement;
+    var box = h('div', { class: 'pview', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' posters' });
+    var close = function () { document.removeEventListener('keydown', onKey); box.remove(); document.body.style.overflow = ''; if (back && back.focus) back.focus(); };
+    var go = function (n) { i = (n + all.length) % all.length; paint(); };
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); close(); }
+      else if (e.key === 'ArrowRight') { e.preventDefault(); go(i + 1); }
+      else if (e.key === 'ArrowLeft') { e.preventDefault(); go(i - 1); }
+    }
+    function paint() {
+      var p = all[i], name = p.label || p.kind || 'Poster';
+      box.innerHTML = '';
+      var big = h('div', { class: 'pvimg' }, [posterImg(p, 900, d.title + ' ' + name.toLowerCase())]);
+      var tx0 = null;
+      big.addEventListener('touchstart', function (e) { tx0 = e.touches[0].clientX; }, { passive: true });
+      big.addEventListener('touchend', function (e) { if (tx0 === null) return; var dx = e.changedTouches[0].clientX - tx0; tx0 = null; if (Math.abs(dx) > 40) go(i + (dx < 0 ? 1 : -1)); });
+      var perm = /official/i.test(p.permission) ? 'Official art' : 'Shown with distributor permission';
+      box.appendChild(h('div', { class: 'pv-top' }, [h('span', { class: 'note', text: (i + 1) + ' of ' + all.length + (p.kind ? ' · ' + p.kind : '') }),
+        h('button', { type: 'button', class: 'pib', 'aria-label': 'Close', on: { click: close } }, ['✕'])]));
+      box.appendChild(h('div', { class: 'pv-mid' }, [
+        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav', 'aria-label': 'Previous poster', on: { click: function () { go(i - 1); } } }, ['‹']) : null,
+        big,
+        h('div', { class: 'pv-info' }, [
+          h('h2', { text: name }),
+          h('div', { class: 'note' }, [
+            p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? h('div', { text: 'Released ' + fmtDate(p.date, true) }) : null,
+            h('div', { text: 'Official poster' + (p.credit ? ' · ' + p.credit : '') }),
+            h('div', { class: 'pv-ok', text: '✓ ' + perm })]),
+          h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [h('button', { type: 'button', class: 'btn primary', text: navigator.share ? 'Share' : 'Copy link', on: { click: function () {
+            var full = location.origin + movieUrl(m) + '#posters', text = d.title + ' – ' + name + ' on Reelscore';
+            if (navigator.share) { try { navigator.share({ title: text, text: text, url: full }).catch(function () {}); return; } catch (e) {} }
+            copyText(full, 'Link copied');
+          } } })])
+        ]),
+        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav', 'aria-label': 'Next poster', on: { click: function () { go(i + 1); } } }, ['›']) : null
+      ]));
+      if (all.length > 1) box.appendChild(h('div', { class: 'pv-thumbs' }, all.map(function (q, k) {
+        return h('button', { type: 'button', class: 'pv-t' + (k === i ? ' on' : ''), 'aria-label': 'Poster ' + (k + 1), 'aria-current': k === i ? 'true' : null, on: { click: function () { go(k); } } }, [posterImg(q, 120, '')]);
+      })));
+      var f = box.querySelector('.pv-t.on') || box.querySelector('.pib'); if (f) f.focus({ preventScroll: true });
+    }
+    box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    guardImg(box);
+    document.addEventListener('keydown', onKey);
+    document.body.appendChild(box); document.body.style.overflow = 'hidden';
+    paint();
+  }
+
   // ---------- sidebar extras: trivia, fan poll, filming locations, awards ----------
   function triviaBlock(m) {
     var items = (m.data.trivia || []).filter(function (t) { return t && String(t.text || '').trim(); });

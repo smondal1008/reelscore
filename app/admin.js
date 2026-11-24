@@ -4,6 +4,9 @@ window.ReelAdmin = function (env) {
   var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip', 'Interview'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
+  var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
+  // A poster shows on the site only once one of the last two is picked.
+  var POSTER_PERMS = ['Choose permission', 'Distributor permission', 'Official art, re-hosted'];
   var REQUIRED = [
     ['synopsis', 'Synopsis'], ['releaseDate', 'Release date'], ['languages', 'Languages'], ['genre', 'Genre'],
     ['runtime', 'Runtime'], ['certificate', 'Certificate'], ['posterUrl', 'Poster'], ['bannerUrl', 'Banner']
@@ -1864,6 +1867,16 @@ window.ReelAdmin = function (env) {
               draft.bannerVideo = star ? '' : item.url; touch(); draw();
             } } }));
         }
+        // Posters: ★ makes this the title's page poster (cards, banner, search).
+        if (key === 'posters') {
+          var pmain = !!item.url && draft.posterUrl === item.url;
+          cells.push(h('button', { type: 'button', class: 'x vstar' + (pmain ? ' on' : ''), 'aria-pressed': String(pmain), disabled: !canWrite || pmain,
+            'aria-label': pmain ? 'Poster ' + (i + 1) + ' is the page poster' : 'Use poster ' + (i + 1) + ' as the page poster', title: pmain ? 'The page poster' : 'Use as the page poster',
+            text: pmain ? '★' : '☆', on: { click: function () {
+              if (!safeUrl(item.url)) { setStatus('Add the image first.'); return; }
+              draft.posterUrl = item.url; draft.posterId = item.id || ''; touch(); draw(); if (typeof updatePreview === 'function') updatePreview();
+            } } }));
+        }
         // Extras: blur the thumbnail on the title page until played (for spoilers). Off unless switched on here.
         if (key === 'extras') {
           cells.push(h('button', { type: 'button', class: 'x blurb' + (item.blur ? ' on' : ''), 'aria-pressed': String(!!item.blur), disabled: !canWrite,
@@ -1880,6 +1893,20 @@ window.ReelAdmin = function (env) {
         cells.push(h('button', { type: 'button', class: 'x', 'aria-label': 'Remove row ' + (i + 1), text: '×', disabled: !canWrite,
           on: { click: function () { if (key === 'videos' && item.url && draft.bannerVideo === item.url) draft.bannerVideo = ''; arr.splice(i, 1); touch(); draw(); } } }));
         if (av) cells.unshift(av);
+        if (key === 'posters') {
+          var pprev = h('button', { type: 'button', class: 'vthumb pthumb', 'aria-label': 'Preview poster ' + (i + 1), title: 'Click for a larger preview', style: bgUrl(item.url),
+            on: { click: function () { if (safeUrl(item.url)) imagePreview(item.url, (item.label || item.kind || 'Poster') + ' of ' + (draft.title || 'this title'), 2 / 3); } } });
+          var pgrip = h('button', { type: 'button', class: 'grip', 'aria-label': 'Move poster ' + (i + 1) + ' (' + (item.label || item.kind || 'untitled') + '). Use the up and down arrow keys, or drag.', title: 'Drag to reorder', disabled: !canWrite, text: '⋮⋮' });
+          pgrip.addEventListener('keydown', function (e) {
+            var to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : -1;
+            if (to < 0 || to >= arr.length) return;
+            e.preventDefault(); moveRow(i, to); var g = rows.querySelectorAll('.grip')[to]; if (g) g.focus();
+          });
+          pgrip.addEventListener('mousedown', function () { if (canWrite) rowEl.draggable = true; });
+          pgrip.addEventListener('touchstart', function () { if (canWrite) rowEl.draggable = true; }, { passive: true });
+          cells.unshift(h('span', { class: 'vgrip' }, [pgrip, pprev]));
+          (function (pv) { setTimeout(function () { var u = rows.querySelector('#posters' + i + 'url'); if (u) u.addEventListener('change', function () { pv.setAttribute('style', bgUrl(u.value)); }); }, 0); })(pprev);
+        }
         if (key === 'videos' || key === 'extras') {
           var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
             title: 'Click for a larger preview' + (item.thumbUrl ? (item.thumbHd ? ' (HD)' : ' (small only)') : ''), style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '',
@@ -1896,8 +1923,8 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
-        if (key === 'videos' || key === 'extras') dragRow(rowEl, i);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
+        if (key === 'videos' || key === 'extras' || key === 'posters') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
     }
@@ -1933,8 +1960,25 @@ window.ReelAdmin = function (env) {
       fillYt(draft[key], k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
         .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
     } } }) : null;
-    var hint = key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Cast interviews go in Trailers & songs with the type Interview. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
-    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, extra, add])]), rows, hint]);
+    // Posters: upload one or more images; each becomes a row to label and give a permission.
+    var upBtn = null;
+    if (key === 'posters') {
+      var upIn = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', multiple: true, class: 'sr', tabindex: '-1' });
+      upBtn = h('span', {}, [upIn, h('button', { type: 'button', class: 'btn small primary', text: 'Upload', disabled: !canUpload, title: canUpload ? 'Upload poster images' : 'Uploads need editor access', on: { click: function () { upIn.click(); } } })]);
+      upIn.addEventListener('change', function () {
+        var files = Array.prototype.slice.call(upIn.files || []).filter(function (f) { return /^image\/(png|jpeg|webp)$/.test(f.type) && f.size <= 10 * 1024 * 1024; });
+        upIn.value = ''; if (!files.length) { setStatus('Use PNG, JPEG or WebP images up to 10 MB.'); return; }
+        setStatus('Uploading ' + files.length + (files.length === 1 ? ' poster…' : ' posters…'));
+        files.reduce(function (pr, f) { return pr.then(function () { return assets.upload(f).then(function (res) {
+          draft.posters = draft.posters || [];
+          draft.posters.push({ kind: draft.posters.length ? 'Character' : 'Main', label: '', url: res.url, id: res.id, credit: '', permission: POSTER_PERMS[0], date: '' });
+          touch(); draw();
+        }); }); }, Promise.resolve()).then(function () { setStatus('Uploaded. Add a label and pick the permission for each, then save.'); })
+          .catch(function (e) { setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
+      });
+    }
+    var hint = key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Cast interviews go in Trailers & songs with the type Interview. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, upBtn, extra, add])]), rows, hint]);
   }
 
   function renderEditor() {
@@ -2080,6 +2124,7 @@ window.ReelAdmin = function (env) {
     ]));
 
     main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'artists', label: 'Singers / people' }, { k: 'dur', label: 'Length 3:45' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+    main.appendChild(listEditor('Posters', 'posters', [{ k: 'kind', label: 'Type', options: POSTER_KINDS }, { k: 'label', label: 'Label, e.g. Hindi poster' }, { k: 'url', label: 'Image URL' }, { k: 'credit', label: 'Credit, e.g. the studio' }, { k: 'permission', label: 'Permission', options: POSTER_PERMS }, { k: 'date', label: 'Released 2026-10-02' }], 'No posters yet. Upload official posters, or add an image link.'));
     main.appendChild(listEditor('Fan videos', 'extras', [{ k: 'kind', label: 'Type', options: EXTRA_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'channel', label: 'Channel' }, { k: 'dur', label: 'Length 3:45' }], 'None yet. Add the YouTube link for an announcement, a trailer breakdown or a post-credit scene video.'));
 
 
@@ -2260,6 +2305,8 @@ window.ReelAdmin = function (env) {
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     body.extras = (body.extras || []).filter(function (v) { return (v.title || v.url || '').trim(); });
+    body.posters = (body.posters || []).filter(function (p) { return String(p.url || '').trim(); });
+    if (!body.posters.length) delete body.posters;
     if (!body.extras.length) delete body.extras;
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
     return fillThumbs(body.videos).then(function () { return fillThumbs(body.extras || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
