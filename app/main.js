@@ -1909,7 +1909,7 @@
     var o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
     return o.gross || o.nett || o.world || o.day ? o : null;
   }
-  function crore(x) { return x == null ? '₹ — Cr' : '₹' + (x >= 1000 ? Math.round(x).toLocaleString('en-IN') : (Math.round(x * 100) / 100).toLocaleString('en-IN')) + ' Cr'; }
+  function crore(x) { return x == null ? '₹ — Cr' : '₹' + (Math.round(x * 100) / 100).toLocaleString('en-IN', { maximumFractionDigits: 2 }) + ' Cr'; }
   var CLUBS = [100, 250, 500, 1000, 1500, 2000];
   function boSourceLine(bo) {
     var bits = [];
