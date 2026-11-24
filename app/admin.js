@@ -849,6 +849,75 @@ window.ReelAdmin = function (env) {
       });
     }));
   }
+
+  // ---------- YouTube details: each video's length, and a song's singers from its official upload's description ----------
+  // Needs a YouTube Data API key. It is pasted once and kept only in this browser (never in the code or the database).
+  var YT_KEY_LS = 'rs_yt_key';
+  function ytKey(ask) {
+    var k = ''; try { k = localStorage.getItem(YT_KEY_LS) || ''; } catch (e) {}
+    if (!k && ask) {
+      k = String(window.prompt('Paste the YouTube Data API key (Google Cloud → APIs & Services → Credentials → Show key). It stays in this browser only.') || '').trim();
+      if (/^AIza[0-9A-Za-z_\-]{35}$/.test(k)) { try { localStorage.setItem(YT_KEY_LS, k); } catch (e) {} } else { if (k) setStatus('That doesn’t look like a YouTube API key.'); k = ''; }
+    }
+    return k;
+  }
+  function isoDur(p) {
+    var m = String(p || '').match(/^P(?:(\d+)D)?(?:T(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$/); if (!m) return '';
+    var hh = (+m[1] || 0) * 24 + (+m[2] || 0), mi = +m[3] || 0, se = +m[4] || 0;
+    if (!hh && !mi && !se) return '';
+    return hh ? hh + ':' + String(mi).padStart(2, '0') + ':' + String(se).padStart(2, '0') : mi + ':' + String(se).padStart(2, '0');
+  }
+  function descArtists(desc) {
+    var lines = String(desc || '').split(/\r?\n/).map(function (l) { return l.replace(/^[\s♪♫•*➤►▶-]+/, '').trim(); });
+    function pick(re) {
+      for (var i = 0; i < lines.length; i++) { var m = lines[i].match(re); if (m) { var v = m[1].replace(/\s*[|#].*$/, '').replace(/[.]+$/, '').trim(); if (v && v.length <= 120 && !/https?:/i.test(v)) return v; } }
+      return '';
+    }
+    var singers = pick(/^(?:singers?|vocals?|vocalists?|sung by|voices?)\s*(?:[:\-–—]+|by)\s*(.+)$/i);
+    if (singers) return singers;
+    var music = pick(/^(?:music(?: composed| director| composer)?(?: by)?|composers?|composed by)\s*[:\-–—]*\s*(.+)$/i);
+    return music ? 'Music: ' + music : '';
+  }
+  // Fills missing lengths (all videos) and singers (songs) in place. Resolves to how many videos changed.
+  function fillYt(videos, key) {
+    var need = (videos || []).filter(function (x) { return x && ytIdOf(x.url) && (!x.dur || (vidKind(x.kind) === 'songs' && !x.artists && !x.artistsChecked)); });
+    if (!need.length || !key) return Promise.resolve(0);
+    var ids = need.map(function (x) { return ytIdOf(x.url); }).filter(function (v, i, a) { return a.indexOf(v) === i; }), info = {}, chunks = [];
+    for (var i = 0; i < ids.length; i += 50) chunks.push(ids.slice(i, i + 50));
+    return Promise.all(chunks.map(function (c) {
+      return fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&fields=items(id,contentDetails/duration,snippet/description)&id=' + c.join(',') + '&key=' + encodeURIComponent(key))
+        .then(function (r) { return r.json(); }).then(function (j) {
+          if (j && j.error) throw new Error(j.error.message || 'YouTube error');
+          (j.items || []).forEach(function (it) { info[it.id] = { dur: isoDur(it.contentDetails && it.contentDetails.duration), artists: descArtists(it.snippet && it.snippet.description) }; });
+        });
+    })).then(function () {
+      var n = 0;
+      need.forEach(function (x) {
+        var d = info[ytIdOf(x.url)]; if (!d) return; var ch = false;
+        if (!x.dur && d.dur) { x.dur = d.dur; ch = true; }
+        if (vidKind(x.kind) === 'songs' && !x.artists) { if (d.artists) x.artists = d.artists; x.artistsChecked = true; ch = true; }
+        if (ch) n++;
+      });
+      return n;
+    });
+  }
+  // Every title: fill what's missing, one write per changed title.
+  function fillYtAll() {
+    var key = ytKey(true); if (!key) return;
+    if (!window.confirm('Fill missing video lengths and song singers from YouTube for every title? This saves each title that changes.')) return;
+    var list = movies.filter(function (m) { return (m.data.videos || []).some(function (x) { return ytIdOf(x.url); }); }), done = 0, changed = 0, i = 0;
+    setStatus('Fetching from YouTube… 0 / ' + list.length);
+    function next() {
+      if (i >= list.length) { setStatus('YouTube details: ' + changed + ' titles updated out of ' + list.length + '. Deploy to show them on the site.'); return; }
+      var m = list[i++], vids = clone(m.data.videos || []);
+      fillYt(vids, key).then(function (n) {
+        done++; if (!n) return;
+        changed++; return db.doc('movies/' + m.id).update({ videos: vids, updatedAt: new Date().toISOString() });
+      }).then(function () { setStatus('Fetching from YouTube… ' + done + ' / ' + list.length + ' · ' + changed + ' updated'); next(); })
+        .catch(function (e) { setStatus('Stopped: ' + (e && e.message || 'YouTube error') + '. ' + changed + ' titles updated so far.'); if (/key/i.test(String(e && e.message))) { try { localStorage.removeItem(YT_KEY_LS); } catch (er) {} } });
+    }
+    next();
+  }
   function hasVideo(d) { return !!safeUrl(d.trailerFileUrl) || (d.videos || []).some(function (x) { return !!safeUrl(x.url); }); }
   function hasSong(d) { return (d.videos || []).some(function (x) { return !!safeUrl(x.url) && vidKind(x.kind) === 'songs'; }); }
   var PB = {
@@ -1220,6 +1289,7 @@ window.ReelAdmin = function (env) {
     }
     if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
+    if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
       sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; fieldF = []; pageNo = 1; }); } } })]));
@@ -1822,8 +1892,13 @@ window.ReelAdmin = function (env) {
       openPersonForm({ onSaved: function (nm) { draft.cast = draft.cast || []; draft.cast.push({ name: nm, role: '' }); touch(); draw(); var l = rows.querySelectorAll('.row'); l = l[l.length - 1]; var r = l && l.querySelector('input'); if (r) r.focus(); } });
     } } }) : null;
     var bname = draft.section === 'TV shows' ? 'TV Shows' : 'Movies';
+    var ytBtn = key === 'videos' ? h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Fill lengths & singers from YouTube', on: { click: function () {
+      var k = ytKey(true); if (!k) return; setStatus('Fetching from YouTube…');
+      fillYt(draft.videos, k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
+        .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
+    } } }) : null;
     var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: '★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
-    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px' }, [extra, add])]), rows, hint]);
+    return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, extra, add])]), rows, hint]);
   }
 
   function renderEditor() {
@@ -1968,7 +2043,7 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'note', text: 'Only upload images you have the rights to use: press-kit art sent or approved by the producer or distributor, or an image under a licence that allows it (TVmaze CC BY-SA images are credited automatically). Do not copy posters from Wikipedia, IMDb or TMDB.' })
     ]));
 
-    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
+    main.appendChild(listEditor('Trailers & songs', 'videos', [{ k: 'kind', label: 'Type', options: VIDEO_KINDS }, { k: 'title', label: 'Title' }, { k: 'url', label: 'YouTube URL' }, { k: 'artists', label: 'Singers / people' }, { k: 'dur', label: 'Length 3:45' }], 'No videos yet. Add the YouTube link for each trailer or song.'));
 
 
     // Buy tickets (films only): booking partner and a link per city. Folded for Older releases and On OTT; a tap opens it.
@@ -2143,7 +2218,7 @@ window.ReelAdmin = function (env) {
     body.cast = (body.cast || []).filter(function (c) { return (c.name || '').trim(); });
     body.videos = (body.videos || []).filter(function (v) { return (v.title || v.url || '').trim(); });
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
-    return fillThumbs(body.videos).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
+    return fillThumbs(body.videos).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();

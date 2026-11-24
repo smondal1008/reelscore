@@ -1722,7 +1722,8 @@
     if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
     (d.videos || []).forEach(function (x) {
       var u = safeUrl(x.url), id = ytId(u);
-      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd });
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
+        artists: String(x.artists || '').trim().slice(0, 120), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
     });
     return out;
   }
@@ -1977,6 +1978,11 @@
     if (y.yt) return h('img', { src: y.thumb && y.thumbHd && w > 400 ? y.thumb : 'https://i.ytimg.com/vi/' + y.yt + '/' + (w > 400 ? 'hqdefault' : 'mqdefault') + '.jpg', alt: '', width: 320, height: 180, loading: 'lazy' });
     var a = artLazy(m, 'banner', 640); return h('span', { class: 'ph', style: a.style, 'data-bg': a.bg });
   }
+  // Under a video card: its singers (or people) and length; the type when neither is known.
+  function vSub(y, can) {
+    var bits = [y.artists, y.dur].filter(Boolean);
+    return h('span', { class: 'note vsub', text: bits.length ? bits.join(' · ') : can ? y.kind : y.kind + ' · link coming' });
+  }
   function vidStage(m, items, i, playing, onClose) {
     var d = m.data, x = items[i], media = null;
     if (playing && x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1',
@@ -2016,8 +2022,8 @@
       if (g.idx.length > 1) kids.push(h('div', { class: 'vgrid' }, g.idx.map(function (i) {
         var y = items[i], sel = i === cur, can = !!(y.yt || y.clip), u = vurl(y);
         return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': sel ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i); } } }, [
-          h('span', { class: 'th' }, [vThumb(m, y, 640), sel && playing ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
+          h('span', { class: 'th' }, [vThumb(m, y, 640), y.dur ? h('span', { class: 'dur', text: y.dur }) : null, sel && playing ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: y.title }), vSub(y, can)
         ]);
       })));
     } else {
@@ -2026,8 +2032,8 @@
       kids.push(h('div', { class: 'vgrid' }, show.map(function (i) {
         var y = items[i], on = i === pl, can = !!(y.yt || y.clip), u = vurl(y);
         return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': on ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i, true); } } }, [
-          h('span', { class: 'th' }, [vThumb(m, y, 640), on ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
+          h('span', { class: 'th' }, [vThumb(m, y, 640), y.dur ? h('span', { class: 'dur', text: y.dur }) : null, on ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: y.title }), vSub(y, can)
         ]);
       })));
       if (g.idx.length > 6) kids.push(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + g.idx.length + ' ' + g.label.toLowerCase(), on: { click: function () { S.vmore[key] = !all; if (!refreshVideos(m.id, g.idx)) { if (!S.vplay) S.vKeep = null; render(true); } } } }));
