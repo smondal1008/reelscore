@@ -747,7 +747,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .tpage > .tp { order: 1; } .tpage > .vstrip { order: 2; } .tpage > .ptabs { order: 3; }
   .tpage > .tsec { order: 4; margin: 28px 16px 0; }
   .tpage > .tside { order: 5; float: none; width: auto; margin: 28px 16px 0; }
-  .tpage > #about, .tpage > #cast, .tpage > #reviews, .tpage > #news { order: 6; }
+  .tpage > #about, .tpage > #cast, .tpage > #reviews, .tpage > #extras, .tpage > #news { order: 6; }
   .tpage > .sect { order: 7; } .tpage > footer.ft { order: 8; }
   .tpage .tp { margin: 8px 12px 0; border-radius: 18px; }
   .tpage .tp .in { padding: 24px 18px 60px; }

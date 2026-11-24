@@ -1497,6 +1497,9 @@
     var act = actionBlock(m, rel, ott);
     var side = h('aside', { class: 'tside', 'aria-label': 'Where to watch and details' }, [act, factsBlock(m), planBlock(m), triviaBlock(m), pollBlock(m), locationsBlock(m), awardsBlock(m)]);
     var vsecs = groups.map(function (g) { return keep && keep.id === g.id && keep._mid === m.id ? keep : vidSection(m, g, items); });
+    // Fan videos (announcements, breakdowns, post-credit) sit below Reviews; the other video sections stay near the top.
+    var fan = null; vsecs = vsecs.filter(function (s) { if (s && s.id === 'extras') { fan = s; return false; } return true; });
+    if (fan) groups.forEach(function (g) { if (g.id === 'extras') fan._n = g.idx.length; });
     var story = storyBlock(m), cast = castBlock(m), reviews = rel ? reviewsBlock(m, rel) : null, news = newsBlock(m);
     if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
     var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
@@ -1529,10 +1532,11 @@
     var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
     put(pageTabs([
       bo ? ['boxoffice', 'Box office', 0] : null
-    ].concat(groups.map(function (g) { return [g.id, g.label, g.idx.length]; })).concat([
+    ].concat(groups.filter(function (g) { return g.id !== 'extras'; }).map(function (g) { return [g.id, g.label, g.idx.length]; })).concat([
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
       reviews ? ['reviews', 'Reviews', nRev] : null,
+      fan ? ['extras', 'Fan videos', fan._n || 0] : null,
       news ? ['news', 'News', 0] : null,
       rc || rs || r ? [(rs || rc || r).id, 'More like this', 0] : null
     ]).filter(Boolean)));
@@ -1540,7 +1544,7 @@
     put(side);
     put(bo);
     vsecs.forEach(put);
-    put(story); put(cast); put(reviews); put(news);
+    put(story); put(cast); put(reviews); put(fan); put(news);
     if (rs) put(rs);
     if (rc) put(rc);
     if (r) put(r);
@@ -2126,7 +2130,7 @@
       var k = x.cat === 'extras' ? 'extras' : /interview/i.test(x.kind) ? 'interviews' : x.cat === 'songs' ? 'songs' : x.cat === 'episodes' ? 'episodes' : 'trailers';
       g[k].push(i);
     });
-    return [['trailers', isTv(m) ? 'Trailers & promos' : 'Trailers'], ['songs', 'Songs'], ['extras', 'Announcements & breakdowns'], ['interviews', 'Interviews'], ['episodes', 'Episodes']]
+    return [['trailers', isTv(m) ? 'Trailers & promos' : 'Trailers'], ['songs', 'Songs'], ['interviews', 'Cast interviews'], ['extras', 'Fan videos'], ['episodes', 'Episodes']]
       .filter(function (k) { return g[k[0]].length; }).map(function (k) { return { id: k[0], label: k[1], idx: g[k[0]] }; });
   }
   function vThumb(m, y, w) {
