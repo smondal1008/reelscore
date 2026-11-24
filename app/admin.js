@@ -1299,6 +1299,7 @@ window.ReelAdmin = function (env) {
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
     if (canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Update box office figures for many films from a CSV file', text: '⬆ Import box office CSV', on: { click: importBoCsv } }));
+    if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Search YouTube for an official trailer for titles in this list that have none', text: '🔎 Find trailers', on: { click: function () { findTrailers(vis); } } }));
     if (!movies.length) { sum.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No titles yet. Use + Add title to create one.' : 'Loading titles…' })); return; }
     if (!total) {
       sum.appendChild(h('div', { class: 'empty' }, ['No titles match. ', h('button', { type: 'button', class: 'btn small', text: 'Clear filters', on: { click: function () { setList(function () { query = ''; langF = ''; yearF = ''; seoF = ''; statusF = 'published'; filter = 'All'; missF = []; fieldF = []; pageNo = 1; }); } } })]));
@@ -1871,6 +1872,93 @@ window.ReelAdmin = function (env) {
   }
   var MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   function normT(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
+  // ---------- Find trailers: YouTube search for titles in the current list that have no trailer ----------
+  // Runs in this browser with the YouTube key kept here. A search costs 100 of YouTube's 10,000 daily units, so one run covers up to 90 titles.
+  // Matches are only suggestions: tick the ones from an official channel (the studio, TV channel or streaming service), then Apply.
+  var OFFICIAL_CH = /(altt|alt ?balaji|jio ?cinema|jio ?hotstar|disney\+? ?hotstar|\bhotstar\b|\bvoot\b|colors ?(tv|marathi|bangla|kannada|gujarati|odia|tamil)?|star ?plus|star ?bharat|star ?jalsha|star ?pravah|star ?vijay|star ?maa|asianet|sony ?(liv|sab|entertainment|tv|marathi|yay)|\bsony\b|\bset india\b|zee ?(5|tv|tamil|telugu|marathi|bangla|kannada|keralam|zindagi|music)?|\bzee\b|netflix|prime ?video|amazon ?mx|mx ?player|\baha\b|hoichoi|sun ?(tv|nxt)|tvf|the viral fever|dice media|pocket aces|ullu|eros ?now|shemaroo|hungama|discovery\+?|sonyliv|&tv|and ?tv|dangal|yash ?raj|dharma|t-series|excel|tips official|saregama|lyca|hombale|mythri|sun pictures|red chillies|applause|banijay|endemol|balaji)/i;
+  function findTrailers(list) {
+    var todo = list.filter(function (m) { return missingTrailer(m.data); });
+    var box = h('div', { class: 'boimp', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Find trailers' });
+    var panel = h('div', { class: 'boimp-in' }); box.appendChild(panel);
+    var stop = false, close = function () { stop = true; box.remove(); document.removeEventListener('keydown', onKey); };
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    var head = function (extra) { return h('div', { class: 'head' }, [h('h2', { text: 'Find trailers' }), h('span', { style: 'display:flex;gap:8px' }, [extra, h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })])]); };
+    var MAX = 90, run = todo.slice(0, MAX);
+    panel.appendChild(head(null));
+    if (!todo.length) { panel.appendChild(h('p', { class: 'note', text: 'Every title in this list already has a trailer.' })); document.body.appendChild(box); return; }
+    panel.appendChild(h('p', { class: 'note', text: todo.length + (todo.length === 1 ? ' title' : ' titles') + ' in this list have no trailer' + (todo.length > MAX ? '. YouTube allows about 95 searches a day, so this run covers the first ' + MAX + '; run it again tomorrow for the rest.' : '.') + ' You pick which matches to keep before anything is saved. Only tick videos from an official channel: the studio, the TV channel or the streaming service.' }));
+    panel.appendChild(h('div', {}, [h('button', { type: 'button', class: 'btn primary', text: 'Search YouTube for ' + run.length + (run.length === 1 ? ' title' : ' titles'), on: { click: start } })]));
+    document.body.appendChild(box);
+    function dec(t) { var x = document.createElement('textarea'); x.innerHTML = t; return x.value; }
+    function words(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(function (w) { return w.length > 1 && ['the', 'and', 'of', 'season', 'part'].indexOf(w) === -1; }); }
+    function rank(m, r) {
+      var vt = dec(r.snippet.title), ch = dec(r.snippet.channelTitle), tw = words(m.data.title), lw = words(vt), hit = tw.filter(function (w) { return lw.indexOf(w) !== -1; }).length;
+      var sc = (tw.length ? hit / tw.length : 0) * 4 + (/trailer|teaser|promo/i.test(vt) ? 2 : 0) + (OFFICIAL_CH.test(ch) ? 2 : 0) - (/reaction|review|explain|fan ?made|spoof|recap|status|edit\b|parody|breakdown|#shorts|full episode|episode \d/i.test(vt) ? 6 : 0);
+      return { id: r.id.videoId, title: vt, ch: ch, sc: sc, full: tw.length && hit === tw.length, kind: /teaser/i.test(vt) ? 'Teaser' : /promo/i.test(vt) && !/trailer/i.test(vt) ? 'Promo' : 'Trailer' };
+    }
+    function start() {
+      var key = ytKey(true); if (!key) return;
+      var rows = run.map(function (m) { return { m: m, res: [], pick: 0, on: false, st: 'wait' }; }), i = 0, quota = false;
+      panel.innerHTML = '';
+      var apply = h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'Searching…' });
+      var prog = h('span', { class: 'note' });
+      panel.appendChild(head(apply));
+      panel.appendChild(h('div', { style: 'margin:4px 0 10px' }, [prog]));
+      var tb = h('tbody'); panel.appendChild(h('div', { class: 'boimp-tbl' }, [h('table', {}, [h('thead', {}, [h('tr', {}, ['', 'Title', 'Video', 'Match · channel'].map(function (x) { return h('th', { text: x }); }))]), tb])]));
+      panel.appendChild(h('p', { class: 'note', text: 'Ticked by default only when the title matches and the channel looks official. Check each channel name; untick anything that is a fan upload, a reaction or a re-upload. Applying adds the video to the title and, if it has no banner, uses the video’s HD frame as the banner.' }));
+      var count = function () { var k = rows.filter(function (x) { return x.on; }).length; apply.textContent = 'Apply ' + k + (k === 1 ? ' trailer' : ' trailers'); apply.disabled = !k || !canWrite; };
+      function drawRow(x) {
+        var r = x.res[x.pick], tr = x.tr || (x.tr = h('tr')); tr.innerHTML = '';
+        var cb = h('input', { type: 'checkbox', checked: x.on, disabled: !r, 'aria-label': 'Keep the match for ' + x.m.data.title, on: { change: function () { x.on = cb.checked; count(); } } });
+        var sel = x.res.length > 1 ? h('select', { class: 'in', style: 'max-width:420px', 'aria-label': 'Other matches for ' + x.m.data.title, on: { change: function () { x.pick = +sel.value; x.on = false; drawRow(x); count(); } } },
+          x.res.map(function (o, k) { return h('option', { value: String(k), selected: k === x.pick, text: o.title + ' — ' + o.ch }); })) : null;
+        tr.appendChild(h('td', {}, [cb]));
+        tr.appendChild(h('td', {}, [h('b', { text: x.m.data.title }), h('div', { class: 'note', text: [x.m.data.section, x.m.data.platform, String(x.m.data.releaseDate || '').slice(0, 4)].filter(Boolean).join(' · ') })]));
+        tr.appendChild(h('td', {}, r ? [h('a', { href: 'https://www.youtube.com/watch?v=' + r.id, target: '_blank', rel: 'noopener', style: 'display:flex;gap:10px;align-items:center;color:inherit' }, [h('img', { src: 'https://i.ytimg.com/vi/' + r.id + '/mqdefault.jpg', alt: '', width: 96, height: 54, style: 'border-radius:6px;flex:none' }), h('span', { text: r.title })]), sel] : [h('span', { class: 'note', text: x.st === 'wait' ? 'Waiting…' : x.st === 'quota' ? 'Not searched: YouTube’s daily limit is used up' : x.st === 'err' ? 'Search failed' : 'No match found' })]));
+        tr.appendChild(h('td', {}, r ? [h('span', { class: 'bostat ' + (x.res[x.pick].full && OFFICIAL_CH.test(r.ch) ? 'ok' : 'warn'), text: r.kind }), h('div', { class: 'note', style: 'margin-top:4px', text: r.ch })] : []));
+        if (!tr.parentNode) tb.appendChild(tr);
+      }
+      rows.forEach(drawRow);
+      function next() {
+        if (stop) return;
+        if (i >= rows.length || quota) { rows.forEach(function (x) { if (x.st === 'wait') { x.st = 'quota'; drawRow(x); } }); prog.textContent = 'Done. ' + rows.filter(function (x) { return x.res.length; }).length + ' of ' + rows.length + ' have a match' + (quota ? '; YouTube’s daily limit ran out, run it again tomorrow for the rest.' : '.'); count(); return; }
+        var x = rows[i++], tv = x.m.data.section === 'TV shows';
+        prog.textContent = 'Searching ' + i + ' of ' + rows.length + '…';
+        var q = x.m.data.title + (tv ? ' official trailer promo' : ' official trailer') + (x.m.data.languages ? ' ' + String(x.m.data.languages).split(/[,;]/)[0] : '');
+        fetch('https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=6&fields=items(id/videoId,snippet(title,channelTitle))&q=' + encodeURIComponent(q) + '&key=' + encodeURIComponent(key))
+          .then(function (r) { return r.json(); }).then(function (j) {
+            if (j && j.error) { if (/quota/i.test(JSON.stringify(j.error))) { quota = true; x.st = 'quota'; } else { x.st = 'err'; } drawRow(x); return; }
+            x.res = (j.items || []).filter(function (r) { return r.id && r.id.videoId; }).map(function (r) { return rank(x.m, r); }).filter(function (o) { return o.sc > 1; }).sort(function (a, b) { return b.sc - a.sc; });
+            x.st = 'done'; x.on = !!x.res[0] && x.res[0].full && OFFICIAL_CH.test(x.res[0].ch) && /trailer|teaser|promo/i.test(x.res[0].title); drawRow(x);
+          }).catch(function () { x.st = 'err'; drawRow(x); }).then(function () { count(); next(); });
+      }
+      next();
+      apply.addEventListener('click', function () {
+        var pick = rows.filter(function (x) { return x.on && x.res[x.pick]; }); if (!pick.length) return;
+        apply.disabled = true; apply.textContent = 'Saving…';
+        var ids = pick.map(function (x) { return x.res[x.pick].id; }), info = {};
+        fetch('https://www.googleapis.com/youtube/v3/videos?part=contentDetails,snippet&fields=items(id,contentDetails/duration,snippet(publishedAt,thumbnails/maxres/url))&id=' + ids.join(',') + '&key=' + encodeURIComponent(key))
+          .then(function (r) { return r.json(); }).then(function (j) { (j.items || []).forEach(function (it) { info[it.id] = it; }); }).catch(function () {})
+          .then(function () {
+            var day = new Date().toLocaleDateString('en-CA');
+            return Promise.all(pick.map(function (x) {
+              var r = x.res[x.pick], it = info[r.id] || {}, hd = !!(it.snippet && it.snippet.thumbnails && it.snippet.thumbnails.maxres);
+              var cur = movies.find(function (m) { return m.id === x.m.id; }) || x.m, d = cur.data;
+              var v = { kind: r.kind, title: 'Official ' + r.kind.toLowerCase(), url: 'https://www.youtube.com/watch?v=' + r.id, channel: r.ch, addedAt: day };
+              var du = isoDur(it.contentDetails && it.contentDetails.duration); if (du) v.dur = du;
+              if (it.snippet && it.snippet.publishedAt) v.publishedAt = it.snippet.publishedAt;
+              if (hd) { v.thumbUrl = 'https://i.ytimg.com/vi/' + r.id + '/maxresdefault.jpg'; v.thumbHd = true; }
+              var up = { videos: (d.videos || []).concat([v]), updatedAt: new Date().toISOString() };
+              if (!safeUrl(d.bannerUrl) && hd) up.bannerUrl = v.thumbUrl;
+              return db.doc('movies/' + x.m.id).update(up);
+            }));
+          }).then(function () { close(); setStatus('Added ' + pick.length + (pick.length === 1 ? ' trailer' : ' trailers') + '. Deploy to show them on the site.'); })
+          .catch(function (e) { apply.disabled = false; count(); setStatus('Saving failed: ' + (e && e.message || 'error')); });
+      });
+    }
+  }
   function importBoCsv() {
     var fileIn = h('input', { type: 'file', accept: '.csv,text/csv', class: 'sr' });
     var box = h('div', { class: 'boimp', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'Import box office CSV' });
