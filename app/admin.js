@@ -2033,6 +2033,15 @@ window.ReelAdmin = function (env) {
       field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers. Shown on the title page.' })
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
+    // Box office (films only): figures in ₹ crore, with the date and where they come from.
+    if (!tvEd) {
+      var crN = function (label, key) { return field(label, key, { placeholder: 'e.g. 812.5', note: '₹ crore' }); };
+      main.appendChild(h('section', { class: 'card', id: 'boxCard' }, [h('h2', {}, ['Box office ', h('span', { class: 'note', text: '(optional · shown on the title page)' })]),
+        h('div', { class: 'grid' }, [crN('India gross', 'boGross'), crN('India nett', 'boNett'), crN('Worldwide gross', 'boWorld'), crN('Latest day · India nett', 'boDay'),
+          field('Figures as of', 'boUpdated', { type: 'date' }),
+          field('Source', 'boSource', { placeholder: 'e.g. Producer announcement' }),
+          field('Source link', 'boUrl', { placeholder: 'https://…', note: 'Shown as a link next to the source.' })])]));
+    }
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
 

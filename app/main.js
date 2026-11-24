@@ -1884,24 +1884,70 @@
       fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 32); })) : null,
       fr.length >= 3 ? null : h('div', { class: 'note' }, ['Their score shows at 3 ratings. ', h('a', { href: '/my-list', text: 'Find people' })])
     ]);
-    return h('section', { class: 'card vstrip', 'aria-label': 'Verdict' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), right]);
+    return h('section', { class: 'card vstrip', 'aria-label': 'Verdict' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), boCall(m) || right]);
   }
 
   // Box office: the tiles are in place; figures come once there's a source for them.
+  // Box office figures entered in Admin (₹ crore). null when none are set.
+  function boData(m) {
+    var d = m.data, n = function (v) { var x = parseFloat(String(v == null ? '' : v).replace(/[,₹\s]|cr(ore)?s?\.?$/ig, '')); return isFinite(x) && x > 0 ? x : null; };
+    var o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
+    return o.gross || o.nett || o.world || o.day ? o : null;
+  }
+  function crore(x) { return x == null ? '₹ — Cr' : '₹' + (x >= 1000 ? Math.round(x).toLocaleString('en-IN') : (Math.round(x * 100) / 100).toLocaleString('en-IN')) + ' Cr'; }
+  var CLUBS = [100, 250, 500, 1000, 1500, 2000];
+  function boSourceLine(bo) {
+    var bits = [];
+    if (bo.updated) bits.push('As of ' + fmtDate(bo.updated, true));
+    var src = bo.source || (bo.url ? (function () { try { return new URL(bo.url).hostname.replace(/^www\./, ''); } catch (e) { return ''; } })() : '');
+    return h('div', { class: 'note' }, [bits.join(''), bits.length && src ? ' · ' : '', src ? 'Source: ' : '', src ? (bo.url ? h('a', { href: bo.url, target: '_blank', rel: 'noopener nofollow', style: 'color:var(--muted)', text: src }) : src) : '', ' · reported figures']);
+  }
+  // Box office: tiles from the Admin figures; "Coming soon" until there are some.
   function boxOfficeBlock(m) {
     if (isTv(m) || isOtt(m) || !released(m)) return null;
-    var live = m.data.section === 'In theatres', dt = String(m.data.releaseDate || '');
-    // Shown while it runs, and for a year after release.
-    if (!live && !(/^\d{4}-\d{2}-\d{2}$/.test(dt) && (new Date(today()) - new Date(dt)) / 864e5 <= 365)) return null;
-    var tiles = [['India gross', 'before taxes'], ['India nett', 'after taxes'], ['Worldwide gross', 'India + overseas'], live ? ['Yesterday · nett', 'day by day'] : ['Overseas gross', 'outside India']];
+    var bo = boData(m), live = m.data.section === 'In theatres', dt = String(m.data.releaseDate || '');
+    // Without figures: shown while it runs, and for a year after release.
+    if (!bo && !live && !(/^\d{4}-\d{2}-\d{2}$/.test(dt) && (new Date(today()) - new Date(dt)) / 864e5 <= 365)) return null;
+    var b = bo || {};
+    var tiles = [['India gross', b.gross, 'before taxes'], ['India nett', b.nett, 'after taxes'], ['Worldwide gross', b.world, 'India + overseas'],
+      live || b.day ? ['Latest day · nett', b.day, 'India'] : ['Overseas gross', b.world && b.gross && b.world > b.gross ? b.world - b.gross : null, 'outside India']];
     return h('section', { class: 'tsec', id: 'boxoffice', 'aria-labelledby': 'h-bo' }, [
-      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-bo' }, [m.data.title + ' box office']), h('span', { class: 'soon', text: 'Coming soon' })]),
+      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-bo' }, [m.data.title + ' box office']), bo ? null : h('span', { class: 'soon', text: 'Coming soon' })]),
       h('div', { class: 'bo-tiles' }, tiles.map(function (t) {
-        return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v', text: '₹ — Cr' }), h('span', { class: 'note', text: t[1] })]);
+        return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v' + (t[1] == null ? '' : ' on'), text: crore(t[1]) }), h('span', { class: 'note', text: t[2] })]);
       })),
-      h('div', { class: 'note', text: live ? 'Collections will show here while it runs in theatres.' : 'Collections will show here.' })
+      bo ? boSourceLine(bo) : h('div', { class: 'note', text: live ? 'Collections will show here while it runs in theatres.' : 'Collections will show here.' })
     ]);
   }
+  // The box office call in the verdict strip: will it reach the next club? Votes live in each person's public verdicts doc (bo).
+  function boCall(m) {
+    var bo = boData(m); if (!bo || !bo.world || m.data.section !== 'In theatres' || isTv(m) || isOtt(m)) return null;
+    var next = CLUBS.filter(function (c) { return c > bo.world; })[0], prev = CLUBS.filter(function (c) { return c <= bo.world; }).pop() || 0;
+    var key = m.id + ':' + (next || 'done'), mine = S.uid && S.verdicts[S.uid] && (S.verdicts[S.uid].bo || {})[key];
+    var y = 0, n = 0;
+    Object.keys(S.verdicts).forEach(function (u) { var x = (S.verdicts[u].bo || {})[key]; if (x === 'y') y++; else if (x === 'n') n++; });
+    var vote = function (val) {
+      if (!needUser() || writing.v) return;
+      var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
+      if (cur.bo[key] === val) delete cur.bo[key]; else cur.bo[key] = val;
+      cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; render();
+      writing.v = true; guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
+    };
+    var pctTo = next ? Math.max(4, Math.min(100, Math.round(100 * (bo.world - prev) / (next - prev)))) : 100;
+    var tot = y + n;
+    return h('div', { class: 'vs-peer vs-bo' }, [
+      h('div', { class: 'kicker' }, [h('span', { style: 'color:#7BD88F', text: '● ' }), 'Box office', bo.updated ? ' · as of ' + fmtDate(bo.updated) : '']),
+      h('div', { class: 'vs-big' }, [h('span', { style: 'font-size:26px;font-weight:700', text: crore(bo.world) }), h('span', { class: 'note', text: 'worldwide' })]),
+      next ? h('div', { class: 'vs-bar', style: 'height:6px' }, [h('span', { style: 'width:' + pctTo + '%;background:var(--accent)' })]) : null,
+      next ? h('div', { style: 'font-size:13px;color:#FFD08A', text: crore(Math.round((next - bo.world) * 10) / 10) + ' to the ₹' + next.toLocaleString('en-IN') + ' Cr club' }) : h('div', { style: 'font-size:13px;color:#FFD08A', text: 'Past the ₹2,000 Cr club' }),
+      next ? h('div', { style: 'font-size:14px;font-weight:700;margin-top:2px', text: 'Will it get there?' }) : null,
+      next ? h('div', { class: 'bocall' }, [['y', 'Yes, it will'], ['n', 'Falls short']].map(function (o) {
+        return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(mine === o[0]), on: { click: function () { vote(o[0]); } } }, [o[1] + (mine && tot ? ' · ' + Math.round(100 * (o[0] === 'y' ? y : n) / tot) + '%' : '')]);
+      })) : null,
+      mine && tot ? h('div', { class: 'note', text: tot + (tot === 1 ? ' call' : ' calls') + ' so far' }) : null
+    ]);
+  }
+
 
   // Videos are split into their own sections: Trailers (a player with every trailer under it), Songs, Interviews and Episodes (grids that play in place).
   function vidGroups(m, items) {

@@ -681,6 +681,8 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .bo-tiles { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .bo-tile { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; display: flex; flex-direction: column; gap: 6px; }
 .bo-v { font-size: 24px; font-weight: 700; color: var(--dim); }
+.bo-v.on { color: var(--text); }
+.bocall { display: flex; gap: 8px; } .bocall .chip { flex: 1 1 0; height: 38px; }
 .vsec .stage { box-shadow: none; }
 .stage .vt2 { font-size: 22px; font-weight: 700; color: var(--text); }
 .vrow { display: flex; gap: 14px; overflow-x: auto; scrollbar-width: thin; padding-bottom: 4px; }
