@@ -1877,10 +1877,39 @@ window.ReelAdmin = function (env) {
           var vid0 = ytIdOf(item.url), prev = h('button', { type: 'button', class: 'vthumb' + (item.thumbHd ? ' hd' : ''), 'aria-label': 'Preview the thumbnail of video ' + (i + 1),
             title: 'Click for a larger preview' + (item.thumbUrl ? (item.thumbHd ? ' (HD)' : ' (small only)') : ''), style: vid0 ? 'background-image:url("https://i.ytimg.com/vi/' + vid0 + '/mqdefault.jpg")' : '',
             on: { click: function () { var u = rows.querySelector('#videos' + i + 'url'); thumbPreview(ytIdOf(u ? u.value : item.url), item); } } });
-          cells.unshift(prev);
+          // ⋮⋮ moves the row: drag it, or focus it and use the arrow keys. The title page shows trailers and songs in this order.
+          var grip = h('button', { type: 'button', class: 'grip', 'aria-label': 'Move video ' + (i + 1) + ' (' + (item.title || item.kind || 'untitled') + '). Use the up and down arrow keys, or drag.', title: 'Drag to reorder', disabled: !canWrite, text: '⋮⋮' });
+          grip.addEventListener('keydown', function (e) {
+            var to = e.key === 'ArrowUp' ? i - 1 : e.key === 'ArrowDown' ? i + 1 : -1;
+            if (to < 0 || to >= arr.length) return;
+            e.preventDefault(); moveRow(i, to); var g = rows.querySelectorAll('.grip')[to]; if (g) g.focus();
+          });
+          grip.addEventListener('mousedown', function () { if (canWrite) rowEl.draggable = true; });
+          grip.addEventListener('touchstart', function () { if (canWrite) rowEl.draggable = true; }, { passive: true });
+          cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells));
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awards' : '') + (key === 'trivia' ? ' trivia' : '') + (av ? ' cast' : '') }, cells);
+        if (key === 'videos') dragRow(rowEl, i);
+        rows.appendChild(rowEl);
+      });
+    }
+    function moveRow(from, to) {
+      var arr = draft[key] || []; if (from === to || from < 0 || to < 0 || from >= arr.length || to >= arr.length) return;
+      arr.splice(to, 0, arr.splice(from, 1)[0]); touch(); draw();
+    }
+    // Drag to reorder (only from the ⋮⋮ handle, so text in the boxes can still be selected).
+    var dragFrom = null;
+    function clearMarks() { rows.querySelectorAll('.row').forEach(function (r) { r.style.boxShadow = ''; }); }
+    function dragRow(row, i) {
+      row.addEventListener('dragstart', function (e) { dragFrom = i; row.style.opacity = '.4'; try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(i)); } catch (x) {} });
+      row.addEventListener('dragend', function () { row.style.opacity = ''; row.draggable = false; dragFrom = null; clearMarks(); });
+      row.addEventListener('dragover', function (e) { if (dragFrom === null) return; e.preventDefault(); var r = row.getBoundingClientRect(), after = e.clientY > r.top + r.height / 2; clearMarks(); row.style.boxShadow = after ? '0 3px 0 var(--accent)' : '0 -3px 0 var(--accent)'; });
+      row.addEventListener('drop', function (e) {
+        e.preventDefault(); if (dragFrom === null) return;
+        var r = row.getBoundingClientRect(), to = i + (e.clientY > r.top + r.height / 2 ? 1 : 0);
+        if (dragFrom < to) to--;
+        var f = dragFrom; dragFrom = null; clearMarks(); moveRow(f, to);
       });
     }
     draw();
@@ -1897,7 +1926,7 @@ window.ReelAdmin = function (env) {
       fillYt(draft.videos, k).then(function (n) { setStatus(n ? 'Filled details for ' + n + (n === 1 ? ' video' : ' videos') + '. Save to keep them.' : 'Nothing missing, or YouTube had no details.'); if (n) { touch(); draw(); } })
         .catch(function (e) { setStatus('YouTube: ' + (e && e.message || 'error')); });
     } } }) : null;
-    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: '★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, extra, add])]), rows, hint]);
   }
 
