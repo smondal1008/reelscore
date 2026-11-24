@@ -261,10 +261,10 @@
     var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub');
     if (sub) sub.textContent = rateNote();
   }
-  function saveReview(mid, text, spoiler) {
+  function saveReview(mid, text, spoiler, where, via) {
     if (!needUser() || writing.r) return;
     var cur = clone(S.reviews[S.uid] || { items: {} }); cur.items = cur.items || {};
-    if (text) cur.items[mid] = { text: text.slice(0, 2000), spoiler: !!spoiler, at: new Date().toISOString() };
+    if (text) { cur.items[mid] = { text: text.slice(0, 2000), spoiler: !!spoiler, at: new Date().toISOString() }; if (where) cur.items[mid].where = where; if (via) cur.items[mid].via = String(via).slice(0, 40); }
     else delete cur.items[mid];
     S.reviews[S.uid] = cur; S.reviewDraft[mid] = undefined; render();
     writing.r = true;
@@ -1464,7 +1464,7 @@
     var v = $('view-title');
     // A pre-rendered page (built for search engines) stays on screen until the catalogue arrives.
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
-    var keep = S.vKeep && S.vKeep.parentNode === v && ((S.vplay && S.vKeep._mid === S.vplay.mid) || (S.vIdle && S.vKeep._mid === S.vIdle.mid)) ? S.vKeep : null;
+    var keep = S.vKeep && S.vKeep.parentNode === v && S.vplay && S.vKeep._mid === S.vplay.mid ? S.vKeep : null;
     Array.prototype.slice.call(v.childNodes).forEach(function (c) { if (c !== keep) v.removeChild(c); });
     if (!keep) S.vKeep = null;
     var put = function (n) { if (!n) return; if (n === keep) { keep = null; return; } if (keep) v.insertBefore(n, keep); else v.appendChild(n); };
@@ -1473,57 +1473,28 @@
     if (!m || (S.vplay && S.vplay.mid !== m.id)) { S.vplay = null; if (S.vKeep && S.vKeep.parentNode) S.vKeep.parentNode.removeChild(S.vKeep); S.vKeep = null; keep = null; }
     if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
     setNoindex(!m && S.loaded);
+    v.classList.remove('tpage');
     if (!S.loaded) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
     if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
     var d = m.data, rel = released(m), ott = isOtt(m);
-    var tags = [h('span', { class: 'tag hot', text: statusLabel(m) })];
-    var npl = npLabel(m); if (npl) tags.splice(1, 0, h('span', { class: 'tag np', text: npl }));
+    v.classList.add('tpage');
+    // Badges: status (with the day count while it runs in theatres), then what's new or the release note.
+    var live = d.section === 'In theatres' && rel && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '');
+    var dayN = live ? Math.floor((new Date(today() + 'T00:00:00') - new Date(d.releaseDate + 'T00:00:00')) / 864e5) + 1 : 0;
+    var tags = [h('span', { class: 'tag hot' + (live ? ' live' : ''), text: live && dayN <= 200 ? '● In theatres · day ' + dayN : statusLabel(m) })];
+    var npl = npLabel(m); if (npl) tags.push(h('span', { class: 'tag np', text: npl }));
     if (d.published === false) tags.unshift(h('span', { class: 'tag', style: 'background:var(--danger);color:#0B0A0F', text: 'Not published · admins only' }));
-    [d.languages, d.genre, [d.runtime, d.certificate].filter(Boolean).join(' · ')].forEach(function (t) { if (t) tags.push(h('span', { class: 'tag', text: t })); });
     if (d.releaseNote) tags.push(h('span', { class: 'tag', text: d.releaseNote }));
-    var bOn = btnOn('title', 'book'), wOn = btnOn('title', 'watch');
-    var actLabel = ott ? (rel ? (wOn ? 'Watch on ' + (d.platform || 'OTT') : null) : 'Remind me') : isOld(m) || isTv(m) ? 'Where to watch' : hasBooking(d) && bOn ? (rel ? 'Book tickets' : 'Advance booking') : safeUrl(d.platformUrl) && wOn ? 'Where to watch' : null;
-    put(titleHero(m, tags, actLabel));
+    put(titleHero(m, tags));
+    put(verdictStrip(m, rel));
 
-    // scores
-    var sc = score(m.id), vs = vset(m), my = myVerdict(m.id);
-    var friendScore = score(m.id, S.mine.following);
-    var overall = h('div', { class: 'scard' }, [
-      h('div', {}, [
-        h('div', { class: 'kicker', text: 'Overall score' }),
-        h('div', { class: 'big', style: 'color:var(--accent);font-size:' + (shownPct(sc) === null ? '34px' : '52px'), text: shownPct(sc) === null ? (rel ? 'Verdicts open' : 'Opens on release') : sc.pct + '%' }),
-        shownPct(sc) !== null ? h('div', { class: 'split', 'aria-hidden': 'true' }, [h('span', { style: 'width:' + (100 * sc.n.a / sc.tot) + '%;background:var(--accent)' }), h('span', { style: 'width:' + (100 * sc.n.b / sc.tot) + '%;background:var(--text)' })]) : null,
-        h('div', { class: 'sub', style: 'margin-top:6px' }, [sc.tot && shownPct(sc) === null ? sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') + ' so far. The score appears after ' + MIN_SHOW + '.' : sc.tot ? vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(' · ') + ' · ' + sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') : (rel ? 'Seen it? Your verdict starts the score.' : 'Verdicts open on ' + fmtDate(d.releaseDate, true) + '.'), ' ', h('a', { href: '/about', style: 'color:var(--muted)', text: 'How scores work' })])
-      ]),
-      rel ? h('div', { role: 'group', 'aria-label': 'Your verdict' }, [
-        h('div', { class: 'kicker', style: 'margin-bottom:8px', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
-        h('div', { class: 'vbtns' }, vs.map(function (x) {
-          return h('button', { type: 'button', class: 'vb ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setVerdict(m.id, x[0]); } } }, [h('b', { text: x[1] }), h('small', { text: x[2] })]);
-        })),
-        // After a verdict: ask friends for theirs. More verdicts make the score worth trusting.
-        my ? h('div', { class: 'sub', style: 'margin-top:10px' }, ['Ask friends who saw it: ',
-          h('a', { href: 'https://wa.me/?text=' + encodeURIComponent('My verdict on ' + d.title + ': ' + (vs.filter(function (x) { return x[0] === my; })[0] || [0, ''])[1] + '. What’s yours? ' + location.origin + movieUrl(m)), target: '_blank', rel: 'noopener', style: 'color:var(--accent);font-weight:600', text: 'Share on WhatsApp' }),
-          navigator.share ? ' · ' : null,
-          navigator.share ? h('a', { href: '#', style: 'color:var(--accent);font-weight:600', text: 'More…', on: { click: function (e) { e.preventDefault(); try { navigator.share({ title: d.title + ' on Reelscore', text: 'What’s your verdict on ' + d.title + '?', url: location.origin + movieUrl(m) }); } catch (er) {} } } }) : null]) : null
-      ]) : h('button', { type: 'button', class: 'btn', 'aria-pressed': String(hasReminder(m.id)), on: { click: function () { toggleRemind(m.id); } } }, [hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me on release'])
-    ]);
-    var fr = friendScore.raters;
-    var friends = h('div', { class: 'scard', style: 'flex:1 1 300px' }, [
-      h('div', {}, [
-        h('div', { class: 'kicker', text: 'People you follow' }),
-        fr.length >= 3 ? h('div', { class: 'big', text: friendScore.pct + '%' }) : h('div', { style: 'font-size:16px;font-weight:600;margin-top:6px', text: fr.length ? fr.length + (fr.length === 1 ? ' person you follow rated it' : ' people you follow rated it') : (S.mine.following.length ? 'None of them have rated it yet' : 'You’re not following anyone yet') }),
-        h('div', { class: 'sub', style: 'margin-top:6px' }, [fr.length >= 3 ? fr.length + ' ratings · Peer Score' : 'Peer Score appears at 3 ratings. ', fr.length >= 3 ? null : h('a', { href: '/my-list', text: 'Find people' })])
-      ]),
-      fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 36); })) : null
-    ]);
-    put(h('div', { class: 'scores', style: 'margin-top:8px' }, [overall, friends]));
-
-    // columns
-    // sections, in the order of the tabs above them
+    var items = vidItems(m), groups = vidGroups(m, items);
+    var bo = boxOfficeBlock(m);
     var act = actionBlock(m, rel, ott);
-    var theatre = keep && keep._mid === m.id ? keep : videosBlock(m);
-    var main = h('div', { class: 'colm' }, [act, aboutBlock(m), castBlock(m), rel ? reviewsBlock(m, rel) : null]); // no Reviews before release
-    var side = h('div', { class: 'cols2' }, [planBlock(m), factsBlock(m)]);
+    var side = h('aside', { class: 'tside', 'aria-label': 'Where to watch and details' }, [act, factsBlock(m), planBlock(m)]);
+    var vsecs = groups.map(function (g) { return keep && keep.id === g.id && keep._mid === m.id ? keep : vidSection(m, g, items); });
+    var story = storyBlock(m), cast = castBlock(m), reviews = rel ? reviewsBlock(m, rel) : null, news = newsBlock(m);
+    if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
     var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
     var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
     if (r) r.id = 'more';
@@ -1549,20 +1520,25 @@
     }).filter(function (o) { return o.shared > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 10).map(function (o) { return o.m; }) : [];
     var rs = similar.length ? rowSection(inList(m.id) ? 'Because it’s on your list' : 'More like ' + d.title, similar, null) : null;
     if (rs) rs.id = 'similar';
-    var nVids = vidItems(m).length, nRev = 0;
+    var nRev = 0;
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
     var nWatch = d.platform ? String(d.platform).split(/\s*[,/&]\s*|\s+and\s+/).filter(Boolean).length : 0;
     put(pageTabs([
-      ['videos', 'Trailers & songs', nVids],
+      bo ? ['boxoffice', 'Box office', 0] : null
+    ].concat(groups.map(function (g) { return [g.id, g.label, g.idx.length]; })).concat([
       act ? ['watch', 'Where to watch', nWatch] : null,
       ['cast', 'Cast & crew', 0],
-      released(m) ? ['reviews', 'Reviews', nRev] : null,
-      r ? ['more', 'More like this', 0] : null
-    ].filter(Boolean)));
-    put(theatre);
-    put(h('div', { class: 'cols' }, [main, side]));
-    if (rc) put(rc);
+      reviews ? ['reviews', 'Reviews', nRev] : null,
+      news ? ['news', 'News', 0] : null,
+      rc || rs || r ? [(rs || rc || r).id, 'More like this', 0] : null
+    ]).filter(Boolean)));
+    // Main sections and the sidebar are direct children of the page, so a video playing in one of them stays put when the page redraws.
+    put(side);
+    put(bo);
+    vsecs.forEach(put);
+    put(story); put(cast); put(reviews); put(news);
     if (rs) put(rs);
+    if (rc) put(rc);
     if (r) put(r);
     put(footer());
   }
@@ -1588,7 +1564,7 @@
     return nav;
   }
 
-  function titleHero(m, tags, actLabel) {
+  function titleHero(m, tags) {
     var d = m.data, clip = safeUrl(d.trailerFileUrl);
     var playing = !!(S.tplay && S.tplay.id === m.id && clip);
     if (playing && S.tpNode && S.tpNode._mid === m.id) {
@@ -1605,9 +1581,9 @@
       video.addEventListener('error', function () { toast('This clip couldn’t play.'); stopTitleTrailer(); });
     }
     var playBtn = playing
-      ? h('button', { type: 'button', class: 'btn lg light', id: 'tPlay', on: { click: toggleTitlePause } }, ['❚❚  Pause'])
-      : clip ? h('button', { type: 'button', class: 'btn lg light', on: { click: function () { startTitleTrailer(m.id); } } }, ['▶  Play trailer'])
-      : vidItems(m).some(function (x) { return x.yt; }) ? h('button', { type: 'button', class: 'btn lg light', on: { click: function () { var it = vidItems(m), k = 0; it.some(function (x, i) { if (x.yt) { k = i; return true; } }); playVid(m.id, k, true); } } }, ['▶  Play trailer'])
+      ? h('button', { type: 'button', class: 'btn lg primary', id: 'tPlay', on: { click: toggleTitlePause } }, ['❚❚  Pause'])
+      : clip ? h('button', { type: 'button', class: 'btn lg primary', on: { click: function () { startTitleTrailer(m.id); } } }, ['▶  Watch trailer'])
+      : vidItems(m).some(function (x) { return x.yt; }) ? h('button', { type: 'button', class: 'btn lg primary', on: { click: function () { var it = vidItems(m), k = -1; it.some(function (x, i) { if (x.yt && x.cat === 'trailers') { k = i; return true; } }); if (k < 0) it.some(function (x, i) { if (x.yt) { k = i; return true; } }); playVid(m.id, k, true); } } }, ['▶  Watch trailer'])
       : trailerBtn(m);
     var node = h('section', { class: 'tp art' + (playing ? ' playing' : ''), style: art(m, 'banner', 1920) }, [
       video,
@@ -1628,12 +1604,15 @@
           h('div', { class: 'tags' }, tags),
           h('h1', { class: 'display ttl', style: 'font-size:clamp(44px,6vw,84px)', text: d.title }),
           d.subtitle ? h('div', { class: 'display sbt', style: 'font-size:clamp(24px,3vw,36px);color:#D9D5DF', text: d.subtitle }) : null,
-          d.synopsis ? h('p', { class: 'lede', style: 'max-width:680px', text: d.synopsis }) : null,
+          (function () {
+            var y = String(d.releaseDate || '').slice(0, 4), bits = [isTv(m) ? tvYears(d) : y, d.languages, d.genre, d.runtime].filter(Boolean);
+            return bits.length || d.certificate ? h('p', { class: 'tmeta' }, [bits.join(' · '), d.certificate ? h('span', { class: 'cert', text: d.certificate }) : null]) : null;
+          })(),
+          heroLine(d) ? h('p', { class: 'lede hook', text: heroLine(d) }) : null,
           srcCredit(d),
           h('div', { class: 'acts2' }, [
             playBtn,
             playing ? h('button', { type: 'button', class: 'roundadd', id: 'tMute', 'aria-label': S.tplay.muted ? 'Unmute' : 'Mute', text: S.tplay.muted ? '🔇' : '🔊', on: { click: toggleTitleMute } }) : null,
-            actLabel === null ? null : h('a', { class: 'btn lg primary', href: '#watch', on: { click: function (e) { e.preventDefault(); var t = $('watch'); if (t) t.scrollIntoView({ behavior: 'smooth' }); } } }, [actLabel]),
             listBtn(m),
             playing ? null : h('button', { type: 'button', class: 'btn lg glass', on: { click: function () { copyText(shareText(m), 'Copied a link-ready message'); } } }, ['Share'])
           ])
@@ -1669,8 +1648,23 @@
       ta.value = S.reviewDraft[m.id] !== undefined ? S.reviewDraft[m.id] : (myR ? myR.text : '');
       ta.addEventListener('input', function () { S.reviewDraft[m.id] = ta.value; });
       var sp = h('input', { type: 'checkbox', id: 'rvSp', checked: !!(myR && myR.spoiler), style: 'width:18px;height:18px;accent-color:var(--accent)' });
+      // Where you watched it: Theatre or OTT (and which service). TV shows skip this.
+      S.rvWhere = S.rvWhere || {};
+      var tvT = isTv(m), plats = String(m.data.platform || '').split(/\s*[,/&]\s*|\s+and\s+/).map(function (x) { return x.trim(); }).filter(Boolean);
+      var wh = S.rvWhere[m.id] || (S.rvWhere[m.id] = { where: myR && myR.where ? myR.where : (isOtt(m) ? 'ott' : ''), via: myR && myR.via ? myR.via : (isOtt(m) && plats[0]) || '' });
+      var whereRow = tvT ? null : h('div', { class: 'rvwhere', role: 'group', 'aria-label': 'Where did you watch it?' }, [
+        h('span', { class: 'note', text: 'Where did you watch it?' }),
+        isOtt(m) ? null : h('button', { type: 'button', class: 'chip', 'aria-pressed': String(wh.where === 'theatre'), on: { click: function () { wh.where = wh.where === 'theatre' ? '' : 'theatre'; render(true); } } }, [icon('screen', 15), ' Theatre']),
+        h('button', { type: 'button', class: 'chip', 'aria-pressed': String(wh.where === 'ott'), on: { click: function () { wh.where = wh.where === 'ott' ? '' : 'ott'; if (!wh.via && plats.length === 1) wh.via = plats[0]; render(true); } } }, [icon('tv', 15), ' OTT']),
+        wh.where === 'ott' ? (function () {
+          var opts = plats.concat(['Other']).filter(function (x, i, a) { return a.indexOf(x) === i; });
+          var sel = h('select', { class: 'in', 'aria-label': 'Which service', style: 'width:auto;height:34px;border-radius:17px' }, [h('option', { value: '', text: 'Which service? (optional)' })].concat(opts.map(function (o) { return h('option', { value: o, text: o, selected: wh.via === o }); })));
+          sel.addEventListener('change', function () { wh.via = sel.value; });
+          return sel;
+        })() : null
+      ]);
       box.appendChild(h('div', { class: 'field' }, [
-        h('label', { class: 'l', for: 'rvText', text: myR ? 'Your review' : 'Write a review' }), ta,
+        h('label', { class: 'l', for: 'rvText', text: myR ? 'Your review' : 'Write a review' }), ta, whereRow,
         h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px' }, [
           h('label', { style: 'display:flex;align-items:center;gap:8px;font-size:14px;color:var(--muted)' }, [sp, 'Contains spoilers']),
           h('span', { style: 'display:flex;gap:8px' }, [
@@ -1678,7 +1672,7 @@
             h('button', { type: 'button', class: 'btn small primary', text: myR ? 'Update review' : 'Post review', on: { click: function () {
               var t = ta.value.trim(); if (!t) { toast('Write something first.'); return; }
               if (!myVerdict(m.id)) { toast('Pick a verdict first.'); return; }
-              saveReview(m.id, t, sp.checked);
+              saveReview(m.id, t, sp.checked, wh.where, wh.where === 'ott' && wh.via !== 'Other' ? wh.via : '');
             } } })
           ])
         ])
@@ -1705,6 +1699,7 @@
       box.appendChild(h('article', { class: 'rv' }, [
         h('div', { class: 'who' }, [
           avatarEl(r.uid), personEl(r.uid), lab ? h('span', { class: 'vtag', style: 'background:' + VCOL[vv], text: lab[1].toUpperCase() }) : null,
+          r.it.where === 'theatre' || r.it.where === 'ott' ? h('span', { class: 'wtag' }, [icon(r.it.where === 'theatre' ? 'screen' : 'tv', 13), r.it.where === 'theatre' ? 'Watched in theatre' : 'Watched on ' + (r.it.via || 'OTT')]) : null,
           r.it.spoiler ? h('span', { class: 'miss', text: 'SPOILER' }) : null,
           h('span', { class: 'note', style: 'margin-left:auto', text: (r.it.at || '').slice(0, 10) }),
           r.uid !== S.uid ? h('button', { type: 'button', class: 'btn small', text: following(r.uid) ? 'Following' : 'Follow', 'aria-pressed': String(following(r.uid)), on: { click: function () { toggleFollow(r.uid); } } }) : null
@@ -1819,88 +1814,13 @@
     S.vplay = { mid: mid, i: i }; S.vKeep = null; S.vIdle = null;
     if (S.tplay) { if (S.tpVideo) { try { S.tpVideo.pause(); } catch (e) {} } S.tplay = null; S.tpNode = null; S.tpVideo = null; }
     render(true);
-    if (scroll) setTimeout(function () { var t = $('videos'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
+    if (scroll) setTimeout(function () { var t = document.querySelector('.vsec.playing') || $('trailers'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   }
   function stepVid(m, dir, play) {
     var it = vidItems(m), n = it.length; if (!n) return;
     var cur = (S.vsel && S.vsel[m.id]) || 0, k = cur;
     for (var t = 0; t < n; t++) { k = (k + dir + n) % n; if (it[k].yt || it[k].clip) break; }
     if (play) playVid(m.id, k); else { S.vsel = S.vsel || {}; S.vsel[m.id] = k; S.vplay = null; S.vKeep = null; S.vIdle = null; render(true); }
-  }
-  function videosBlock(m) {
-    var d = m.data, items = vidItems(m), n = items.length;
-    var head = function (extra) { return h('div', { class: 'thx-h' }, [h('h2', { id: 'h-vid', text: 'Trailers & songs' })].concat(extra || [])); };
-    if (!n) return h('section', { class: 'thx', id: 'videos', 'aria-labelledby': 'h-vid' }, [head(), h('div', { class: 'note', text: 'No trailers or songs yet.' })]);
-    S.vsel = S.vsel || {}; S.vf = S.vf || {};
-    var cur = Math.min(S.vsel[m.id] || 0, n - 1), x = items[cur];
-    var playing = !!(S.vplay && S.vplay.mid === m.id && S.vplay.i === cur && (x.yt || x.clip));
-    var cats = [['all', 'All'], ['trailers', 'Trailers'], ['songs', 'Songs'], ['episodes', 'Episodes'], ['more', 'More']].map(function (c) {
-      return [c[0], c[1], c[0] === 'all' ? n : items.filter(function (y) { return y.cat === c[0]; }).length];
-    }).filter(function (c) { return c[2]; });
-    var vf = S.vf[m.id] || 'all'; if (!cats.some(function (c) { return c[0] === vf; })) vf = 'all';
-    var chips = cats.length > 2 ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter videos' }, cats.map(function (c) {
-      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === c[0]), text: c[1] + ' · ' + c[2], on: { click: function () { S.vf[m.id] = c[0]; if (!S.vplay) { S.vKeep = null; S.vIdle = null; } render(true); } } });
-    })) : null;
-
-    // the stage
-    var media = null;
-    if (playing && x.yt) {
-      media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1',
-        title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
-    } else if (playing && x.clip) {
-      media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true, preload: 'auto' });
-      media.setAttribute('aria-label', d.title + ' · ' + x.title);
-      setTimeout(function () { safePlay(media); }, 0);
-    }
-    // A YouTube video sits in the page as a real (lazy) embed even before it is played, so search engines can see it;
-    // the section is then kept across re-renders so a video started in that player isn't interrupted.
-    var idle = false; // was: a lazy YouTube embed before play; now a thumbnail until tapped (faster pages)
-    if (idle) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?rel=0&playsinline=1&modestbranding=1', loading: 'lazy',
-      title: d.title + ' · ' + x.title, allow: 'encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
-    var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/hqdefault.jpg")' : art(m, 'banner');
-    var stage = h('div', { class: 'stage' + (playing || idle ? ' on' : ''), style: playing ? '' : bg }, playing || idle ? [media] : [
-      h('div', { class: 'shade' }),
-      h('div', { class: 'top' }, [h('span', { class: 'kb', text: String(x.kind).toUpperCase() }), h('span', { class: 'pos', text: (cur + 1) + ' / ' + n })]),
-      x.yt || x.clip
-        ? h('button', { type: 'button', class: 'big', 'aria-label': 'Play ' + x.title, on: { click: function () { playVid(m.id, cur); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' })])
-        : h('div', { class: 'big off', text: x.url ? '' : 'Link coming' }),
-      h('div', { class: 'bot' }, [h('div', { class: 'display t', text: x.title }), h('div', { class: 'note', style: 'color:#E4E0D8', text: d.title + ' · ' + x.kind })])
-    ]);
-    var nextI = cur + 1 < n ? cur + 1 : -1;
-    var info = h('div', { class: 'thx-i' }, [
-      h('div', { style: 'min-width:0' }, [
-        h('h3', { text: x.title }),
-        h('div', { class: 'note', text: nextI >= 0 ? 'Next: ' + items[nextI].title + ' · ' + items[nextI].kind : x.kind })
-      ]),
-      h('div', { class: 'thx-c' }, [
-        videoUrl(m, x.yt) ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Share ' + x.title, text: 'Share', on: { click: function () { var u = videoUrl(m, x.yt); shareVideo(m, videoPaths(m.data).filter(function (p) { return p.yt === x.yt; })[0], u); } } }) : null,
-        n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Previous video', text: '‹', on: { click: function () { stepVid(m, -1, playing); } } }) : null,
-        n > 1 ? h('button', { type: 'button', class: 'btn sq', 'aria-label': 'Next video', text: '›', on: { click: function () { stepVid(m, 1, playing); } } }) : null,
-      ])
-    ]);
-    var shown = items.map(function (y, i) { return [y, i]; }).filter(function (p) { return vf === 'all' || p[0].cat === vf; });
-    var list = n > 1 ? h('aside', { class: 'thx-l', 'aria-label': 'Playlist' }, [
-      h('div', { class: 'thx-lh' }, [h('b', { text: 'Playlist' }), h('span', { class: 'note', text: shown.length + ' of ' + n + (n === 1 ? ' video' : ' videos') })]),
-      h('div', { class: 'thx-ls' }, shown.map(function (p) {
-        var y = p[0], i = p[1], sel = i === cur, can = !!(y.yt || y.clip);
-        var th = y.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + y.yt + '/mqdefault.jpg', alt: '', width: 320, height: 180, loading: 'lazy' }) : h('span', { class: 'ph', style: artLazy(m, 'banner', 640).style, 'data-bg': artLazy(m, 'banner', 640).bg });
-        return h('button', { type: 'button', class: 'pli', 'aria-current': sel ? 'true' : 'false', disabled: !can, on: { click: function () { playVid(m.id, i); } } }, [
-          h('span', { class: 'th' }, [th, h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
-          h('span', { class: 'tx' }, [
-            h('span', { class: 'bd' + (sel ? ' on' : ''), text: sel ? (playing ? 'NOW PLAYING' : 'SELECTED') : String(i + 1).padStart(2, '0') }),
-            h('span', { class: 'tt', text: y.title }),
-            h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
-          ])
-        ]);
-      }))
-    ]) : null;
-    var sec = h('section', { class: 'thx', id: 'videos', 'aria-labelledby': 'h-vid' }, [
-      head([chips]),
-      h('div', { class: 'thx-g' }, [h('div', { class: 'thx-p' }, [stage, info]), list])
-    ]);
-    sec._mid = m.id;
-    S.vKeep = playing || idle ? sec : null; S.vIdle = idle ? { mid: m.id } : null;
-    return sec;
   }
   function epText(n) { n = String(n || '').trim(); return n ? n + (n === '1' ? ' episode' : ' episodes') : ''; }
   // Plain-language summary written from the title's facts (app/about.js; the pre-rendered page uses the same text).
@@ -1912,16 +1832,218 @@
       platform: d.platform, director: d.director, cast: (d.cast || []).filter(function (c) { return c && c.name; }), verdicts: { pct: sc.pct, tot: sc.tot } });
     return h('section', { class: 'card', id: 'about' }, [h('h2', { text: 'About ' + d.title }), h('p', { class: 'about', text: text })]);
   }
+  // ---------- title page blocks (2026 redesign) ----------
+  // Small inline icons; static markup only.
+  var ICONS = {
+    screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
+    tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
+    skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
+    thumb: '<path d="M7 10v10H4V10zM7 10l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/>'
+  };
+  function icon(name, size) {
+    var s = h('span', { class: 'ic', 'aria-hidden': 'true' });
+    s.innerHTML = '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>';
+    return s;
+  }
+  function vIconName(m, k) { return k === 'c' ? 'skip' : isOtt(m) || isTv(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
+  var SPLITCOL = { a: 'var(--accent)', b: '#7FB2FF', c: '#6B6577' };
+
+  // Score, your verdict, and what people you follow said: one strip under the banner.
+  function verdictStrip(m, rel) {
+    var d = m.data, sc = score(m.id), vs = vset(m), my = myVerdict(m.id), pct = shownPct(sc);
+    var left = h('div', { class: 'vs-score' }, [
+      h('div', { class: 'kicker', text: 'Reelscore verdict' }),
+      h('div', { class: 'vs-big' }, [
+        h('span', { class: 'big', style: pct === null ? 'font-size:30px' : '', text: pct === null ? (rel ? 'Verdicts open' : 'Opens on release') : pct + '%' }),
+        pct !== null ? h('span', { class: 'vs-cap', text: 'say it’s worth watching' }) : null
+      ]),
+      pct !== null ? h('div', { class: 'vs-bar', role: 'img', 'aria-label': vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(', ') },
+        vs.map(function (x) { return h('span', { style: 'width:' + (100 * sc.n[x[0]] / sc.tot) + '%;background:' + SPLITCOL[x[0]] }); })) : null,
+      h('div', { class: 'vs-leg' }, (pct !== null ? vs.map(function (x) {
+        return h('span', { style: 'color:' + SPLITCOL[x[0]] }, [icon(vIconName(m, x[0]), 14), h('span', { class: 'note', text: x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%' })]);
+      }) : []).concat([h('span', { class: 'note' }, [sc.tot && pct === null ? sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts') + ' so far · the score shows at ' + MIN_SHOW : pct !== null ? sc.tot + ' verdicts' : rel ? 'Seen it? Your verdict starts the score' : 'Verdicts open on ' + fmtDate(d.releaseDate, true),
+        ' · ', h('a', { href: '/about', style: 'color:var(--muted)', text: 'How scores work' })])]))
+    ]);
+    var mid = rel ? h('div', { class: 'vs-mine', role: 'group', 'aria-label': 'Your verdict' }, [
+      h('div', { class: 'kicker', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
+      h('div', { class: 'vbtns' }, vs.map(function (x) {
+        return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setVerdict(m.id, x[0]); } } },
+          [h('span', { class: 'vi' }, [icon(vIconName(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
+      })),
+      my ? h('a', { href: '#reviews', class: 'vs-link', text: 'Add a review to your verdict →', on: { click: function (e) { var t = $('reviews'); if (!t) return; e.preventDefault(); t.scrollIntoView({ behavior: 'smooth', block: 'start' }); setTimeout(function () { var ta = $('rvText'); if (ta) ta.focus({ preventScroll: true }); }, 400); } } }) : null
+    ]) : h('div', { class: 'vs-mine' }, [
+      h('div', { class: 'kicker', text: 'Releases ' + fmtDate(d.releaseDate, true) }),
+      h('button', { type: 'button', class: 'btn', 'aria-pressed': String(hasReminder(m.id)), on: { click: function () { toggleRemind(m.id); } } }, [hasReminder(m.id) ? '🔔 Reminder set' : 'Remind me on release'])
+    ]);
+    var fs = score(m.id, S.mine.following), fr = fs.raters;
+    var right = h('div', { class: 'vs-peer' }, [
+      h('div', { class: 'kicker', text: 'People you follow' }),
+      fr.length >= 3 ? h('div', { class: 'vs-big' }, [h('span', { class: 'big', style: 'font-size:34px', text: fs.pct + '%' }), h('span', { class: 'vs-cap', text: fr.length + ' ratings' })])
+        : h('div', { style: 'font-size:15px;font-weight:600', text: fr.length ? fr.length + (fr.length === 1 ? ' person you follow rated it' : ' people you follow rated it') : (S.mine.following.length ? 'None of them have rated it yet' : 'You’re not following anyone yet') }),
+      fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 32); })) : null,
+      fr.length >= 3 ? null : h('div', { class: 'note' }, ['Their score shows at 3 ratings. ', h('a', { href: '/my-list', text: 'Find people' })])
+    ]);
+    return h('section', { class: 'card vstrip', 'aria-label': 'Verdict' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), right]);
+  }
+
+  // Box office: the tiles are in place; figures come once there's a source for them.
+  function boxOfficeBlock(m) {
+    if (isTv(m) || isOtt(m) || !released(m)) return null;
+    var live = m.data.section === 'In theatres', dt = String(m.data.releaseDate || '');
+    // Shown while it runs, and for a year after release.
+    if (!live && !(/^\d{4}-\d{2}-\d{2}$/.test(dt) && (new Date(today()) - new Date(dt)) / 864e5 <= 365)) return null;
+    var tiles = [['India gross', 'before taxes'], ['India nett', 'after taxes'], ['Worldwide gross', 'India + overseas'], live ? ['Yesterday · nett', 'day by day'] : ['Overseas gross', 'outside India']];
+    return h('section', { class: 'tsec', id: 'boxoffice', 'aria-labelledby': 'h-bo' }, [
+      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-bo' }, [m.data.title + ' box office']), h('span', { class: 'soon', text: 'Coming soon' })]),
+      h('div', { class: 'bo-tiles' }, tiles.map(function (t) {
+        return h('div', { class: 'bo-tile' }, [h('span', { class: 'kicker', text: t[0] }), h('span', { class: 'bo-v', text: '₹ — Cr' }), h('span', { class: 'note', text: t[1] })]);
+      })),
+      h('div', { class: 'note', text: live ? 'Collections will show here while it runs in theatres.' : 'Collections will show here.' })
+    ]);
+  }
+
+  // Videos are split into their own sections: Trailers (a player with every trailer under it), Songs, Interviews and Episodes (grids that play in place).
+  function vidGroups(m, items) {
+    var g = { trailers: [], songs: [], interviews: [], episodes: [] };
+    items.forEach(function (x, i) {
+      var k = /interview/i.test(x.kind) ? 'interviews' : x.cat === 'songs' ? 'songs' : x.cat === 'episodes' ? 'episodes' : 'trailers';
+      g[k].push(i);
+    });
+    return [['trailers', isTv(m) ? 'Trailers & promos' : 'Trailers'], ['songs', 'Songs'], ['interviews', 'Interviews'], ['episodes', 'Episodes']]
+      .filter(function (k) { return g[k[0]].length; }).map(function (k) { return { id: k[0], label: k[1], idx: g[k[0]] }; });
+  }
+  function vThumb(m, y, w) {
+    if (y.yt) return h('img', { src: y.thumb && y.thumbHd && w > 400 ? y.thumb : 'https://i.ytimg.com/vi/' + y.yt + '/' + (w > 400 ? 'hqdefault' : 'mqdefault') + '.jpg', alt: '', width: 320, height: 180, loading: 'lazy' });
+    var a = artLazy(m, 'banner', 640); return h('span', { class: 'ph', style: a.style, 'data-bg': a.bg });
+  }
+  function vidStage(m, items, i, playing, onClose) {
+    var d = m.data, x = items[i], media = null;
+    if (playing && x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1',
+      title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+    else if (playing && x.clip) {
+      media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true, preload: 'auto' });
+      media.setAttribute('aria-label', d.title + ' · ' + x.title);
+      setTimeout(function () { safePlay(media); }, 0);
+    }
+    var bg = x.yt ? 'background-image:url("https://i.ytimg.com/vi/' + x.yt + '/' + (x.thumbHd ? 'maxresdefault' : 'hqdefault') + '.jpg")' : art(m, 'banner');
+    var stage = h('div', { class: 'stage' + (playing ? ' on' : ''), style: playing ? '' : bg }, playing ? [media] : [
+      h('div', { class: 'shade' }),
+      h('div', { class: 'top' }, [h('span', { class: 'kb', text: String(x.kind).toUpperCase() })]),
+      x.yt || x.clip ? h('button', { type: 'button', class: 'big', 'aria-label': 'Play ' + x.title, on: { click: function () { playVid(m.id, i); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' })])
+        : h('div', { class: 'big off', text: 'Link coming' })
+    ]);
+    var vp = videoPaths(d).filter(function (p) { return p.yt === x.yt; })[0];
+    var info = h('div', { class: 'thx-i' }, [
+      h('div', { style: 'min-width:0' }, [h('div', { class: 'kicker', style: 'color:var(--accent)', text: playing ? 'Now playing' : x.kind }), h('h3', { text: x.title })]),
+      h('div', { class: 'thx-c' }, [
+        vp ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Share ' + x.title, text: 'Share', on: { click: function () { shareVideo(m, vp, movieUrl(m) + vp.path); } } }) : null,
+        onClose ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Close player', text: 'Close', on: { click: onClose } }) : null
+      ])
+    ]);
+    return [stage, info];
+  }
+  function vidSection(m, g, items) {
+    S.vsel = S.vsel || {}; S.vmore = S.vmore || {};
+    var key = m.id + ':' + g.id, pl = S.vplay && S.vplay.mid === m.id && g.idx.indexOf(S.vplay.i) !== -1 ? S.vplay.i : -1;
+    var playing = pl !== -1 && !!(items[pl].yt || items[pl].clip);
+    var kids = [h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-' + g.id }, [m.data.title + ' ' + g.label.toLowerCase(), ' ', h('span', { class: 'cnt', text: String(g.idx.length) })])])];
+    var stop = function () { S.vplay = null; S.vKeep = null; render(true); };
+    var vurl = function (y) { return y.yt ? videoUrl(m, y.yt) : ''; };
+    if (g.id === 'trailers') {
+      var cur = playing ? pl : (g.idx.indexOf(S.vsel[key]) !== -1 ? S.vsel[key] : g.idx[0]);
+      kids = kids.concat(vidStage(m, items, cur, playing, null));
+      if (g.idx.length > 1) kids.push(h('div', { class: 'vrow' }, g.idx.map(function (i) {
+        var y = items[i], sel = i === cur, can = !!(y.yt || y.clip), u = vurl(y);
+        return h(u ? 'a' : 'button', { class: 'vcard sm', href: u || null, type: u ? null : 'button', 'aria-current': sel ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i); } } }, [
+          h('span', { class: 'th' }, [vThumb(m, y, 320), sel && playing ? h('span', { class: 'pl', text: 'Playing' }) : null]),
+          h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
+        ]);
+      })));
+    } else {
+      if (pl !== -1) kids = kids.concat(vidStage(m, items, pl, playing, stop));
+      var all = !!S.vmore[key], show = all ? g.idx : g.idx.slice(0, 6);
+      kids.push(h('div', { class: 'vgrid' }, show.map(function (i) {
+        var y = items[i], on = i === pl, can = !!(y.yt || y.clip), u = vurl(y);
+        return h(u ? 'a' : 'button', { class: 'vcard', href: u || null, type: u ? null : 'button', 'aria-current': on ? 'true' : 'false', 'aria-disabled': can ? null : 'true', on: { click: function (e) { if (!can) return; e.preventDefault(); playVid(m.id, i, true); } } }, [
+          h('span', { class: 'th' }, [vThumb(m, y, 640), on ? h('span', { class: 'pl', text: 'Playing' }) : h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
+          h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
+        ]);
+      })));
+      if (g.idx.length > 6) kids.push(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + g.idx.length + ' ' + g.label.toLowerCase(), on: { click: function () { S.vmore[key] = !all; if (!S.vplay) S.vKeep = null; render(true); } } }));
+    }
+    var sec = h('section', { class: 'tsec vsec' + (playing ? ' playing' : ''), id: g.id, 'aria-labelledby': 'h-' + g.id }, kids);
+    sec._mid = m.id;
+    if (playing) S.vKeep = sec;
+    return sec;
+  }
+
+  // Story: the synopsis, in full. The banner shows the one-line hook instead.
+  function storyBlock(m) {
+    var d = m.data, text = String(d.synopsis || '').trim();
+    if (!text && window.RS_ABOUT) { var a = aboutBlock(m); return a ? (a.classList.add('tsec'), a.classList.remove('card'), a) : null; }
+    if (!text) return null;
+    return h('section', { class: 'tsec', id: 'about' }, [h('h2', { text: 'Story' }), h('p', { class: 'story', text: text })]);
+  }
+
+  // Cast & crew: the two leads large, key crew by role, then everyone else.
   function castBlock(m) {
-    var cast = m.data.cast || [];
-    return h('section', { class: 'card', id: 'cast' }, [h('h2', { text: 'Cast & crew' }),
-      cast.length ? h('div', { class: 'castg' }, cast.map(function (c, i) {
-        var pk = personSlug(c.name), ph = personPhotoUrl(c.name);
-        var face = ph ? h('img', { src: ph, alt: '', class: 'c', style: 'object-fit:cover;background:#2E2A38' })
-          : h('span', { class: 'c', style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
-        var kids = [face, h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), h('span', { class: 'note', text: [c.role || '', isTv(m) ? epText(c.episodes) : '', isTv(m) ? c.year || '' : ''].filter(Boolean).join(' · ') })];
-        return pk ? h('a', { class: 'cp', href: personUrl(c.name), 'aria-label': c.name + (c.role ? ', ' + c.role : '') + ' — see all titles' }, kids) : h('div', {}, kids);
-      })) : h('div', { class: 'note', text: 'Cast and crew not added yet.' })]);
+    var d = m.data, all = (d.cast || []).filter(function (c) { return c && c.name; }), tv = isTv(m);
+    var crew = all.filter(function (c) { return CREW_RE.test(c.role || ''); });
+    var actors = all.filter(function (c) { return !CREW_RE.test(c.role || ''); });
+    String(d.director || '').split(/,| and /).map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (nm) {
+      if (!crew.some(function (c) { return personSlug(c.name) === personSlug(nm); })) crew.unshift({ name: nm, role: tv ? 'Created by' : 'Director' });
+    });
+    var box = h('section', { class: 'tsec', id: 'cast', 'aria-labelledby': 'h-cast' }, [h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-cast', text: 'Cast & crew' }),
+      all.length ? h('span', { class: 'note', text: actors.length + ' cast · ' + crew.length + ' crew' }) : null])]);
+    if (!actors.length && !crew.length) { box.appendChild(h('div', { class: 'note', text: 'Cast and crew not added yet.' })); return box; }
+    var face = function (c, i, cls) {
+      var ph = personPhotoUrl(c.name);
+      return ph ? h('img', { src: ph, alt: '', class: cls, loading: 'lazy' }) : h('span', { class: cls, style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
+    };
+    var link = function (c, cls, kids, label) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name), 'aria-label': label }, kids) : h('div', { class: cls }, kids); };
+    var sub = function (c) { return [/^(lead|cast|actor|actress)$/i.test(c.role || '') ? '' : c.role || '', tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
+    var leads = actors.slice(0, actors.length > 2 ? 2 : actors.length), rest = actors.slice(leads.length);
+    if (leads.length) box.appendChild(h('div', { class: 'leads' }, leads.map(function (c, i) {
+      return link(c, 'lead card', [face(c, i, 'lf'), h('span', { class: 'lt' }, [h('span', { class: 'lbadge', text: 'Lead' }), h('span', { class: 'ln', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null])], c.name + ', lead');
+    })));
+    if (crew.length) {
+      var byRole = [], at = {};
+      crew.forEach(function (c) { var r = (c.role || 'Crew').trim(), k = r.toLowerCase(); if (!(k in at)) { at[k] = byRole.length; byRole.push({ role: r, people: [] }); } byRole[at[k]].people.push(c); });
+      box.appendChild(h('div', { class: 'crew card' }, byRole.map(function (r) {
+        var names = []; r.people.forEach(function (c, j) { if (j) names.push(', '); names.push(personSlug(c.name) ? h('a', { href: personUrl(c.name), text: c.name }) : c.name); });
+        return h('div', { class: 'cr' }, [h('span', { class: 'kicker', text: r.role }), h('span', { class: 'crn' }, names)]);
+      })));
+    }
+    if (rest.length) {
+      S.castAll = S.castAll || {};
+      var open = !!S.castAll[m.id], show = open ? rest : rest.slice(0, 12);
+      box.appendChild(h('div', { class: 'castg' }, show.map(function (c, i) {
+        return link(c, 'cp', [face(c, i + 2, 'c'), h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null], c.name + (c.role ? ', ' + c.role : '') + ' — see all titles');
+      })));
+      if (rest.length > 12) box.appendChild(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + actors.length + ' cast', on: { click: function () { S.castAll[m.id] = !open; render(true); } } }));
+    }
+    return box;
+  }
+
+  // News: headline, publisher and date only; each item links out to the publisher.
+  function newsBlock(m) {
+    var items = (m.data.news || []).filter(function (n) { return n && n.title && safeUrl(n.url); }).slice().sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+    if (!items.length) return null;
+    S.newsAll = S.newsAll || {};
+    var open = !!S.newsAll[m.id], show = open ? items : items.slice(0, 5);
+    var host = function (u) { try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return ''; } };
+    return h('section', { class: 'tsec', id: 'news', 'aria-labelledby': 'h-news' }, [
+      h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-news', text: m.data.title + ' news' })]),
+      h('div', { class: 'card news' }, show.map(function (n) {
+        return h('a', { class: 'nw', href: safeUrl(n.url), target: '_blank', rel: 'noopener nofollow' }, [
+          h('span', { class: 'nm' }, [n.topic && n.topic !== 'Other' ? h('span', { class: 'ntag', text: n.topic }) : null, h('span', { class: 'note', text: [n.source || host(n.url), /^\d{4}-\d{2}-\d{2}$/.test(n.date || '') ? fmtDate(n.date, true) : ''].filter(Boolean).join(' · ') })]),
+          h('span', { class: 'nt', text: n.title }), h('span', { class: 'na', 'aria-hidden': 'true', text: '↗' })
+        ]);
+      })),
+      items.length > 5 ? h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + items.length + ' stories', on: { click: function () { S.newsAll[m.id] = !open; render(true); } } }) : null,
+      h('div', { class: 'note', text: 'Headlines link to the publisher’s own page.' })
+    ]);
   }
   // "Watch on …": a real link once a streaming URL is added in Admin, otherwise a disabled button.
   function watchBtn(d, label, off) {

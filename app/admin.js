@@ -1804,7 +1804,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(prev);
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#videos' + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (av ? ' cast' : '') }, cells));
+        rows.appendChild(h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'news' ? ' news' : '') + (av ? ' cast' : '') }, cells));
       });
     }
     draw();
@@ -2028,6 +2028,8 @@ window.ReelAdmin = function (env) {
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
 
     main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
+
+    main.appendChild(listEditor('News', 'news', [{ k: 'topic', label: 'Topic', options: ['Box office', 'Release & OTT', 'Cast', 'Other'] }, { k: 'title', label: 'Headline, as published' }, { k: 'url', label: 'Link to the article' }, { k: 'source', label: 'Publisher' }, { k: 'date', label: 'Date (2026-11-24)' }], 'No news yet. Add a headline and its link; the title page links out to the publisher.'));
 
     // home banner clip: optional, so it comes last
     main.appendChild(h('section', { class: 'card' }, [h('h2', {}, ['Trailer clip for the home banner ', h('span', { class: 'note', text: '(optional)' })]), videoSlot()]));
