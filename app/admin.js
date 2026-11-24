@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing synopsis'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing cast', 'Missing synopsis'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
@@ -1092,7 +1092,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing synopsis': 'missing-synopsis' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing cast': 'missing-cast', 'Missing synopsis': 'missing-synopsis' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
@@ -1144,7 +1144,7 @@ window.ReelAdmin = function (env) {
     if (location.pathname + location.search !== url) history.replaceState(null, '', url);
   }
   // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
-  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing synopsis': 'synopsis' };
+  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing cast': 'cast', 'Missing synopsis': 'synopsis' };
   function isMiss(f) { return !!MISS_SLUG[f]; }
   // With Missing info picked, the field chips (fieldF) narrow it to titles missing every picked field.
   function chipOk(d, id, sec, miss, fields) {
@@ -1227,7 +1227,10 @@ window.ReelAdmin = function (env) {
   function missingSynopsis(d, id) { return !String(d.synopsis || '').trim() && !synFile[id]; }
   // No trailer, teaser, promo, clip or interview with a link (songs and episodes don't count).
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|episode)$/i.test((v.kind || '').trim()); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
+  // Films only: TV shows rarely have songs. Cast: no actor listed (crew such as the director doesn't count).
+  function missingSongs(d) { return d.section !== 'TV shows' && !(d.videos || []).some(function (v) { return (v.url || '').trim() && /^song$/i.test((v.kind || '').trim()); }); }
+  function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing cast' ? missingCast(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
     if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
