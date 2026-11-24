@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing cast', 'Missing synopsis'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing synopsis'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
@@ -883,6 +883,56 @@ window.ReelAdmin = function (env) {
     return music ? 'Music: ' + music : '';
   }
   // Fills missing lengths (all videos) and singers (songs) in place. Resolves to how many videos changed.
+  // Pasting a YouTube link pre-fills the row from the video's own title and channel (via /api/yt: no key, no quota).
+  // Only empty boxes are filled. Trailers, teasers and promos get the house style ("Official trailer"); songs get the song's name.
+  function ytMeta(id) { return fetch('/api/yt?id=' + id).then(function (r) { return r.ok ? r.json() : null; }).catch(function () { return null; }); }
+  function ytKindOf(t) {
+    return /lyric|video song|full song|audio song|\bsong\b|jukebox|\(video\)|music video/i.test(t) ? 'Song' : /teaser/i.test(t) ? 'Teaser' : /trailer/i.test(t) ? 'Trailer' : /\bpromo\b/i.test(t) ? 'Promo' : /\bepisode\b|\bep\.? ?\d/i.test(t) ? 'Episode' : '';
+  }
+  function cleanYtTitle(t) { return String(t || '').replace(/#[\wऀ-෿]+/g, '').replace(/\s{2,}/g, ' ').replace(/[\s|｜\-–—:]+$/, '').trim().slice(0, 140); }
+  var YT_NOISE = /^(full|official|lyrical|lyric|lyrics|video|audio|music|song|songs|4k|hd|uhd|new|latest|hindi|tamil|telugu|malayalam|kannada|punjabi|bengali|marathi)$/i;
+  function songName(t, film) {
+    var plain = function (x) { return String(x || '').normalize('NFKD').replace(/[̀-ͯ]/g, ''); };
+    var q = String(t || '').match(/["“]([^"”]{2,60})["”]/); if (q) return q[1].trim();
+    var src = plain(cleanYtTitle(t)), f = plain(film).trim();
+    var fw = f.split(/[^A-Za-z0-9]+/).filter(Boolean);
+    if (fw.length) src = src.replace(new RegExp('(^|[^A-Za-z0-9])' + fw.join('[^A-Za-z0-9]*') + '(?=$|[^A-Za-z0-9])', 'ig'), '$1 | ');
+    var segs = src.split(/\s*(?:\||｜|–|—|\s-\s|:)\s*/).map(function (x) {
+      x = x.replace(/[(\[][^)\]]*(video|lyric|audio|song|from|official|4k|hd)[^)\]]*[)\]]/gi, ' ').replace(/["“”']/g, '').replace(/\s{2,}/g, ' ').trim();
+      var w = x.split(' '); while (w.length && YT_NOISE.test(w[w.length - 1])) w.pop(); while (w.length && YT_NOISE.test(w[0])) w.shift();
+      return w.join(' ');
+    }).filter(Boolean);
+    var n = segs[0] || cleanYtTitle(t);
+    return /^title (track|song)$/i.test(n) && f ? f + ' ' + n.replace(/\b\w/g, function (c) { return c.toUpperCase(); }) : n;
+  }
+  var KIND_PICKED = typeof WeakSet === 'function' ? new WeakSet() : { add: function () {}, has: function () { return true; } };
+  function extraKindOf(t) { return /post[- ]?credits?/i.test(t) ? (/compil|all post|every post/i.test(t) ? 'Post-credit scenes compilation' : 'Post-credit scene breakdown') : /breakdown|explained|hidden details|easter eggs?/i.test(t) ? 'Trailer breakdown' : /announce/i.test(t) ? 'Announcement' : ''; }
+  function ytPrefill(el, key, i, item, rows) {
+    var last = ytIdOf(item.url), fresh = !String(item.url || '').trim();
+    el.addEventListener('input', function () {
+      var id = ytIdOf(el.value); if (!id || id === last) return; last = id;
+      setStatus('Reading the video’s details from YouTube…');
+      ytMeta(id).then(function (j) {
+        if (!j || !j.title) { setStatus('Couldn’t read that video’s details from YouTube. Fill the title yourself.'); return; }
+        if (ytIdOf(el.value) !== id) return;
+        var filled = [], set = function (k, v) { if (!v || String(item[k] || '').trim()) return false; item[k] = v; var f = rows.querySelector('#' + key + i + k); if (f) f.value = v; return true; };
+        if (key === 'videos') {
+          var ks = rows.querySelector('#videos' + i + 'kind'), kind = item.kind || (ks ? ks.value : 'Trailer'), guess = ytKindOf(j.title);
+          if (guess && guess !== kind && (!item.kind || (fresh && !KIND_PICKED.has(item)))) { kind = guess; item.kind = kind; if (ks) ks.value = kind; filled.push('type'); }
+          if (set('title', /^song$/i.test(kind) ? songName(j.title, draft.title) : /^(trailer|teaser|promo)$/i.test(kind) ? 'Official ' + kind.toLowerCase() : cleanYtTitle(j.title))) filled.push('title');
+        } else {
+          if (key === 'extras') {
+            var xs = rows.querySelector('#extras' + i + 'kind'), xg = extraKindOf(j.title);
+            if (xg && xg !== (item.kind || (xs ? xs.value : '')) && (!item.kind || (fresh && !KIND_PICKED.has(item)))) { item.kind = xg; if (xs) xs.value = xg; filled.push('type'); }
+          }
+          if (set('title', cleanYtTitle(j.title))) filled.push('title');
+          if (key === 'extras' && set('channel', j.channel)) filled.push('channel');
+        }
+        if (filled.length) touch();
+        setStatus((filled.length ? 'Filled the ' + (filled.length > 1 ? filled.slice(0, -1).join(', ') + ' and ' + filled[filled.length - 1] : filled[0]) + ' from YouTube' : 'Nothing to fill; your entries are kept') + '. On YouTube: “' + j.title + '” by ' + (j.channel || 'an unknown channel') + (key === 'videos' ? '. Trailers and songs must come from an official channel.' : '.'));
+      });
+    });
+  }
   function fillYt(videos, key) {
     var need = (videos || []).filter(function (x) { return x && ytIdOf(x.url) && (!x.dur || (vidKind(x.kind) === 'songs' && !x.artists && !x.artistsChecked)); });
     if (!need.length || !key) return Promise.resolve(0);
@@ -1092,7 +1142,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing cast': 'missing-cast', 'Missing synopsis': 'missing-synopsis' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing synopsis': 'missing-synopsis' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
@@ -1144,7 +1194,7 @@ window.ReelAdmin = function (env) {
     if (location.pathname + location.search !== url) history.replaceState(null, '', url);
   }
   // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
-  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing cast': 'cast', 'Missing synopsis': 'synopsis' };
+  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing interviews': 'interviews', 'Missing cast': 'cast', 'Missing synopsis': 'synopsis' };
   function isMiss(f) { return !!MISS_SLUG[f]; }
   // With Missing info picked, the field chips (fieldF) narrow it to titles missing every picked field.
   function chipOk(d, id, sec, miss, fields) {
@@ -1230,7 +1280,7 @@ window.ReelAdmin = function (env) {
   // Films only: TV shows rarely have songs. Cast: no actor listed (crew such as the director doesn't count).
   function missingSongs(d) { return d.section !== 'TV shows' && !(d.videos || []).some(function (v) { return (v.url || '').trim() && /^song$/i.test((v.kind || '').trim()); }); }
   function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing cast' ? missingCast(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
     if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
@@ -2062,7 +2112,8 @@ window.ReelAdmin = function (env) {
             el = h('input', { id: key + i + c.k, class: 'in', placeholder: c.label, disabled: !canWrite, autocomplete: 'off' }); el.value = item[c.k] || '';
           }
           el.addEventListener('input', function () { item[c.k] = el.value; touch(); });
-          el.addEventListener('change', function () { item[c.k] = el.value; touch(); });
+          el.addEventListener('change', function () { item[c.k] = el.value; touch(); if (c.k === 'kind') KIND_PICKED.add(item); });
+          if (c.k === 'url' && (key === 'videos' || key === 'interviews' || key === 'extras')) ytPrefill(el, key, i, item, rows);
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
         // Videos: ★ picks the one the Movies / TV Shows page banner plays for this title (draft.bannerVideo, its URL).
