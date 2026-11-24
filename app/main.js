@@ -1809,11 +1809,25 @@
     }
     w.appendChild(h('p', { class: 'note', style: 'margin-top:28px' }, ['More videos: ', h('a', { href: tv ? '/tv-promos' : '/trailers', text: tv ? 'TV promotionals' : 'Latest trailers' }), tv ? null : ' · ', tv ? null : h('a', { href: '/songs', text: 'Video songs' })]));
   }
+  // On the title page, swap only the video sections that change (no full redraw, so the rest of the page doesn't flash or reload).
+  function refreshVideos(mid, idxs) {
+    if (S.route !== 'title') return false;
+    var m = findMovie(S.param); if (!m || m.id !== mid) return false;
+    var items = vidItems(m), groups = vidGroups(m, items), done = false;
+    groups.forEach(function (g) {
+      if (!g.idx.some(function (i) { return idxs.indexOf(i) !== -1; })) return;
+      var old = document.getElementById(g.id); if (!old || !old.classList.contains('vsec')) return;
+      if (S.vKeep === old) S.vKeep = null;
+      old.replaceWith(vidSection(m, g, items)); done = true;
+    });
+    return done;
+  }
   function playVid(mid, i, scroll) {
     S.vsel = S.vsel || {}; S.vsel[mid] = i;
-    S.vplay = { mid: mid, i: i }; S.vKeep = null; S.vIdle = null;
-    if (S.tplay) { if (S.tpVideo) { try { S.tpVideo.pause(); } catch (e) {} } S.tplay = null; S.tpNode = null; S.tpVideo = null; }
-    render(true);
+    var prev = S.vplay && S.vplay.mid === mid ? S.vplay.i : -1;
+    S.vplay = { mid: mid, i: i }; S.vIdle = null;
+    if (S.tplay) { if (S.tpVideo) { try { S.tpVideo.pause(); } catch (e) {} } S.tplay = null; S.tpNode = null; S.tpVideo = null; S.vKeep = null; render(true); }
+    else if (!refreshVideos(mid, [prev, i])) { S.vKeep = null; render(true); }
     if (scroll) setTimeout(function () { var t = document.querySelector('.vsec.playing') || $('trailers'); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); }, 30);
   }
   function stepVid(m, dir, play) {
@@ -1994,7 +2008,7 @@
     var key = m.id + ':' + g.id, pl = S.vplay && S.vplay.mid === m.id && g.idx.indexOf(S.vplay.i) !== -1 ? S.vplay.i : -1;
     var playing = pl !== -1 && !!(items[pl].yt || items[pl].clip);
     var kids = [h('div', { class: 'tsec-h' }, [h('h2', { id: 'h-' + g.id }, [m.data.title + ' ' + g.label.toLowerCase(), ' ', h('span', { class: 'cnt', text: String(g.idx.length) })])])];
-    var stop = function () { S.vplay = null; S.vKeep = null; render(true); };
+    var stop = function () { var was = S.vplay ? S.vplay.i : -1; S.vplay = null; if (!refreshVideos(m.id, [was])) { S.vKeep = null; render(true); } };
     var vurl = function (y) { return y.yt ? videoUrl(m, y.yt) : ''; };
     if (g.id === 'trailers') {
       var cur = playing ? pl : (g.idx.indexOf(S.vsel[key]) !== -1 ? S.vsel[key] : g.idx[0]);
@@ -2016,7 +2030,7 @@
           h('span', { class: 'tt', text: y.title }), h('span', { class: 'note', text: can ? y.kind : y.kind + ' · link coming' })
         ]);
       })));
-      if (g.idx.length > 6) kids.push(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + g.idx.length + ' ' + g.label.toLowerCase(), on: { click: function () { S.vmore[key] = !all; if (!S.vplay) S.vKeep = null; render(true); } } }));
+      if (g.idx.length > 6) kids.push(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(all), text: all ? 'Show fewer' : 'Show all ' + g.idx.length + ' ' + g.label.toLowerCase(), on: { click: function () { S.vmore[key] = !all; if (!refreshVideos(m.id, g.idx)) { if (!S.vplay) S.vKeep = null; render(true); } } } }));
     }
     var sec = h('section', { class: 'tsec vsec' + (playing ? ' playing' : ''), id: g.id, 'aria-labelledby': 'h-' + g.id }, kids);
     sec._mid = m.id;
