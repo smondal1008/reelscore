@@ -2339,7 +2339,7 @@
     function paint() {
       var p = all[i], name = p.label || p.kind || 'Poster';
       box.innerHTML = '';
-      var big = h('div', { class: 'pvimg' }, [posterImg(p, 900, d.title + ' ' + name.toLowerCase())]);
+      var big = h('div', { class: 'pvimg' }, [posterImg(p, 1400, d.title + ' ' + name.toLowerCase())]);
       var tx0 = null;
       big.addEventListener('touchstart', function (e) { tx0 = e.touches[0].clientX; }, { passive: true });
       big.addEventListener('touchend', function (e) { if (tx0 === null) return; var dx = e.changedTouches[0].clientX - tx0; tx0 = null; if (Math.abs(dx) > 40) go(i + (dx < 0 ? 1 : -1)); });
@@ -2347,7 +2347,7 @@
       box.appendChild(h('div', { class: 'pv-top' }, [h('span', { class: 'note', text: (i + 1) + ' of ' + all.length + (p.kind ? ' · ' + p.kind : '') }),
         h('button', { type: 'button', class: 'pib', 'aria-label': 'Close', on: { click: close } }, ['✕'])]));
       box.appendChild(h('div', { class: 'pv-mid' }, [
-        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav', 'aria-label': 'Previous poster', on: { click: function () { go(i - 1); } } }, ['‹']) : null,
+        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav pv-prev', 'aria-label': 'Previous poster', on: { click: function () { go(i - 1); } } }, ['‹']) : null,
         big,
         h('div', { class: 'pv-info' }, [
           h('h2', { text: name }),
@@ -2361,7 +2361,7 @@
             copyText(full, 'Link copied');
           } } })])
         ]),
-        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav', 'aria-label': 'Next poster', on: { click: function () { go(i + 1); } } }, ['›']) : null
+        all.length > 1 ? h('button', { type: 'button', class: 'pib pv-nav pv-next', 'aria-label': 'Next poster', on: { click: function () { go(i + 1); } } }, ['›']) : null
       ]));
       if (all.length > 1) box.appendChild(h('div', { class: 'pv-thumbs' }, all.map(function (q, k) {
         return h('button', { type: 'button', class: 'pv-t' + (k === i ? ' on' : ''), 'aria-label': 'Poster ' + (k + 1), 'aria-current': k === i ? 'true' : null, on: { click: function () { go(k); } } }, [posterImg(q, 120, '')]);

@@ -917,3 +917,18 @@ a.lead:hover .ln { text-decoration: underline; }
   .pview .pvimg { width: min(300px, 78vw); }
   .pview .pv-info { width: min(320px, 90vw); align-items: center; text-align: center; }
 }
+
+/* Poster viewer: the poster fills the screen at its own shape (no black bars); arrows sit at the screen edges. */
+.pview { background: rgba(8,7,12,.97); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+.pview .pv-mid { position: relative; align-self: stretch; gap: 40px; margin: 12px 0; padding: 0 72px; }
+.pview .pvimg { width: auto; aspect-ratio: auto; max-height: none; border: 0; border-radius: 0; overflow: visible; display: flex; justify-content: center; }
+.pview .pvimg img { width: auto; height: auto; max-width: min(62vw, 1000px); max-height: calc(100vh - 190px); object-fit: contain; background: none; border-radius: 12px; box-shadow: 0 24px 60px rgba(0,0,0,.6); }
+.pview .pv-nav { position: absolute; top: 50%; transform: translateY(-50%); width: 52px; height: 52px; font-size: 24px; }
+.pview .pv-prev { left: 8px; } .pview .pv-next { right: 8px; }
+.pview .pv-info { width: 260px; }
+.pview .pv-t { flex-basis: 44px; }
+@media (max-width: 900px) {
+  .pview .pv-mid { padding: 0; gap: 12px; }
+  .pview .pvimg { width: auto; }
+  .pview .pvimg img { max-width: 92vw; max-height: calc(100vh - 300px); }
+}
