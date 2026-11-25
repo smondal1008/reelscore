@@ -527,6 +527,40 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .qb[aria-pressed="true"].a { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
   .qb[aria-pressed="true"].b { background: var(--text); border-color: var(--text); color: #0B0A0F; }
   .qb[aria-pressed="true"].c { background: #8E8899; border-color: #8E8899; color: #0B0A0F; }
+  /* Icon-only quick verdict (poster cards): the word pops up on hover / focus, and briefly after a tap */
+  .qv.icons .qb { position: relative; overflow: visible; display: flex; align-items: center; justify-content: center; padding: 7px 4px; min-height: 36px; }
+  .qv.icons .qb .ic { display: flex; }
+  .qv.icons .qb.a { color: var(--accent); } .qv.icons .qb.b { color: #7FB2FF; } .qv.icons .qb.c { color: #A39FB0; }
+  .qv.icons .qb[aria-pressed="true"] { color: #0B0A0F; }
+  .qv.icons .qb[aria-pressed="true"].b { background: #7FB2FF; border-color: #7FB2FF; }
+  .qv.icons:not(.th) .qb.a[aria-pressed="true"] svg path { fill: currentColor; }
+  .qv.icons.th .qb.a[aria-pressed="true"] svg path:first-child { fill: currentColor; fill-opacity: .35; }
+  .qtip { --tx: -50%; position: absolute; left: 50%; bottom: calc(100% + 6px); z-index: 3; transform: translate(var(--tx), 4px); white-space: nowrap; padding: 4px 9px; border-radius: 8px; background: #F4F1EA; color: #0B0A0F; font-size: 12px; font-weight: 700; line-height: 1.3; opacity: 0; pointer-events: none; transition: opacity .15s ease, transform .15s ease; box-shadow: 0 4px 12px rgba(0,0,0,.35); }
+  .qb.a .qtip { --tx: 0; left: 0; }
+  .qb.c .qtip { --tx: 0; left: auto; right: 0; }
+  .qb:focus-visible .qtip { opacity: 1; transform: translate(var(--tx), 0); }
+  .qb.flash[aria-pressed="true"] .qtip { animation: qflash 1.6s ease forwards; }
+  .qb.flash[aria-pressed="true"] .qtip::after { content: ' \2713'; }
+  @keyframes qflash { 0% { opacity: 0; transform: translate(var(--tx), 4px); } 12%, 78% { opacity: 1; transform: translate(var(--tx), 0); } 100% { opacity: 0; transform: translate(var(--tx), 0); } }
+  @media (hover: hover) {
+    .qv.icons .qb:hover .qtip { opacity: 1; transform: translate(var(--tx), 0); }
+    .qv.icons:not(.th) .qb.a:hover svg { animation: qpop .5s ease; }
+    .qv.icons:not(.th) .qb.a:hover svg path { fill: currentColor; }
+    .qv.icons:not(.th) .qb.b:hover svg { animation: qnod .55s ease; transform-origin: 30% 85%; }
+    .qv.icons.th .qb.a:hover svg { animation: qglow .6s ease; }
+    .qv.icons.th .qb.a:hover svg path:first-child { fill: currentColor; fill-opacity: .35; }
+    .qv.icons.th .qb.b:hover svg { animation: qtvon .5s ease; }
+    .qv.icons .qb.c:hover svg { animation: qshake .45s ease; }
+  }
+  @keyframes qpop { 0% { transform: scale(1) rotate(0); } 40% { transform: scale(1.35) rotate(-18deg); } 70% { transform: scale(.92) rotate(8deg); } 100% { transform: scale(1) rotate(0); } }
+  @keyframes qnod { 0% { transform: rotate(0); } 35% { transform: translateY(-3px) rotate(-18deg); } 65% { transform: translateY(0) rotate(6deg); } 100% { transform: rotate(0); } }
+  @keyframes qshake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(4deg); } }
+  @keyframes qglow { 0% { transform: scale(1); } 35% { transform: translateY(-2px) scale(1.22); filter: drop-shadow(0 0 4px #F5A524); } 100% { transform: scale(1); } }
+  @keyframes qtvon { 0% { transform: scale(1, 1); } 20% { transform: scale(1.12, .12); } 55% { transform: scale(.96, 1.08); } 100% { transform: scale(1, 1); } }
+  @media (prefers-reduced-motion: reduce) { .qv.icons .qb svg { animation: none !important; } .qtip { transition: none; } .qb.flash[aria-pressed="true"] .qtip { animation: none; opacity: 1; transform: translate(var(--tx), 0); } }
+  .qlegend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin-top: 4px; font-size: 12px; color: var(--muted); }
+  .qlegend .ql { display: inline-flex; align-items: center; gap: 4px; }
+  .qlegend .ql.a .ic { color: var(--accent); } .qlegend .ql.b .ic { color: #7FB2FF; } .qlegend .ql.c .ic { color: #A39FB0; }
 /* About text on title and person pages (app/about.js) */
 .about { margin: 0; line-height: 1.6; color: var(--text); max-width: 760px; }
 .pabout h3 { margin: 18px 0 8px; font-size: 16px; }

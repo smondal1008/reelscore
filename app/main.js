@@ -261,7 +261,7 @@
         if (m) b.lastChild.nodeValue = shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(m.data.releaseDate)) : sc.pct + '%';
       }
     });
-    var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub');
+    var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub .rnote');
     if (sub) sub.textContent = rateNote();
   }
   function saveReview(mid, text, spoiler, where, via) {
@@ -742,11 +742,7 @@
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta) {
-      var my = myVerdict(m.id);
-      kids.push(h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + d.title }, vset(m).map(function (x) {
-        return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
-          on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); } } });
-      })));
+      kids.push(qvButtons(m));
     }
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
@@ -1372,7 +1368,7 @@
     }
     list = list.slice(0, 15);
     S.rateOrder = { lang: S.navLang, ids: list.map(function (m) { return m.id; }) };
-    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub', text: rateNote() }));
+    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub' }, [h('span', { class: 'rnote', text: rateNote() }), qvLegend(list)]));
   }
   function rateNote() {
     var done = S.justRated || {}, n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
@@ -3732,12 +3728,36 @@
   function wtwDone(id) {
     var i = (S.mine.wtw || []).indexOf(id); if (i !== -1) { S.mine.wtw.splice(i, 1); saveMine(null); }
   }
-  function verdictButtons(m, after) {
-    var my = myVerdict(m.id);
-    return h('div', { class: 'qv', role: 'group', 'aria-label': 'Your verdict on ' + m.data.title }, vset(m).map(function (x) {
-      return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': String(my === x[0]), title: x[2], text: x[1],
-        on: { click: function () { S.justRated = S.justRated || {}; S.justRated[m.id] = 1; setVerdict(m.id, x[0]); if (after) after(); } } });
+  function verdictButtons(m, after) { return qvButtons(m, after); }
+  // Quick verdict buttons on poster cards (home "Seen these?" row, My List): icon only. The word shows on hover,
+  // and for a moment after a tap (phones can't hover). Stored values stay a / b / c, so earlier verdicts are unchanged.
+  var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Skip, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Skip' } };
+  function qvTip(m, k) { return VTIP[bigScreen(m) ? 'theatre' : 'ott'][k]; }
+  function qvButtons(m, after) {
+    var my = myVerdict(m.id), big = bigScreen(m), fl = S.qvFlash;
+    var flashOn = fl && fl.id === m.id && Date.now() - fl.t < 1500 ? fl.v : '';
+    return h('div', { class: 'qv icons' + (big ? ' th' : ''), role: 'group', 'aria-label': 'Your verdict on ' + m.data.title }, vset(m).map(function (x) {
+      var tip = qvTip(m, x[0]);
+      return h('button', { type: 'button', class: 'qb ' + x[0] + (flashOn === x[0] ? ' flash' : ''), 'data-v': x[0], 'aria-pressed': String(my === x[0]), 'aria-label': tip,
+        on: { click: function (e) {
+          var btn = e.currentTarget, setting = myVerdict(m.id) !== x[0];
+          S.justRated = S.justRated || {}; S.justRated[m.id] = 1;
+          S.qvFlash = setting ? { id: m.id, v: x[0], t: Date.now() } : null;
+          setVerdict(m.id, x[0]);
+          // The home page keeps the same buttons (no redraw): flash the word on this one.
+          if (setting && btn && btn.isConnected) { btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); setTimeout(function () { btn.classList.remove('flash'); }, 1700); }
+          if (after) after();
+        } } }, [icon(vIconName(m, x[0]), 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: tip })]);
     }));
+  }
+  // Key under the "Seen these?" row: what each icon means, for the kinds of film in the row.
+  function qvLegend(list) {
+    var hasTh = list.some(bigScreen), hasOtt = list.some(function (m) { return !bigScreen(m); });
+    var items = [];
+    if (hasOtt) items.push(['star', 'Must watch', 'a'], ['thumb', 'Liked it', 'b']);
+    if (hasTh) items.push(['screen', 'In theatres', 'a'], ['tv', 'Wait for OTT', 'b']);
+    items.push(['skip', 'Skip', 'c']);
+    return h('span', { class: 'qlegend' }, items.map(function (x) { return h('span', { class: 'ql ' + x[2] }, [icon(x[0], 14), h('span', { text: x[1] })]); }));
   }
   function followUpBox(m) {
     var box = h('div', { class: 'fu' });
