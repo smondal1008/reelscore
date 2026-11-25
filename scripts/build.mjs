@@ -516,6 +516,9 @@ async function main() {
     const r = richCount(slug);
     return !!st.bio || (!!safeUrl(st.photoUrl) && r >= PERSON_PHOTO) || r >= PERSON_TITLES;
   };
+  const personWhy = slug => { const st = people[slug] || {}, r = richCount(slug), ph = !!safeUrl(st.photoUrl);
+    if (st.bio) return 'Has a bio'; if (ph && r >= PERSON_PHOTO) return 'Photo and ' + r + ' titles with content'; if (r >= PERSON_TITLES) return r + ' titles with content';
+    return r + ' title' + (r === 1 ? '' : 's') + ' with content, ' + (ph ? 'has a photo' : 'no photo') + ', no bio; needs a bio, or a photo + ' + PERSON_PHOTO + ' titles, or ' + PERSON_TITLES + ' titles'; };
   const personName = slug => {
     const st = people[slug]; if (st && st.name) return st.name;
     const tally = {}; (credits[slug] || []).forEach(c => { tally[c.name] = (tally[c.name] || 0) + 1; });
@@ -575,6 +578,8 @@ async function main() {
   }
 
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
+  // Why each page is open to Google or kept out, for the page report (seo-pages.csv, written at the end).
+  const pageWhy = new Map();
   const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0, nVideoPages = 0; const tierCount = {};
 
   // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
@@ -679,6 +684,8 @@ async function main() {
 
     // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
     const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
+    pageWhy.set(url, thinTitle ? ({ kept: 'No story, poster, video or verdict yet', thin: 'Story under 80 characters and nothing else', border: 'Story under 200 characters and nothing else' })[tier] + '; add a poster, a YouTube video, where to watch or a 200+ character story'
+      : 'Good substance: ' + (safeUrl(d.posterUrl) ? 'poster' : ytVideos(d).length ? 'YouTube video' : hasWhere(d) ? 'where to watch' : String(d.synopsis || '').trim().length >= 200 ? 'story of 200+ characters' : '3+ verdicts'));
     write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), hero: { banner: safeUrl(d.bannerUrl), poster: safeUrl(d.posterUrl) },
       heroHtml: titleHeroMarkup(m, url, tv ? tvYears(d) : String(d.releaseDate || '').slice(0, 4), (vpaths.find(x => /trailer|teaser|promo|glimpse/i.test(x.kind || '')) || vpaths[0] || {}).path || ''), robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
@@ -695,6 +702,7 @@ async function main() {
     // The VideoObject's uploadDate must be YouTube's own publish date (stored as publishedAt); without one, no VideoObject.
     for (const v of vpaths) {
       const vurl = url + v.path, song = v.seg === 'song', kindName = song ? 'Song' : v.kind;
+      pageWhy.set(vurl, thinTitle ? 'Its title page is kept out of Google' : 'Its title page is in Google');
       const vname = song ? v.title : d.title + ' – ' + v.title, vtitle = videoTitleTag(d, v, tv);
       const vdesc = clip((song ? v.title + ', a song from ' : (v.title.toLowerCase() === v.kind.toLowerCase() ? v.kind : v.title + ', ' + v.kind.toLowerCase()) + ' of ') + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + (/^[aeiou]/i.test(lang) ? 'an ' : 'a ') + lang + (tv ? ' series' : ' film') : '') + '. Watch it on Reelscore' + (sc.tot >= 3 ? ', where ' + sc.pct + '% of ' + sc.tot + ' viewers rate it positively' : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 158);
       const others = vpaths.filter(o => o !== v);
@@ -1003,6 +1011,7 @@ async function main() {
       const sibs = mine.filter(x => !x.year), years = mine.filter(x => x.year).slice(0, 12);
       const same = allPages.filter(x => x !== o && x.indexed && x.path.replace(lslug(x.lang), '') === o.path.replace(lslug(lang), ''));
       const desc = clip(o.intro, 158), robots = o.indexed ? '' : 'noindex,follow';
+      pageWhy.set(o.path, o.indexed ? 'Links to 3+ titles with substance' : 'Links to fewer than 3 titles with substance');
       if (robots) nLangNoindex++;
       let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(o.h1.charAt(0).toUpperCase() + o.h1.slice(1)) + '</nav><h1>' + esc(o.h1.charAt(0).toUpperCase() + o.h1.slice(1)) + '</h1><p>' + esc(o.intro) + '</p>';
       body += o.list.length ? '<ul>' + o.list.map(titleLi).join('') + '</ul>' : '';
@@ -1079,7 +1088,8 @@ async function main() {
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + esc(h1) + '</nav><h1>' + esc(h1) + '</h1><p>' + items.length + ' videos. ' + esc(desc) + '</p>' +
       '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + ((videoPaths(m.data).find(p => p.yt === x.yt) || {}).path || '') + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
       '<h2>More videos</h2><ul>' + vidHubs.filter(v => v[0] !== slug).map(v => '<li><a href="/' + v[0] + '">' + esc(v[1]) + '</a></li>').join('') + '</ul>';
-    writeHub(slug + '.html', { title, description: desc, canonical: '/' + slug, ogPath: '/' + slug, route: 'vids', body,
+    // An empty list (no videos of that kind yet) stays out of Google, as it's out of the sitemap.
+    writeHub(slug + '.html', { title, description: desc, canonical: '/' + slug, ogPath: '/' + slug, route: 'vids', body, robots: items.length ? undefined : 'noindex,follow',
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: h1, item: SITE + '/' + slug }] }] });
     if (items.length) sitemap.push({ loc: '/' + slug, pri: '0.6' });
   }
@@ -1106,6 +1116,31 @@ async function main() {
   ].join('\n'));
 
   write('robots.txt', ['User-agent: *', 'Disallow: /admin', 'Disallow: /my-list', 'Disallow: /tonight', 'Disallow: /setup', 'Disallow: /data/', '', 'Sitemap: ' + SITE + '/sitemap.xml', ''].join('\n'));
+
+  // ----- page report: every page, open to Google or kept out, and why (/seo-pages.csv, linked from the admin panel) -----
+  {
+    const inMap = new Set(sitemap.map(x => x.loc)), rows = [];
+    const walk = dir => { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name);
+      if (e.isDirectory()) { if (!['assets', 'app', 'js', 'fonts', 'data', 'admin', 'node_modules'].includes(e.name) || dir !== OUT) walk(f); continue; }
+      if (!e.name.endsWith('.html')) continue;
+      const rel = '/' + path.relative(OUT, f).replace(/\\/g, '/').replace(/\.html$/, '').replace(/(^|\/)index$/, '');
+      if (rel === '/404' || /^\/(setup|admin|my-list|tonight)(\/|$)/.test(rel)) continue;
+      const html = fs.readFileSync(f, 'utf8');
+      if (/<title>Moved \| Reelscore<\/title>/.test(html)) continue; // old addresses that point to a page
+      const url = rel || '/', open = !/<meta name="robots" content="[^"]*noindex/.test(html);
+      const type = /^\/movie\/[^/]+\/./.test(url) || /^\/tv\/[^/]+\/./.test(url) ? 'Video' : /^\/movie\//.test(url) ? 'Film' : /^\/tv\//.test(url) ? 'TV show'
+        : /^\/person\//.test(url) ? 'Person' : pageWhy.has(url) ? 'Language page' : 'Hub page';
+      const why = type === 'Person' ? personWhy(url.slice(8)) : pageWhy.get(url) || (open ? 'Site page' : 'Kept out of Google');
+      rows.push([SITE + url, type, open ? 'Open to Google' : 'Kept out', inMap.has(url) ? 'yes' : 'no', why]);
+    } };
+    walk(OUT);
+    const order = { Film: 1, 'TV show': 2, Person: 3, 'Language page': 4, 'Hub page': 5, Video: 6 };
+    rows.sort((a, b) => (a[2] === b[2] ? 0 : a[2] === 'Open to Google' ? -1 : 1) || order[a[1]] - order[b[1]] || a[0].localeCompare(b[0]));
+    const cell = v => /[",\n]/.test(v) ? '"' + String(v).replace(/"/g, '""') + '"' : v;
+    write('seo-pages.csv', [['URL', 'Type', 'Google', 'In sitemap', 'Why']].concat(rows).map(r => r.map(cell).join(',')).join('\n') + '\n');
+    const odd = rows.filter(r => (r[2] === 'Open to Google') !== (r[3] === 'yes'));
+    console.log(`[seo] page report: ${rows.filter(r => r[2] === 'Open to Google').length} open to Google, ${rows.filter(r => r[2] !== 'Open to Google').length} kept out` + (odd.length ? `; ${odd.length} differ from the sitemap, e.g. ${odd.slice(0, 3).map(r => r[0].replace(SITE, '')).join(', ')}` : ''));
+  }
 
   // ----- fingerprinted assets: /assets/<name>.<hash>.<ext>, cached for a year (vercel.json) -----
   // Every HTML page points at the hashed copies, so a deploy changes the URLs and browsers never run stale code.
