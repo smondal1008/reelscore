@@ -3997,7 +3997,9 @@
       seed.movies.forEach(function (m) { if (m && m.id && m.data) base[m.id] = m.data; });
       if (seed.verdicts && !Object.keys(S.verdicts).length) S.verdicts = seed.verdicts;
       apply();
-      fetchCore();
+      // The catalogue waits until the hero picture is in (the page's load event, or 3 s), so the two don't share the line.
+      var started = false, go = function () { if (!started) { started = true; fetchCore(); } };
+      if (document.readyState === 'complete') go(); else { window.addEventListener('load', go); setTimeout(go, 3000); }
     } else if (seed) {
       seeded = true; builtAt = seed.builtAt; S.partial = true; S.seedOnly = true; S.seedKind = 'title';
       seed.movies.forEach(function (m) { if (m && m.id && m.data) base[m.id] = m.data; });

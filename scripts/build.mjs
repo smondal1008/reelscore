@@ -274,9 +274,10 @@ function loadFixture(file) {
 // Only whitespace, syntax and local names change: each file keeps its global names, so the files still work together.
 // Runs from the small catalogue script, before app/main.js: asks for the page's hero pictures at once, at exactly the
 // sizes app/main.js will ask for (same rules as its cld, bannerW and poster width), so the app finds them already loading.
-// The home seed is in index.html, which also stands in for /browse and other app pages: only "/" preloads its banner.
+// The home seed is in index.html, which also stands in for /browse and other app pages: only "/" preloads its banner;
+// the others preload the core catalogue instead (the home page fetches it once its hero is in; see app/main.js).
 const HERO_JS = "(function(){try{var e=document.getElementById('rs-seed');if(!e)return;var k=e.getAttribute('data-kind');" +
-  "if(k==='home'&&location.pathname!=='/')return;" +
+  "if(k==='home'&&location.pathname!=='/'){if(window.RS_CAT_CORE){var f=document.createElement('link');f.rel='preload';f.as='fetch';f.crossOrigin='anonymous';f.href=window.RS_CAT_CORE;document.head.appendChild(f);}return;}" +
   "var D=Math.min(window.devicePixelRatio||1,2),V=Math.max(320,Math.min(window.innerWidth||1280,2560));" +
   "var c=function(u,w){var m=u.match(/^(https:\\/\\/res\\.cloudinary\\.com\\/[^/]+\\/image\\/upload\\/)(.*)$/);if(!m||/^[a-z]{1,3}_[^/]*\\//.test(m[2]))return u;return m[1]+'f_auto,q_auto,c_limit,w_'+w+'/'+m[2];};" +
   "var p=function(u,hi){if(!/^https:\\/\\//.test(u||''))return;var l=document.createElement('link');l.rel='preload';l.as='image';l.href=u;if(hi)l.setAttribute('fetchpriority','high');document.head.appendChild(l);};" +
@@ -1033,7 +1034,7 @@ async function main() {
     let html = fs.readFileSync(f, 'utf8'), changed = false;
     for (const [from, to] of Object.entries(hashed)) { if (/^\/catalogue/.test(from)) continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
     // Pages without a seed need the core catalogue first, so the browser starts fetching it while it reads the page.
-    const pre = html.includes('id="rs-seed" data-kind="title"') ? '' : '\n<link rel="preload" href="' + hashed['/catalogue-core.json'] + '" as="fetch" crossorigin="anonymous">';
+    const pre = html.includes('id="rs-seed"') ? '' : '\n<link rel="preload" href="' + hashed['/catalogue-core.json'] + '" as="fetch" crossorigin="anonymous">';
     if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script defer src="' + catPtr + '"></script>' + pre); changed = true; }
     if (changed) fs.writeFileSync(f, html);
   }
