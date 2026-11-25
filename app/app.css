@@ -1019,4 +1019,5 @@ a.lead:hover .ln { text-decoration: underline; }
 }
 /* The title hero written into the page by the build (scripts/build.mjs titleHeroMarkup) leaves out a few buttons and tags
    the app adds; on phones it keeps at least the height of the app's hero so the swap doesn't change the first screen. */
-@media (max-width: 900px) { .tp.rs-static { min-height: 660px; } }
+/* Phones: the app's title page is a flex column, which keeps the hero's top margin inside it; flow-root does the same here. */
+@media (max-width: 900px) { .tp.rs-static { min-height: 660px; } .rs-statwrap { display: flow-root; } }
