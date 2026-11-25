@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing characters', 'Missing synopsis', 'No OTT link'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Films not in Google', 'TV not in Google', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing characters', 'Missing synopsis', 'No OTT link'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Soundtrack', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
@@ -231,6 +231,44 @@ window.ReelAdmin = function (env) {
     return Object.keys(map).map(function (k) { return { key: k, name: map[k].name, titles: map[k].titles }; })
       .sort(function (a, b) { return b.titles.length - a.titles.length || a.name.localeCompare(b.name); });
   }
+  // ---------- person pages in Google ----------
+  // Same rule as scripts/build.mjs (indexedPerson): a person's page is in Google with a bio, or a photo and PERSON_PHOTO
+  // titles with content, or PERSON_TITLES titles with content. A title has content with a story, a poster or a YouTube video;
+  // only published titles count. Bios from the editorial file (content/bios.json) count too: the build lists them.
+  var PERSON_TITLES = 8, PERSON_PHOTO = 4, bioFile = {};
+  fetch('/bio-file-ids.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : []; }).then(function (ids) {
+    (ids || []).forEach(function (id) { bioFile[id] = 1; }); if (peopleMode) renderPeople();
+  }).catch(function () {});
+  // Published titles per person: { all, rich } counts. Work it out once per draw and pass it to personSeo.
+  function personTitleCounts() {
+    var map = {};
+    movies.forEach(function (m) {
+      var d = m.data; if (d.published === false) return;
+      var rich = !!(storyLen(d, m.id) || safeUrl(d.posterUrl) || hasYt(d)), cast = d.cast || [];
+      var add = function (k) { if (!k) return; var e = map[k] || (map[k] = { all: {}, rich: {} }); e.all[m.id] = 1; if (rich) e.rich[m.id] = 1; };
+      cast.forEach(function (c) { add(personKey(c.name)); });
+      String(d.director || '').split(/,| and /).map(function (x) { return x.trim(); }).filter(Boolean).forEach(function (n) {
+        var k = personKey(n); if (!cast.some(function (c) { return personKey(c.name) === k; })) add(k);
+      });
+    });
+    Object.keys(map).forEach(function (k) { map[k] = { all: Object.keys(map[k].all).length, rich: Object.keys(map[k].rich).length }; });
+    return map;
+  }
+  function personSeo(k, counts) {
+    var c = (counts || personTitleCounts())[k] || { all: 0, rich: 0 }, st = people[k] || {}, r = c.rich;
+    var bio = !!String(st.bio || '').trim() || !!bioFile[k], photo = !!safeUrl(st.photoUrl);
+    var nt = function (n) { return n + ' title' + (n === 1 ? '' : 's'); };
+    if (!c.all) return { on: false, page: false, short: 'No page', text: 'No public page: not credited on any published title.' };
+    if (bio) return { on: true, short: 'In Google', text: 'In Google: has a bio.' };
+    if (photo && r >= PERSON_PHOTO) return { on: true, short: 'In Google', text: 'In Google: has a photo and ' + nt(r) + ' with content.' };
+    if (r >= PERSON_TITLES) return { on: true, short: 'In Google', text: 'In Google: ' + nt(r) + ' with content.' };
+    var mt = function (n) { return n + ' more title' + (n === 1 ? '' : 's'); }, ways = ['add a short bio'];
+    if (photo) ways.push('credit them on ' + mt(PERSON_PHOTO - r) + ' with content');
+    else if (r >= PERSON_PHOTO) ways.push('add a photo');
+    else ways.push('add a photo and credit them on ' + mt(PERSON_PHOTO - r) + ' with content', 'credit them on ' + mt(PERSON_TITLES - r) + ' with content');
+    return { on: false, page: true, short: 'Not in Google', text: 'Not in Google (' + nt(r) + ' with content' + (photo ? ', has a photo' : ', no photo') + '). To get in at the next deploy: ' +
+      ways.join(', or ') + '. A title has content when it has a story, a poster or a YouTube video.' };
+  }
   function renderPeopleCount() {
     var el = $('peopleCount'); if (!el) return;
     var list = allPeople(), withPhoto = list.filter(function (p) { return personPhoto(p.name); }).length;
@@ -390,6 +428,7 @@ window.ReelAdmin = function (env) {
     var box = h('div', { role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'pf_t', class: 'card', style: 'width:min(520px,100%);max-height:90vh;overflow:auto' }, [
       h('div', { class: 'head' }, [h('h2', { id: 'pf_t', text: opts.key ? 'Edit ' + startName : 'Add a cast or crew member' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]),
       h('div', { style: 'display:flex;gap:16px;align-items:center;flex-wrap:wrap' }, [pv, h('div', {}, [upBtn, h('div', { class: 'note', style: 'margin-top:6px', text: 'Square headshot you have the rights to use.' })])]),
+      opts.key ? (function () { var g = personSeo(opts.key); return h('div', { class: g.on ? 'note' : 'warn', text: (g.on ? '✓ ' : '') + g.text }); })() : null,
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_name', text: 'Name' }), nameIn, url, warn,
         opts.key ? h('div', { class: 'note', text: 'Changing the name updates it on every title they appear in.' }) : null]),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'pf_bio', text: 'Short bio' }), bioIn]),
@@ -445,10 +484,14 @@ window.ReelAdmin = function (env) {
     var dupMap = dupCache.map;
     function popOf(k) { return popState(k); }
     var pinN = list.filter(function (p) { return popOf(p.key) === 'pin'; }).length, hideN = list.filter(function (p) { return popOf(p.key) === 'hide'; }).length;
+    // Google status per person: worked out once per draw (the filter, its count and each row use it).
+    var seoMemo = {}, tCounts = personTitleCounts(); function seoOf(k) { return seoMemo[k] || (seoMemo[k] = personSeo(k, tCounts)); }
+    var notGoogleN = list.filter(function (p) { return seoOf(p.key).page; }).length;
     var shown = list.filter(function (p) {
       return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1 || ((people[p.key] && people[p.key].aka) || []).join(' ').toLowerCase().indexOf(q) !== -1) &&
         (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]) &&
-        (peopleFilter !== 'pin' || popOf(p.key) === 'pin') && (peopleFilter !== 'hide' || popOf(p.key) === 'hide');
+        (peopleFilter !== 'pin' || popOf(p.key) === 'pin') && (peopleFilter !== 'hide' || popOf(p.key) === 'hide') &&
+        (peopleFilter !== 'notgoogle' || seoOf(p.key).page);
     });
     var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search by name or URL' }); search.value = peopleQ;
     search.addEventListener('input', function () { peopleQ = search.value; peoplePage = 1; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
@@ -460,7 +503,7 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'note', text: 'Everyone credited on any title, with their public page. Each person has one page and one photo, matched by name, so fix spelling mistakes with Rename or Merge rather than adding a second person.' }),
       h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
         h('label', { class: 'sr', for: 'pplQ', text: 'Search people' }), h('span', { style: 'flex:1;min-width:200px' }, [search]),
-        chip('nophoto', 'Missing photo'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : '')), chip('pin', 'Always popular' + (pinN ? ' (' + pinN + ')' : '')), chip('hide', 'Never popular' + (hideN ? ' (' + hideN + ')' : ''))
+        chip('nophoto', 'Missing photo'), chip('notgoogle', 'Not in Google (' + notGoogleN + ')'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : '')), chip('pin', 'Always popular' + (pinN ? ' (' + pinN + ')' : '')), chip('hide', 'Never popular' + (hideN ? ' (' + hideN + ')' : ''))
       ])
     ]);
     var pages = Math.max(1, Math.ceil(shown.length / PEOPLE_PAGE));
@@ -476,7 +519,8 @@ window.ReelAdmin = function (env) {
         avatarBtn(p.name, 52),
         h('span', { style: 'flex:1;min-width:220px' }, [
           h('div', { style: 'font-weight:600;font-size:14px' }, [p.name, popOf(p.key) === 'pin' ? h('span', { class: 'star', title: 'Always shown in Popular', text: ' ★ Popular' }) : popOf(p.key) === 'hide' ? h('span', { class: 'note', text: ' · hidden from Popular' }) : null]),
-          h('div', { style: 'font-size:13px;margin-top:2px;word-break:break-all' }, [h('a', { href: page, target: '_blank', rel: 'noopener', text: '/person/' + p.key })]),
+          h('div', { style: 'font-size:13px;margin-top:2px;word-break:break-all' }, [h('a', { href: page, target: '_blank', rel: 'noopener', text: '/person/' + p.key }),
+            (function () { var g = seoOf(p.key); return h('span', { class: g.on ? 'note' : 'warn', style: 'margin-left:8px;white-space:nowrap', title: g.text, text: (g.on ? '✓ ' : '') + g.short }); })()]),
           h('div', { class: 'note', style: 'white-space:nowrap;overflow:hidden;text-overflow:ellipsis', title: p.titles.join(', '), text: (p.titles.length ? p.titles.length + (p.titles.length === 1 ? ' title · ' : ' titles · ') + p.titles.join(', ') : 'Not on any title yet') + (bio ? ' · has bio' : '') }),
           dup ? h('div', { class: 'warn', style: 'margin-top:4px' }, ['Possible duplicate of '].concat(dup.slice(0, 2).map(function (d2, i) {
             return h('span', {}, [i ? ', ' : '', h('b', { text: d2.name }), ' ', h('button', { type: 'button', class: 'btn small', style: 'height:26px;padding:0 10px', disabled: !canWrite, text: 'Merge into this', on: { click: function () { mergeInto(p, d2); } } })]);
@@ -1146,7 +1190,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Films not in Google': 'films-not-in-google', 'TV not in Google': 'tv-not-in-google', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
@@ -1154,15 +1198,29 @@ window.ReelAdmin = function (env) {
   function pubOk(d, st) { return st === 'all' || (st === 'unpublished' ? d.published === false : d.published !== false); }
   function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); }) || (d.moreBooking || []).some(function (p) { return p && Object.keys(p.urls || {}).some(function (c) { return safeUrl(p.urls[c]); }); })); }
   function hasYt(d) { return (d.videos || []).some(function (v) { return /youtu\.?be/.test(v.url || ''); }); }
+  // A story from the editorial file (content/synopses.json) counts at its length, as the build applies it before tiering.
+  var synLen = {};
+  fetch('/synopsis-file-lengths.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (o) {
+    synLen = o || {}; if (typeof renderList === 'function' && page === 'titles') renderList();
+  }).catch(function () {});
+  function storyLen(d, id) { var n = String(d.synopsis || '').trim().length; return n || synLen[id] || (synFile && synFile[id] ? 1 : 0); }
   function seoTier(d, id) {
-    var syn = String(d.synopsis || '').trim().length, tot = (seoVotes && seoVotes[id]) || 0;
+    var syn = storyLen(d, id), tot = (seoVotes && seoVotes[id]) || 0;
     if (!syn && !safeUrl(d.posterUrl) && !hasYt(d) && !tot) return 'kept';
     if (safeUrl(d.posterUrl) || hasYt(d) || hasWhere(d) || syn >= 200 || tot >= 3) return 'good';
     return syn < 80 ? 'thin' : 'border';
   }
+  // Whether a title's page is in Google, and if not, what would get it in (shown on the title editor).
+  var SEO_LABEL = { kept: 'kept out: nothing on the page yet', thin: 'clearly thin', border: 'borderline' };
+  function seoInfo(d, id) {
+    if (d.published === false) return { on: false, text: 'Not in Google: the title isn’t published.' };
+    var t = seoTier(d, id), syn = storyLen(d, id);
+    if (t === 'good') return { on: true, text: 'In Google: ' + (safeUrl(d.posterUrl) ? 'it has a poster' : hasYt(d) ? 'it has a YouTube video' : hasWhere(d) ? 'it says where to watch' : syn >= 200 ? 'it has a story of 200+ characters' : 'it has 3+ verdicts') + '.' };
+    return { on: false, text: 'Not in Google (' + SEO_LABEL[t] + '). Add any one of these to get it in at the next deploy: a poster, a YouTube trailer or song, where to watch (OTT platform, OTT link or booking link), or a story of 200+ characters' + (syn ? ' (it has ' + syn + ')' : '') + '.' };
+  }
   function loadSeoVotes() {
     if (seoVotes || !db) return; seoVotes = {};
-    db.collection('verdicts').get().then(function (snap) { var c = {}; snap.docs.forEach(function (x) { var v = (x.data() || {}).v || {}; Object.keys(v).forEach(function (k) { c[k] = (c[k] || 0) + 1; }); }); seoVotes = c; if (seoF) renderList(); }).catch(function () {});
+    db.collection('verdicts').get().then(function (snap) { var c = {}; snap.docs.forEach(function (x) { var v = (x.data() || {}).v || {}; Object.keys(v).forEach(function (k) { c[k] = (c[k] || 0) + 1; }); }); seoVotes = c; if (seoF || /not in Google/.test(filter)) renderList(); }).catch(function () {});
   }
   function yearOf(d) { var y = (d.releaseDate || '').slice(0, 4); return /^\d{4}$/.test(y) ? y : 'none'; }
   function langsOf(d) { return (d.languages || '').split(/[,;/]| dubbed in | and /i).map(function (x) { return x.trim(); }).filter(Boolean); }
@@ -1222,7 +1280,7 @@ window.ReelAdmin = function (env) {
       } else {
         on = filter === f;
         n = base.filter(function (m) { return chipOk(m.data, m.id, f); }).length;
-        click = function () { filter = on ? 'All' : f; };
+        click = function () { filter = on ? 'All' : f; if (/not in Google/.test(f)) loadSeoVotes(); };
       }
       if (isMiss(f) && !isMiss(FILTERS[i - 1])) box.appendChild(h('span', { class: 'chipsep', 'aria-hidden': 'true' }));
       box.appendChild(h('button', { type: 'button', class: 'chip' + (isMiss(f) ? ' gap' : ''), 'aria-pressed': String(on), text: (isMiss(f) && on ? '✓ ' : '') + f + ' · ' + n,
@@ -1289,7 +1347,7 @@ window.ReelAdmin = function (env) {
     return a.some(function (c) { return !String(c.character || '').trim(); });
   }
   function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing characters' ? missingChars(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : d.section === f); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing characters' ? missingChars(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : f === 'Films not in Google' ? d.section !== 'TV shows' && seoTier(d, id) !== 'good' : f === 'TV not in Google' ? d.section === 'TV shows' && seoTier(d, id) !== 'good' : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
     if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
@@ -1339,6 +1397,7 @@ window.ReelAdmin = function (env) {
     setStatus('Downloaded ' + list.length + ' title' + (list.length === 1 ? '' : 's') + '.');
   }
   function renderList() {
+    if (/not in Google/.test(filter)) loadSeoVotes();
     if (seoF) loadSeoVotes();
     var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
     if (page !== 'titles') return;
@@ -2469,7 +2528,9 @@ window.ReelAdmin = function (env) {
             var was = draft.published; draft.published = !pubNow;
             save().then(function (ok) { if (!ok) { draft.published = was; renderEditor(); return; } setStatus((pubNow ? 'Unpublished ' : 'Published ') + (draft.title || 'title') + (pubNow ? '. It’s hidden from visitors.' : '. It’s live on the site.')); renderEditor(); });
           } } })
-      ])
+      ]),
+      // Google status from what is saved and being edited now; the page changes at the next deploy.
+      live ? (function () { var gi = seoInfo(draft, currentId); loadSeoVotes(); return h('div', { class: gi.on ? 'note' : 'warn', style: 'margin-top:8px', text: (gi.on ? '✓ ' : '') + gi.text }); })() : null
     ]));
     if (pendingSwitch) {
       var target = movies.find(function (m) { return m.id === pendingSwitch; });

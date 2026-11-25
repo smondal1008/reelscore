@@ -753,6 +753,10 @@ async function main() {
   write('catalogue.json', JSON.stringify(cat));
   // For the admin panel's Missing synopsis filter: titles whose story comes from content/synopses.json.
   write('synopsis-file-ids.json', JSON.stringify(movies.filter(m => m.data._synFile).map(m => m.id)));
+  // ...and how long each of those stories is, so the admin panel's "in Google" status matches the build's (seoTier).
+  write('synopsis-file-lengths.json', JSON.stringify(Object.fromEntries(movies.filter(m => m.data._synFile).map(m => [m.id, String(m.data.synopsis || '').trim().length]))));
+  // People whose bio comes from content/bios.json: the admin panel counts them as having a bio (person pages in Google).
+  write('bio-file-ids.json', JSON.stringify(data.people.filter(p => p.data && p.data._bioFile && p.data.bio).map(p => p.id)));
   // The app loads it in two parts: the core (every section but Older releases, plus people) first, Older releases after.
   // catalogue.json stays whole: the next build reads it, and the app falls back to it.
   const isOlder = m => m.data.section === 'Older releases' && String(m.data.releaseDate || '') < '2025';
