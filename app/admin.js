@@ -506,12 +506,12 @@ window.ReelAdmin = function (env) {
     var pinN = list.filter(function (p) { return popOf(p.key) === 'pin'; }).length, hideN = list.filter(function (p) { return popOf(p.key) === 'hide'; }).length;
     // Google status per person: worked out once per draw (the filter, its count and each row use it).
     var seoMemo = {}, tCounts = personTitleCounts(); function seoOf(k) { return seoMemo[k] || (seoMemo[k] = personSeo(k, tCounts)); }
-    var notGoogleN = list.filter(function (p) { return seoOf(p.key).page; }).length;
+    var notGoogleN = list.filter(function (p) { return seoOf(p.key).page; }).length, inGoogleN = list.filter(function (p) { return seoOf(p.key).on; }).length;
     var shown = list.filter(function (p) {
       return (!q || p.name.toLowerCase().indexOf(q) !== -1 || p.key.indexOf(q) !== -1 || ((people[p.key] && people[p.key].aka) || []).join(' ').toLowerCase().indexOf(q) !== -1) &&
         (peopleFilter !== 'nophoto' || !personPhoto(p.name)) && (peopleFilter !== 'dupes' || dupMap[p.key]) &&
         (peopleFilter !== 'pin' || popOf(p.key) === 'pin') && (peopleFilter !== 'hide' || popOf(p.key) === 'hide') &&
-        (peopleFilter !== 'notgoogle' || seoOf(p.key).page);
+        (peopleFilter !== 'notgoogle' || seoOf(p.key).page) && (peopleFilter !== 'ingoogle' || seoOf(p.key).on);
     });
     var search = h('input', { class: 'in', id: 'pplQ', type: 'search', placeholder: 'Search by name or URL' }); search.value = peopleQ;
     search.addEventListener('input', function () { peopleQ = search.value; peoplePage = 1; var pos = search.selectionStart; renderPeople(); var n = $('pplQ'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
@@ -523,7 +523,7 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'note', text: 'Everyone credited on any title, with their public page. Each person has one page and one photo, matched by name, so fix spelling mistakes with Rename or Merge rather than adding a second person.' }),
       h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap;align-items:center' }, [
         h('label', { class: 'sr', for: 'pplQ', text: 'Search people' }), h('span', { style: 'flex:1;min-width:200px' }, [search]),
-        chip('nophoto', 'Missing photo'), chip('notgoogle', 'Not in Google (' + notGoogleN + ')'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : '')), chip('pin', 'Always popular' + (pinN ? ' (' + pinN + ')' : '')), chip('hide', 'Never popular' + (hideN ? ' (' + hideN + ')' : ''))
+        chip('nophoto', 'Missing photo'), chip('ingoogle', 'People in Google (' + inGoogleN + ')'), chip('notgoogle', 'People not in Google (' + notGoogleN + ')'), chip('dupes', 'Possible duplicates' + (dupCount ? ' (' + dupCount + ')' : '')), chip('pin', 'Always popular' + (pinN ? ' (' + pinN + ')' : '')), chip('hide', 'Never popular' + (hideN ? ' (' + hideN + ')' : ''))
       ])
     ]);
     var pages = Math.max(1, Math.ceil(shown.length / PEOPLE_PAGE));
@@ -1222,6 +1222,7 @@ window.ReelAdmin = function (env) {
   var synLen = {};
   fetch('/synopsis-file-lengths.json', { cache: 'no-cache' }).then(function (r) { return r.ok ? r.json() : {}; }).then(function (o) {
     synLen = o || {}; if (typeof renderList === 'function' && page === 'titles') renderList();
+    if (peopleMode) { var ae = document.activeElement; if (!(ae && ae.id === 'pplQ')) renderPeople(); } // story lengths decide which titles count for people
   }).catch(function () {});
   function storyLen(d, id) { var n = String(d.synopsis || '').trim().length; return n || synLen[id] || (synFile && synFile[id] ? 1 : 0); }
   function seoTier(d, id) {
