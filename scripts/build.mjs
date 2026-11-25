@@ -292,18 +292,20 @@ function homeHeroMarkup(m, url, n) {
     String(d.genre || '').split(/,| /)[0] ? String(d.genre).split(',')[0] : null, d.releaseDate ? String(d.releaseDate).slice(0, 4) : null, d.runtime || null].filter(Boolean);
   const meta = bits.map((t, i) => (i ? '<i aria-hidden="true"></i>' : '') + '<span>' + esc(t) + '</span>').join('') + (d.certificate ? '<i aria-hidden="true"></i><span class="cert">' + esc(d.certificate) + '</span>' : '');
   const len = String(d.title || '').length, line = heroLineOf(d);
-  return '<div id="heroBox"><section class="fh rs-static" aria-label="Featured: ' + esc(d.title) + '"><div class="scrim"></div><div class="fb">' +
+  const banner = safeUrl(d.bannerUrl);
+  return '<div id="heroBox" data-kind="home"' + (banner ? ' data-banner="' + esc(banner) + '"' : '') + '><section class="fh rs-static" aria-label="Featured: ' + esc(d.title) + '"><div class="scrim"></div><div class="fb">' +
     '<div class="logo' + (len > 28 ? ' long' : len > 16 ? ' mid' : '') + '">' + esc(d.title) + '</div><div class="meta">' + meta + '</div>' +
     (line ? '<p class="syn">' + esc(line) + '</p>' : '') +
     '<div class="btns"><a class="pill play" href="' + esc(url) + '"><span aria-hidden="true">▶</span>Trailer</a><a class="pill info" href="' + esc(url) + '">View details</a>' +
     '<span class="roundadd" aria-hidden="true">+</span></div></div>' +
     (n > 1 ? '<div class="fdots" aria-hidden="true">' + Array.from({ length: n }, (_, i) => '<button type="button" tabindex="-1" aria-current="' + (i === 0) + '"><span></span></button>').join('') + '</div>' : '') +
-    '</section></div>';
+    '</section></div>' + inlineHeroTag();
 }
 function titleHeroMarkup(m, url, yearText, trailerPath) {
   const d = m.data, line = heroLineOf(d);
   const bits = [yearText, d.languages, d.genre, d.runtime].filter(Boolean);
-  return '<div class="tpage rs-statwrap"><section class="tp art rs-static"><div class="shade"></div><div class="in">' +
+  const banner = safeUrl(d.bannerUrl), poster = safeUrl(d.posterUrl);
+  return '<div class="tpage rs-statwrap" data-kind="title"' + (banner ? ' data-banner="' + esc(banner) + '"' : '') + (poster ? ' data-poster="' + esc(poster) + '"' : '') + '><section class="tp art rs-static"><div class="shade"></div><div class="in">' +
     '<div class="poster art" role="img" aria-label="' + esc(d.title) + ' poster"></div><div class="txt">' +
     '<a href="/" style="color:var(--muted);font-weight:600;font-size:14px;text-decoration:none">← Back to home</a>' +
     '<div class="display ttl" style="font-size:clamp(44px,6vw,84px)">' + esc(d.title) + '</div>' +
@@ -313,7 +315,31 @@ function titleHeroMarkup(m, url, yearText, trailerPath) {
     // Watchlist and Share need the app: shown as they will look, not yet usable (the app replaces them in a moment).
     '<div class="acts2">' + (trailerPath ? '<a class="btn lg primary" style="text-decoration:none" href="' + esc(url + trailerPath) + '">▶  Watch trailer</a>' : '') +
     '<span class="btn lg glass" aria-hidden="true">+  Watchlist</span><span class="btn lg glass" aria-hidden="true">Share</span></div>' +
-    '</div></div></section></div>';
+    '</div></div></section></div>' + inlineHeroTag();
+}
+
+// Runs inside the page, right after the hero written into it (homeHeroMarkup / titleHeroMarkup): asks for the hero's
+// pictures while the page is still being read, at the sizes app/main.js will ask for, and puts them on the hero. Its text
+// never changes, so vercel.json's Content-Security-Policy allows exactly it by its hash (INLINE_HERO_HASH; the build
+// checks the two agree and leaves the snippet out, with a warning, if they don't). HERO_JS below does the same later as
+// a fallback; the browser fetches each picture once.
+const INLINE_HERO_JS = "(function(){try{var w=document.currentScript.previousElementSibling,k=w.getAttribute('data-kind');" +
+  "if(k==='home'&&location.pathname!=='/')return;" +
+  "var D=Math.min(window.devicePixelRatio||1,2),V=Math.max(320,Math.min(window.innerWidth||1280,2560));" +
+  "var c=function(u,x){var m=u.match(/^(https:\\/\\/res\\.cloudinary\\.com\\/[^/]+\\/image\\/upload\\/)(.*)$/);if(!m||/^[a-z]{1,3}_[^/]*\\//.test(m[2]))return u;return m[1]+'f_auto,q_auto,c_limit,w_'+x+'/'+m[2];};" +
+  "var p=function(u,hi){var l=document.createElement('link');l.rel='preload';l.as='image';l.href=u;if(hi)l.setAttribute('fetchpriority','high');document.head.appendChild(l);};" +
+  "var s=function(el,u){if(el)el.style.backgroundImage='url(\"'+u.replace(/\"/g,'%22')+'\")';};" +
+  "var b=w.getAttribute('data-banner'),q=w.getAttribute('data-poster');" +
+  "if(/^https:\\/\\//.test(b||'')){var bu=c(b,Math.min(1920,Math.ceil(V*D/320)*320));p(bu,1);s(w.querySelector('.rs-static'),bu);}" +
+  "if(/^https:\\/\\//.test(q||'')){var qu=c(q,480);p(qu,!b);s(w.querySelector('.poster'),qu);}}catch(e){}})();";
+const INLINE_HERO_HASH = "'sha256-" + createHash('sha256').update(INLINE_HERO_JS).digest('base64') + "'";
+let INLINE_HERO_OK = null;
+function inlineHeroTag() {
+  if (INLINE_HERO_OK === null) {
+    INLINE_HERO_OK = fs.readFileSync(path.join(ROOT, 'vercel.json'), 'utf8').includes(INLINE_HERO_HASH);
+    if (!INLINE_HERO_OK) console.warn('[seo] vercel.json script-src lacks ' + INLINE_HERO_HASH + ': the inline hero snippet is left out (pictures load a little later)');
+  }
+  return INLINE_HERO_OK ? '<script>' + INLINE_HERO_JS + '</script>' : '';
 }
 
 // Runs from the small catalogue script, before app/main.js: asks for the page's hero pictures at once, at exactly the
@@ -386,7 +412,7 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
   const seedTag = seed ? '<script type="application/json" id="rs-seed" data-kind="' + route + '"' + heroAttrs + '>' + JSON.stringify(seed).replace(/</g, '\\u003c') + '</script>' : '';
   // heroHtml: the page's first screen as the app draws it (see homeHeroMarkup / titleHeroMarkup), shown before any script
   // runs. With it on top, the search-engine block's poster is below the first screen, so it loads lazily.
-  if (heroHtml) body = body.replace(' fetchpriority="high"', ' loading="lazy"');
+  if (heroHtml) body = body.replace(' fetchpriority="high"', ' loading="lazy" fetchpriority="low"');
   return html.replace(slot, '<div class="view" id="view-' + route + '">' + (heroHtml || '') + '<div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
 }
 
