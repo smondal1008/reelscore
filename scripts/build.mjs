@@ -607,7 +607,7 @@ async function main() {
     if (!/^\/(movie|tv)\/[a-z0-9-]+$/.test(url)) continue;
     if (seen.has(url)) { console.warn('[seo] duplicate URL, skipped:', url, m.id); continue; }
     seen.add(url);
-    const y = year(d), sc = score(m.id), vs = (isOtt(d) || tv) ? VERD.ott : VERD.theatre;
+    const y = year(d), sc = score(m.id), vs = (d.section === 'In theatres' || d.section === 'Coming soon') ? VERD.theatre : VERD.ott;
     const cast = (d.cast || []).filter(c => c && c.name);
     const actors = cast.filter(c => !CREW_RE.test(c.role || '')), crew = cast.filter(c => CREW_RE.test(c.role || ''));
     const directors = String(d.director || '').split(/,| and /).map(s => s.trim()).filter(Boolean);
@@ -1042,7 +1042,7 @@ async function main() {
       '<h2>Verdicts</h2>' +
       '<p>Anyone signed in with a Google account can give a verdict once a title is out. Each person has one verdict per title and can change or remove it at any time. There are three choices:</p>' +
       '<ul><li>For films in theatres: <b>' + esc(t[0][1]) + '</b> (' + esc(t[0][2].toLowerCase()) + '), <b>' + esc(t[1][1]) + '</b> (' + esc(t[1][2].toLowerCase()) + ') or <b>' + esc(t[2][1]) + '</b> (' + esc(t[2][2].toLowerCase()) + ').</li>' +
-      '<li>For films on OTT and TV shows: <b>' + esc(o[0][1]) + '</b>, <b>' + esc(o[1][1]) + '</b> or <b>' + esc(o[2][1]) + '</b>.</li></ul>' +
+      '<li>For films on OTT, older releases and TV shows: <b>' + esc(o[0][1]) + '</b>, <b>' + esc(o[1][1]) + '</b> or <b>' + esc(o[2][1]) + '</b>.</li></ul>' +
       '<p>Verdicts for upcoming films open on their release date, so a score only reflects people who could have seen the film.</p>' +
       '<h2>How the score is worked out</h2>' +
       '<p>A title’s score is the share of its verdicts that recommend watching it at all: the first two choices count as positive, Skip counts as negative. If 80 people give a verdict and 60 of them pick ' + esc(t[0][1]) + ' or ' + esc(t[1][1]) + ', the score is 75%. Below the score you can see how the verdicts split across all three choices, so a 75% made mostly of “' + esc(t[1][1]) + '” reads differently from one made mostly of “' + esc(t[0][1]) + '”.</p>' +

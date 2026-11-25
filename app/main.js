@@ -207,7 +207,10 @@
     if (isOld(m)) return 'Released ' + fmtDate(d.releaseDate, true) + (d.platform ? ' · on ' + d.platform : '');
     return rel ? 'In theatres' : 'Releases ' + fmtDate(d.releaseDate);
   }
-  function vset(m) { return isOtt(m) || isTv(m) ? VERD.ott : VERD.theatre; }
+  // The Theatre / OTT / Skip scale only fits films that are in, or coming to, theatres. Streaming titles, TV shows and
+  // older releases use Must watch / Watch / Skip (same a/b/c keys, so existing verdicts keep their meaning).
+  function bigScreen(m) { return m.data.section === 'In theatres' || m.data.section === 'Coming soon'; }
+  function vset(m) { return bigScreen(m) ? VERD.theatre : VERD.ott; }
   function inList(id) { return S.mine.watchlist.indexOf(id) !== -1; }
   function following(uid) { return S.mine.following.indexOf(uid) !== -1; }
 
@@ -2275,7 +2278,7 @@
     s.innerHTML = '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>';
     return s;
   }
-  function vIconName(m, k) { return k === 'c' ? 'skip' : isOtt(m) || isTv(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
+  function vIconName(m, k) { return k === 'c' ? 'skip' : !bigScreen(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
   var SPLITCOL = { a: 'var(--accent)', b: '#7FB2FF', c: '#6B6577' };
 
   // ---------- before release: countdown, your plan, buzz ----------
