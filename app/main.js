@@ -3324,7 +3324,9 @@
     var pinned = all.filter(function (p) { return p.pin === 'pin'; });
     var auto = all.filter(function (p) { return !p.pin; }).sort(function (a, b) { return b.pop - a.pop; }).slice(0, Math.max(0, 120 - pinned.length));
     var popSet = {}; pinned.concat(auto).forEach(function (p) { popSet[p.slug] = 1; });
-    w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Show', style: 'margin-bottom:14px' }, ['Popular', 'Male actors', 'Female actors', 'Acting', 'All', 'Behind the camera'].map(function (r) {
+    // "All Cast & Crew" and "Behind the camera" are hidden (owner's call); a saved choice of either falls back to Popular.
+    if (P.role === 'All' || P.role === 'Behind the camera') P.role = 'Popular';
+    w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Show', style: 'margin-bottom:14px' }, ['Popular', 'Male actors', 'Female actors', 'Acting'].map(function (r) {
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(P.role === r), text: { All: 'All Cast & Crew', Acting: 'All Actors' }[r] || r, on: { click: function () { P.role = r; P.page = 1; render(true); } } });
     })));
     var q = h('input', { id: 'pplQ', class: 'in', type: 'search', placeholder: 'Search by name', autocomplete: 'off' }); q.value = P.q;
