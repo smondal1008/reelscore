@@ -700,7 +700,7 @@
     } else if (opts.dateBadge && d.releaseDate) {
       var p = d.releaseDate.split('-');
       top = h('span', { class: 'datebadge' }, [h('b', { text: String(+p[2]) }), h('small', { text: MONTHS[+p[1] - 1].toUpperCase() })]);
-    } else {
+    } else if (!(opts.noNew && shownPct(sc) === null && released(m))) {
       top = h('span', { class: 'badge' }, [h('i'), shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
     }
     var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
@@ -745,10 +745,13 @@
   }
   var HOME_MAX = 20;
   function seeAll(href) { return h('span', { class: 'sub' }, [h('a', { href: href, text: 'See all' })]); }
-  // "Because it's on your list" (home): a taste profile built from your whole watchlist and your verdicts.
-  // Watchlist titles count 1, Theatre / Must watch 1.5, OTT / Watch 0.5, Skip -1 (pushes those genres, languages and people down).
-  // Every title you haven't saved or rated is scored on genre (3), language (2), shared actors / directors (2 each, up to 3)
-  // and a small boost (0.5) if it's watchable now. Upcoming titles are allowed. At most 3 cards per saved title, 20 in all.
+  // "More like what you love" (home): a taste profile built from your whole watchlist and your verdicts.
+  // Watchlist titles count 1, Theatre / Must watch 1.5, OTT / Watch 0.5, Skip -1 (pushes those genres and people down).
+  // A pick needs a real link to one title you saved or liked: a shared actor or director, or two shared genres that aren't
+  // broad ones (drama, action, comedy…). Language only filters (it must share one with your titles); it adds nothing to the score.
+  // Scored on genre (3) and shared people (2 each, up to 3), plus 1 if it's out in the last two years, in theatres or streaming now.
+  // Titles without a poster go to the end. At most 3 cards per saved title, 20 in all; the row hides below 6.
+  var BROAD_GENRES = { drama: 1, action: 1, comedy: 1, romance: 1, romantic: 1, family: 1, thriller: 1, film: 1, series: 1, show: 1, entertainer: 1, masala: 1 };
   function tasteFeatures(m) {
     var d = m.data, g = {}, l = {}, p = {};
     String(d.genre || '').toLowerCase().split(/[^a-z-]+/).forEach(function (t) { if (t.length > 2 && t !== 'and') g[t] = 1; });
@@ -777,29 +780,31 @@
       Object.keys(f.p).forEach(function (k) { pp[k] = (pp[k] || 0) + s.w; });
     });
     if (!W) return null;
+    var myLangs = {}; ids.forEach(function (id) { if (seeds[id].w > 0) Object.keys(feat[id].l).forEach(function (k) { myLangs[k] = 1; }); });
     var scored = [];
     S.movies.forEach(function (m) {
       if (seeds[m.id] || inList(m.id) || vv[m.id] || m.data.published === false || !inNavLang(m)) return;
-      var f = tasteFeatures(m), gs = 0, ls = 0, ps = 0, gk = Object.keys(f.g), pk = Object.keys(f.p);
+      var f = tasteFeatures(m), gs = 0, ps = 0, gk = Object.keys(f.g), pk = Object.keys(f.p);
+      if (!Object.keys(f.l).some(function (k) { return myLangs[k]; })) return;
       gk.forEach(function (k) { gs += (pg[k] || 0) / W; });
       if (gk.length) gs = gs / Math.sqrt(gk.length);
-      Object.keys(f.l).forEach(function (k) { ls = Math.max(ls, (pl[k] || 0) / W); });
       pk.forEach(function (k) { ps += pp[k] || 0; });
       ps = Math.max(-3, Math.min(3, ps));
       if (gs <= 0 && ps <= 0) return;
       var np = nowPlayingOf(m.data), now = np === 'theatres' || np === 'ott' || m.data.section === 'In theatres' || m.data.section === 'On OTT';
-      var w = gs * 3 + ls * 2 + ps * 2 + (now ? 0.5 : 0);
-      if (w > 1) scored.push({ m: m, w: w, f: f });
+      var rd = String(m.data.releaseDate || ''), recent = released(m) && rd && daysSince(rd) <= 730;
+      var w = gs * 3 + ps * 2 + (now || recent ? 1 : 0);
+      if (w > 1) scored.push({ m: m, w: w, f: f, art: !!safeUrl(m.data.posterUrl) });
     });
-    scored.sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    scored.sort(function (a, b) { return (b.art - a.art) || b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
     var pos = ids.filter(function (id) { return seeds[id].w > 0; }), per = {}, out = [], why = {};
     for (var i = 0; i < scored.length && out.length < 20 && i < 300; i++) {
       var o = scored[i], best = null, bw = 0;
       pos.forEach(function (id) {
-        var f = feat[id], sw = 0;
-        Object.keys(o.f.p).forEach(function (k) { if (f.p[k]) sw += 2; });
-        Object.keys(o.f.g).forEach(function (k) { if (f.g[k]) sw += 1; });
-        Object.keys(o.f.l).forEach(function (k) { if (f.l[k]) sw += 0.5; });
+        var f = feat[id], sw = 0, people = 0, sharp = 0;
+        Object.keys(o.f.p).forEach(function (k) { if (f.p[k]) { sw += 2; people++; } });
+        Object.keys(o.f.g).forEach(function (k) { if (f.g[k]) { sw += 1; if (!BROAD_GENRES[k]) sharp++; } });
+        if (!people && sharp < 2) return;
         sw *= seeds[id].w;
         if (sw > bw) { bw = sw; best = id; }
       });
@@ -809,8 +814,9 @@
     }
     becauseListSection.ck = ck;
     becauseListSection.draw = function () {
-      if (out.length < 4) return null;
-      var sec = rowSection('Because it’s on your list', out.filter(function (m) { return S.byId[m.id] && !inList(m.id); }), { tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
+      var list = out.filter(function (m) { return S.byId[m.id] && !inList(m.id); });
+      if (list.length < 6) return null;
+      var sec = rowSection('More like what you love', list, { noNew: true, tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
       if (sec) sec.id = 'becauselist';
       return sec;
     };
@@ -848,7 +854,7 @@
     return S.tonight;
   }
   function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, mood: t.mood, langs: t.langs })); } catch (e) {} }
-  // Taste profile from the watchlist and verdicts (same weights as "Because it's on your list").
+  // Taste profile from the watchlist and verdicts (same weights as "More like what you love").
   function tasteModel() {
     var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
     var ck = (S.mine.watchlist || []).join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length;
