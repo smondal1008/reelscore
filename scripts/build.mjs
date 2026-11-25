@@ -272,6 +272,46 @@ function loadFixture(file) {
 // ---------- output helpers ----------
 // Minify the app's scripts and styles in dist/ (esbuild, from package.json). Without it the build still works, unminified.
 // Only whitespace, syntax and local names change: each file keeps its global names, so the files still work together.
+// The hero as app/main.js draws it (drawHero for the home banner, titleHero for a title page), written into the page so it
+// shows before any script runs. Same classes and structure, so it takes the same space; its pictures are set by HERO_JS
+// at the sizes the app asks for, and the app swaps in its own copy (same size, same picture) when it starts.
+// Kept in step with app/main.js heroLine, drawHero and the title hero; buttons that need the app link to the page instead.
+function heroLineOf(d) {
+  const hk = String(d.hook || '').trim(); if (hk) return hk;
+  const syn = String(d.synopsis || '').trim(); if (!syn) return '';
+  const m = syn.match(/^.{20,}?[.!?](?=\s|$)/), first = m ? m[0] : syn;
+  return first.length > 160 ? first.slice(0, 157).replace(/\s+\S*$/, '') + '…' : first;
+}
+function homeHeroMarkup(m, url, n) {
+  const d = m.data, tv = d.section === 'TV shows', ott = d.section === 'On OTT';
+  const bits = [tv ? 'TV show' + (d.platform ? ' · ' + d.platform : '') : ott ? 'Film · ' + (d.platform || 'OTT') : 'Film',
+    String(d.genre || '').split(/,| /)[0] ? String(d.genre).split(',')[0] : null, d.releaseDate ? String(d.releaseDate).slice(0, 4) : null, d.runtime || null].filter(Boolean);
+  const meta = bits.map((t, i) => (i ? '<i aria-hidden="true"></i>' : '') + '<span>' + esc(t) + '</span>').join('') + (d.certificate ? '<i aria-hidden="true"></i><span class="cert">' + esc(d.certificate) + '</span>' : '');
+  const len = String(d.title || '').length, line = heroLineOf(d);
+  return '<div id="heroBox"><section class="fh rs-static" aria-label="Featured: ' + esc(d.title) + '"><div class="scrim"></div><div class="fb">' +
+    '<div class="logo' + (len > 28 ? ' long' : len > 16 ? ' mid' : '') + '">' + esc(d.title) + '</div><div class="meta">' + meta + '</div>' +
+    (line ? '<p class="syn">' + esc(line) + '</p>' : '') +
+    '<div class="btns"><a class="pill play" href="' + esc(url) + '"><span aria-hidden="true">▶</span>Trailer</a><a class="pill info" href="' + esc(url) + '">View details</a>' +
+    '<span class="roundadd" aria-hidden="true">+</span></div></div>' +
+    (n > 1 ? '<div class="fdots" aria-hidden="true">' + Array.from({ length: n }, (_, i) => '<button type="button" tabindex="-1" aria-current="' + (i === 0) + '"><span></span></button>').join('') + '</div>' : '') +
+    '</section></div>';
+}
+function titleHeroMarkup(m, url, yearText, trailerPath) {
+  const d = m.data, line = heroLineOf(d);
+  const bits = [yearText, d.languages, d.genre, d.runtime].filter(Boolean);
+  return '<div class="tpage rs-statwrap"><section class="tp art rs-static"><div class="shade"></div><div class="in">' +
+    '<div class="poster art" role="img" aria-label="' + esc(d.title) + ' poster"></div><div class="txt">' +
+    '<a href="/" style="color:var(--muted);font-weight:600;font-size:14px;text-decoration:none">← Back to home</a>' +
+    '<div class="display ttl" style="font-size:clamp(44px,6vw,84px)">' + esc(d.title) + '</div>' +
+    (d.subtitle ? '<div class="display sbt" style="font-size:clamp(24px,3vw,36px);color:#D9D5DF">' + esc(d.subtitle) + '</div>' : '') +
+    (bits.length || d.certificate ? '<p class="tmeta">' + esc(bits.join(' · ')) + (d.certificate ? '<span class="cert">' + esc(d.certificate) + '</span>' : '') + '</p>' : '') +
+    (line ? '<p class="lede hook">' + esc(line) + '</p>' : '') +
+    // Watchlist and Share need the app: shown as they will look, not yet usable (the app replaces them in a moment).
+    '<div class="acts2">' + (trailerPath ? '<a class="btn lg primary" style="text-decoration:none" href="' + esc(url + trailerPath) + '">▶  Watch trailer</a>' : '') +
+    '<span class="btn lg glass" aria-hidden="true">+  Watchlist</span><span class="btn lg glass" aria-hidden="true">Share</span></div>' +
+    '</div></div></section></div>';
+}
+
 // Runs from the small catalogue script, before app/main.js: asks for the page's hero pictures at once, at exactly the
 // sizes app/main.js will ask for (same rules as its cld, bannerW and poster width), so the app finds them already loading.
 // The home seed is in index.html, which also stands in for /browse and other app pages: only "/" preloads its banner;
@@ -282,7 +322,9 @@ const HERO_JS = "(function(){try{var e=document.getElementById('rs-seed');if(!e)
   "var c=function(u,w){var m=u.match(/^(https:\\/\\/res\\.cloudinary\\.com\\/[^/]+\\/image\\/upload\\/)(.*)$/);if(!m||/^[a-z]{1,3}_[^/]*\\//.test(m[2]))return u;return m[1]+'f_auto,q_auto,c_limit,w_'+w+'/'+m[2];};" +
   "var p=function(u,hi){if(!/^https:\\/\\//.test(u||''))return;var l=document.createElement('link');l.rel='preload';l.as='image';l.href=u;if(hi)l.setAttribute('fetchpriority','high');document.head.appendChild(l);};" +
   "var b=e.getAttribute('data-banner'),q=e.getAttribute('data-poster');" +
-  "if(b)p(c(b,Math.min(1920,Math.ceil(V*D/320)*320)),true);if(q&&k==='title')p(c(q,480),!b);}catch(x){}})();";
+  "var bg=function(sel,u){var el=document.querySelector(sel);if(el&&/^https:\\/\\//.test(u||''))el.style.backgroundImage='url(\"'+u.replace(/\"/g,'%22')+'\")';};" +
+  "if(b){var bu=c(b,Math.min(1920,Math.ceil(V*D/320)*320));p(bu,true);bg(k==='home'?'.fh.rs-static':'.tp.rs-static',bu);}" +
+  "if(q&&k==='title'){var qu=c(q,480);p(qu,!b);bg('.tp.rs-static .poster',qu);}}catch(x){}})();";
 const MINIFY = ['app/main.js', 'app/admin.js', 'app/about.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'app/app.css', 'app/admin.css'];
 async function minifyAssets() {
   let esbuild; try { esbuild = await import('esbuild'); } catch (e) { console.warn('[seo] esbuild not installed: scripts and styles left unminified'); return; }
@@ -309,7 +351,7 @@ function copyDir(from, to) {
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
 const OG_DEFAULT = '/og-default.png';
-function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed, hero }) {
+function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed, hero, heroHtml }) {
   // Pages without a poster or photo share the site-wide card (1200x630).
   const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
@@ -338,7 +380,10 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
   // data-banner / data-poster name the page's first big pictures, which the small catalogue script preloads (see HERO_JS).
   const heroAttrs = hero ? (hero.banner ? ' data-banner="' + esc(hero.banner) + '"' : '') + (hero.poster ? ' data-poster="' + esc(hero.poster) + '"' : '') : '';
   const seedTag = seed ? '<script type="application/json" id="rs-seed" data-kind="' + route + '"' + heroAttrs + '>' + JSON.stringify(seed).replace(/</g, '\\u003c') + '</script>' : '';
-  return html.replace(slot, '<div class="view" id="view-' + route + '"><div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
+  // heroHtml: the page's first screen as the app draws it (see homeHeroMarkup / titleHeroMarkup), shown before any script
+  // runs. With it on top, the search-engine block's poster is below the first screen, so it loads lazily.
+  if (heroHtml) body = body.replace(' fetchpriority="high"', ' loading="lazy"');
+  return html.replace(slot, '<div class="view" id="view-' + route + '">' + (heroHtml || '') + '<div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
 }
 
 // ---------- main ----------
@@ -603,7 +648,8 @@ async function main() {
 
     // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
     const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), hero: { banner: safeUrl(d.bannerUrl), poster: safeUrl(d.posterUrl) }, robots: thinTitle ? 'noindex,follow' : undefined }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), hero: { banner: safeUrl(d.bannerUrl), poster: safeUrl(d.posterUrl) },
+      heroHtml: titleHeroMarkup(m, url, tv ? tvYears(d) : String(d.releaseDate || '').slice(0, 4), (vpaths.find(x => /trailer|teaser|promo|glimpse/i.test(x.kind || '')) || vpaths[0] || {}).path || ''), robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
       const au = (tv ? '/tv/' : '/movie/') + alias;
@@ -793,7 +839,8 @@ async function main() {
   const homeSeed = featured.length ? { builtAt: data.builtAt, movies: featured.map(o => ({ id: o.id, data: slim(o.data) })), people: {}, verdicts: verdictsFor(featured.map(o => o.id)) } : null;
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
     canonical: '/', ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody,
-    seed: homeSeed, hero: homeSeed ? { banner: safeUrl(featured[0].data.bannerUrl) } : null });
+    seed: homeSeed, hero: homeSeed ? { banner: safeUrl(featured[0].data.bannerUrl) } : null,
+    heroHtml: homeSeed ? homeHeroMarkup(featured[0], movieUrl(featured[0]), featured.length) : '' });
   write('index.html', homeHtml);
 
   // Browse: all sections, then one page per section listing every title in it
