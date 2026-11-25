@@ -953,13 +953,45 @@
         .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
     ];
   }
+  // Tonight card art with a ▶ on it when the title has a YouTube trailer. Tapping plays it in the art's place, with sound;
+  // the player loads only then, so the cards stay light. ✕ or Esc puts the art back. One trailer plays at a time.
+  function tnTrailer(m) { return vidItems(m).filter(function (x) { return x.cat === 'trailers' && x.yt; })[0] || null; }
+  var tnStopPlaying = null;
+  function tnMedia(m, art) {
+    var tr = tnTrailer(m), box = h('div', { class: 'tnmedia' }, [art]);
+    if (!tr) return box;
+    var label = (/teaser/i.test(tr.kind) ? 'Teaser' : /promo/i.test(tr.kind) ? 'Promo' : 'Trailer') + (tr.dur ? ' · ' + tr.dur : '');
+    var play = h('button', { type: 'button', class: 'tnplay', 'aria-label': 'Play the ' + label.split(' ·')[0].toLowerCase() + ' of ' + m.data.title, on: { click: start } },
+      [h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]);
+    var chip = h('span', { class: 'tnlen', 'aria-hidden': 'true', text: label });
+    box.appendChild(play); box.appendChild(chip);
+    function onKey(e) { if (e.key === 'Escape') stopIt(); }
+    function stopIt() {
+      if (tnStopPlaying === stopIt) tnStopPlaying = null;
+      document.removeEventListener('keydown', onKey);
+      box.classList.remove('playing'); box.closest('.tnpick') && box.closest('.tnpick').classList.remove('playing');
+      box.innerHTML = ''; box.appendChild(art); box.appendChild(play); box.appendChild(chip); play.focus();
+    }
+    function start() {
+      if (tnStopPlaying) tnStopPlaying();
+      tnStopPlaying = stopIt;
+      var frame = h('iframe', { class: 'tnframe', src: 'https://www.youtube-nocookie.com/embed/' + tr.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: m.data.title + ' · ' + tr.title,
+        allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+      var x = h('button', { type: 'button', class: 'tnclose', 'aria-label': 'Close the trailer', text: '✕', on: { click: stopIt } });
+      box.innerHTML = ''; box.classList.add('playing'); box.closest('.tnpick') && box.closest('.tnpick').classList.add('playing');
+      box.appendChild(frame); box.appendChild(x); x.focus();
+      document.addEventListener('keydown', onKey);
+    }
+    return box;
+  }
   function tnPicks(t, onChange, wide) {
     var pool = tnPool(t), picks = pool.slice(0, 3);
     var kids = picks.map(function (o) {
       var m = o.m, d = m.data, useBanner = wide && !!safeUrl(d.bannerUrl), pa = artLazy(m, useBanner ? 'banner' : 'poster', useBanner ? 640 : undefined);
       var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), isTv(m) ? (o.rt ? 'Series · ' + o.rt + 'm episodes' : 'Series') : o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
+      var art = h('a', { class: 'tnart art' + (wide && !useBanner ? ' tnposter' : ''), href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, pa.bg ? [] : [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]);
       return h('article', { class: 'tnpick' }, [
-        h('a', { class: 'tnart art' + (wide && !useBanner ? ' tnposter' : ''), href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, pa.bg ? [] : [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]),
+        tnMedia(m, art),
         h('div', { class: 'tnbody' }, [
           h('a', { class: 'tnt', href: movieUrl(m), text: d.title }),
           h('div', { class: 'tnm', text: meta }),
