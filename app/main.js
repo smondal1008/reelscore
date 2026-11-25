@@ -953,7 +953,7 @@
         .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
     ];
   }
-  // Tonight card art with a ▶ on it when the title has a YouTube trailer. Tapping plays it in the art's place, with sound;
+  // Tonight card art with a ▶ on it (no label) when the title has a YouTube trailer. Tapping plays it in the art's place, with sound;
   // the player loads only then, so the cards stay light. ✕ or Esc puts the art back. One trailer plays at a time.
   function tnTrailer(m) { return vidItems(m).filter(function (x) { return x.cat === 'trailers' && x.yt; })[0] || null; }
   var tnStopPlaying = null;
@@ -963,14 +963,13 @@
     var label = (/teaser/i.test(tr.kind) ? 'Teaser' : /promo/i.test(tr.kind) ? 'Promo' : 'Trailer') + (tr.dur ? ' · ' + tr.dur : '');
     var play = h('button', { type: 'button', class: 'tnplay', 'aria-label': 'Play the ' + label.split(' ·')[0].toLowerCase() + ' of ' + m.data.title, on: { click: start } },
       [h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]);
-    var chip = h('span', { class: 'tnlen', 'aria-hidden': 'true', text: label });
-    box.appendChild(play); box.appendChild(chip);
+    box.appendChild(play);
     function onKey(e) { if (e.key === 'Escape') stopIt(); }
     function stopIt() {
       if (tnStopPlaying === stopIt) tnStopPlaying = null;
       document.removeEventListener('keydown', onKey);
       box.classList.remove('playing'); box.closest('.tnpick') && box.closest('.tnpick').classList.remove('playing');
-      box.innerHTML = ''; box.appendChild(art); box.appendChild(play); box.appendChild(chip); play.focus();
+      box.innerHTML = ''; box.appendChild(art); box.appendChild(play); play.focus();
     }
     function start() {
       if (tnStopPlaying) tnStopPlaying();
