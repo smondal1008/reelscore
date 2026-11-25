@@ -56,6 +56,7 @@ const SKIP = new Set(['dist', 'scripts', 'node_modules', 'README.md', 'package.j
 const slugify = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const personSlug = n => String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
+const charOf = c => { if (!c) return ''; const x = String(c.character || '').trim(); if (x) return x; const r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; };
 const VERD = {
   theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Skip', 'Not worth it']],
   ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Skip']]
@@ -373,7 +374,7 @@ async function main() {
   const addCredit = (slug, c) => { if (slug) (credits[slug] = credits[slug] || []).push(c); };
   movies.forEach(m => {
     const cast = m.data.cast || [];
-    cast.forEach(c => addCredit(personSlug(c.name), { m, name: c.name, role: c.role || '', crew: CREW_RE.test(c.role || ''), year: c.year || '' }));
+    cast.forEach(c => addCredit(personSlug(c.name), { m, name: c.name, role: CREW_RE.test(c.role || '') ? c.role : charOf(c), crew: CREW_RE.test(c.role || ''), year: c.year || '' }));
     String(m.data.director || '').split(/,| and /).map(s => s.trim()).filter(Boolean).forEach(d => {
       const k = personSlug(d); if (!cast.some(c => personSlug(c.name) === k)) addCredit(k, { m, name: d, role: 'Director', crew: true });
     });
@@ -505,7 +506,7 @@ async function main() {
       upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', released: !!d.releaseDate && d.releaseDate <= TODAY,
       languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, episodes: d.episodes, endYear: d.endYear,
       platform: d.platform, director: d.director, cast, verdicts: { pct: sc.pct, tot: sc.tot } })) + '</p>';
-    if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (c.role && c.role !== 'Cast' ? ' <span class="note">' + esc(c.role) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
+    if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (charOf(c) ? ' <span class="note">as ' + esc(charOf(c)) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d), vpaths = videoPaths(d);
     if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vpaths.map(x => '<li><a href="' + url + x.path + '"><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + '</a> <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';

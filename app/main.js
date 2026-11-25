@@ -2690,7 +2690,7 @@
       return ph ? h('img', { src: ph, alt: '', class: cls, loading: 'lazy' }) : h('span', { class: cls, style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
     };
     var link = function (c, cls, kids, label) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name), 'aria-label': label }, kids) : h('div', { class: cls }, kids); };
-    var sub = function (c) { return [/^(lead|cast|actor|actress)$/i.test(c.role || '') ? '' : c.role || '', tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
+    var sub = function (c) { return [CREW_RE.test(c.role || '') ? c.role : charOf(c), tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
     // Leads: the cast marked ★ in Admin; with none marked, the first two actors.
     var marked = actors.filter(function (c) { return c.lead; });
     var leads = marked.length ? marked : actors.slice(0, actors.length > 2 ? 2 : actors.length);
@@ -2710,7 +2710,7 @@
       S.castAll = S.castAll || {};
       var open = !!S.castAll[m.id], show = open ? rest : rest.slice(0, 12);
       box.appendChild(h('div', { class: 'castg' }, show.map(function (c, i) {
-        return link(c, 'cp', [face(c, i + 2, 'c'), h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null], c.name + (c.role ? ', ' + c.role : '') + ' — see all titles');
+        return link(c, 'cp', [face(c, i + 2, 'c'), h('span', { class: 'cn', style: 'font-size:14px;font-weight:600', text: c.name }), sub(c) ? h('span', { class: 'note', text: sub(c) }) : null], c.name + (charOf(c) ? ', as ' + charOf(c) : c.role ? ', ' + c.role : '') + ' — see all titles');
       })));
       if (rest.length > 12) box.appendChild(h('button', { type: 'button', class: 'btn more', 'aria-expanded': String(open), text: open ? 'Show fewer' : 'Show all ' + actors.length + ' cast', on: { click: function () { S.castAll[m.id] = !open; swapInPlace(box, castBlock(m), '#cast .btn.more'); } } }));
     }
@@ -3044,6 +3044,8 @@
   }
   // ---------- people (cast & crew pages: /person/<name>) ----------
   var CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
+  // Character name for an acting credit: the new `character` field, else an old free-text role that isn't a crew job.
+  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; }
   function personSlug(name) { return String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function personUrl(name) { return '/person/' + personSlug(name); }
   function personPhotoUrl(name, w) { var p = S.people[personSlug(name)]; return p && safeUrl(p.photoUrl) ? cld(p.photoUrl, w || 320) : ''; }
@@ -3051,7 +3053,7 @@
   function creditsOf(slug) {
     var out = [];
     S.movies.forEach(function (m) {
-      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: c.role || '', crew: CREW_RE.test(c.role || ''), episodes: c.episodes || '', year: c.year || '' }); });
+      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: CREW_RE.test(c.role || '') ? c.role : charOf(c), crew: CREW_RE.test(c.role || ''), episodes: c.episodes || '', year: c.year || '' }); });
       if (!(m.data.cast || []).some(function (c) { return personSlug(c.name) === slug; })) {
         String(m.data.director || '').split(/,| and /).forEach(function (d) { if (d.trim() && personSlug(d) === slug) out.push({ m: m, name: d.trim(), role: 'Director', crew: true }); });
       }

@@ -11,6 +11,7 @@
   function langs(v) { return String(v || '').split(/\s*[,;]\s*/).map(function (x) { return x.trim(); }).filter(Boolean); }
   var CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
   var SKIP_ROLE = /^(cast|actor|actress|self)$/i;
+  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; }
 
   // t: { title, tv, date, year, upcoming, released, languages, genre, runtime, certificate, seasons, episodes, endYear, platform,
   //      director, cast: [{name, role}], verdicts: {pct, tot} }
@@ -37,7 +38,7 @@
     var actors = cast.filter(function (c) { return !CREW_RE.test(c.role || ''); });
     var crew = cast.filter(function (c) { return CREW_RE.test(c.role || '') && dirs.indexOf(c.name) === -1; });
     if (actors.length) {
-      var lead = actors.slice(0, 3).map(function (c) { var r = String(c.role || '').trim(); return c.name + (r && !SKIP_ROLE.test(r) ? ' as ' + r : ''); });
+      var lead = actors.slice(0, 3).map(function (c) { var r = charOf(c); return c.name + (r && !SKIP_ROLE.test(r) ? ' as ' + r : ''); });
       var more = actors.slice(3, 9).map(function (c) { return c.name; });
       s.push((actors.length === 1 ? 'It stars ' : 'The cast is led by ') + list(lead) + (more.length ? ', with ' + list(more) + ' also in the cast' : '') + '.');
     }

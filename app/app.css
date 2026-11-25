@@ -136,8 +136,8 @@
   .err { font-size: 13px; color: var(--danger); }
   .rows { display: flex; flex-direction: column; gap: 8px; }
   .row { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) 44px; gap: 8px; align-items: center; }
-  .row.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 44px 44px; }
-  .row.v.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, 1fr) 90px 90px 44px 44px; }
+  .row.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1fr) 44px 44px; }
+  .row.v.cast { grid-template-columns: 48px minmax(0, 1.2fr) minmax(0, .8fr) minmax(0, 1fr) 80px 80px 44px 44px; }
   .cname { display: flex; flex-direction: column; justify-content: center; min-height: 44px; padding: 0 4px; min-width: 0; }
   .cname strong { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .cname a { font-size: 12px; color: var(--muted, #A59FB3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

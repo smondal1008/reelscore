@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing synopsis', 'No OTT link'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing characters', 'Missing synopsis', 'No OTT link'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Soundtrack', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
@@ -306,7 +306,7 @@ window.ReelAdmin = function (env) {
       var next = cast.map(function (c) { if (personKey(c.name) === oldKey) { hit = true; return Object.assign({}, c, { name: newName, role: c.role || '' }); } return c; });
       if (!hit) return;
       // drop a duplicate row if the title already had the target person with the same role
-      var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || ''); if (seen[k]) return false; seen[k] = 1; return true; });
+      var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || '') + '|' + (c.character || ''); if (seen[k]) return false; seen[k] = 1; return true; });
       jobs.push(db.doc('movies/' + m.id).update({ cast: next, updatedAt: new Date().toISOString() }));
     });
     var from = people[oldKey], to = people[newKey];
@@ -1146,7 +1146,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   var SEO_TIERS = [['kept', 'Kept out of Google'], ['thin', 'Clearly thin'], ['border', 'Borderline'], ['good', 'Good substance']];
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
@@ -1198,7 +1198,7 @@ window.ReelAdmin = function (env) {
     if (location.pathname + location.search !== url) history.replaceState(null, '', url);
   }
   // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
-  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing interviews': 'interviews', 'Missing cast': 'cast', 'Missing synopsis': 'synopsis', 'No OTT link': 'ott-link' };
+  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing interviews': 'interviews', 'Missing cast': 'cast', 'Missing characters': 'characters', 'Missing synopsis': 'synopsis', 'No OTT link': 'ott-link' };
   function isMiss(f) { return !!MISS_SLUG[f]; }
   // With Missing info picked, the field chips (fieldF) narrow it to titles missing every picked field.
   function chipOk(d, id, sec, miss, fields) {
@@ -1283,8 +1283,13 @@ window.ReelAdmin = function (env) {
   function missingTrailer(d) { return !(d.videos || []).some(function (v) { return (v.url || '').trim() && !/^(song|soundtrack|episode)$/i.test((v.kind || '').trim()); }); }
   // Films only: TV shows rarely have songs. Cast: no actor listed (crew such as the director doesn't count).
   function missingSongs(d) { return d.section !== 'TV shows' && !(d.videos || []).some(function (v) { return (v.url || '').trim() && /^(song|soundtrack)$/i.test((v.kind || '').trim()); }); }
+  // Missing characters: any of the first 6 actors (not crew, not hosts/judges) has no character name.
+  function missingChars(d) {
+    var a = (d.cast || []).filter(function (c) { return String(c.name || '').trim() && !CREDIT_CREW.test(c.role || '') && !/^(host|co-host|judge|narrator|guest|presenter)\b/i.test(c.role || ''); }).slice(0, 6);
+    return a.some(function (c) { return !String(c.character || '').trim(); });
+  }
   function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : d.section === f); }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing characters' ? missingChars(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : d.section === f); }
   function passQL(d, id, skipSeo, skipStatus) {
     if (!skipStatus && !pubOk(d, statusF)) return false;
     if (seoF && !skipSeo && seoTier(d, id) !== seoF) return false;
@@ -2205,6 +2210,12 @@ window.ReelAdmin = function (env) {
     intro(); document.body.appendChild(box);
   }
 
+  var CREDIT_CREW = /(director|producer|music|writer|screenplay|story|dialogue|composer|cinematograph|editor|lyric|singer|choreograph|designer|stunt|creator|created by)/i;
+  var CREDITS = ['Actor', 'Director', 'Producer', 'Writer', 'Screenplay', 'Story', 'Dialogues', 'Music', 'Background score', 'Cinematographer', 'Editor', 'Lyricist', 'Playback singer', 'Choreographer', 'Production designer', 'Stunt director', 'Created by', 'Host', 'Judge', 'Narrator', 'Guest'];
+  function ensureCreditList() {
+    if (document.getElementById('creditList')) return;
+    document.body.appendChild(h('datalist', { id: 'creditList' }, CREDITS.map(function (c) { return h('option', { value: c }); })));
+  }
   function listEditor(title, key, cols, empty) {
     var rows = h('div', { class: 'rows' });
     function draw() {
@@ -2230,7 +2241,11 @@ window.ReelAdmin = function (env) {
           } else if (c.options) {
             el = h('select', { id: key + i + c.k, class: 'in', disabled: !canWrite }, c.options.map(function (o) { return h('option', { value: o, text: o, selected: (item[c.k] || '').toLowerCase() === o.toLowerCase() }); }));
           } else {
-            el = h('input', { id: key + i + c.k, class: 'in', placeholder: c.label, disabled: !canWrite, autocomplete: 'off' }); el.value = item[c.k] || '';
+            el = h('input', { id: key + i + c.k, class: 'in', placeholder: c.ph || c.label, disabled: !canWrite, autocomplete: 'off', list: c.list || null }); el.value = item[c.k] || '';
+            // Credit blank = Actor. A crew credit (Director, Producer…) has no character, so that box is switched off.
+            if (c.list === 'creditList') ensureCreditList();
+            if (c.charOf) { el.disabled = !canWrite || CREDIT_CREW.test(item.role || ''); el.title = el.disabled && canWrite ? 'Crew credits have no character' : ''; }
+            if (c.list === 'creditList') el.addEventListener('input', function () { var ch = rows.querySelector('#' + key + i + 'character'); if (ch) { var crew = CREDIT_CREW.test(el.value); ch.disabled = !canWrite || crew; ch.title = crew ? 'Crew credits have no character' : ''; } });
           }
           el.addEventListener('input', function () { item[c.k] = el.value; touch(); });
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); if (c.k === 'kind') KIND_PICKED.add(item); });
@@ -2624,7 +2639,7 @@ window.ReelAdmin = function (env) {
       main.appendChild(listEditor('Daily box office', 'boDaily', [{ k: 'date', label: 'Date 2026-11-23' }, { k: 'nett', label: 'That day’s India nett' }, { k: 'dgross', label: 'That day’s India gross' }, { k: 'tnett', label: 'Total India nett' }, { k: 'gross', label: 'Total India gross' }, { k: 'world', label: 'Total worldwide' }, { k: 'langs', label: 'India nett by language so far: Hindi 725, Tamil 47.45' }], 'No daily figures yet. Add a row per day, or use ⬆ Import box office CSV in the Box office card above.'));
     }
 
-    main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Role or character' }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
+    main.appendChild(listEditor('Cast & crew · tap 📷 to add a photo', 'cast', [{ k: 'name', label: 'Name' }, { k: 'role', label: 'Credit', ph: 'Actor', list: 'creditList' }, { k: 'character', label: 'Character', charOf: true }].concat(tvEd ? [{ k: 'episodes', label: 'Episodes' }, { k: 'year', label: 'Year(s)' }] : []), 'No cast or crew yet.'));
 
     main.appendChild(listEditor('Did you know? (trivia)', 'trivia', [{ k: 'text', label: 'Fact, in our own words, no spoilers' }, { k: 'source', label: 'Source link' }], 'No facts yet. Write each one in our own words and add the link it came from.'));
     main.appendChild(listEditor('Filmed in', 'locations', [{ k: 'name', label: 'Place, e.g. Leh, Ladakh' }], 'No filming locations yet.'));
