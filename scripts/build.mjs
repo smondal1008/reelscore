@@ -8,7 +8,8 @@
 // Settings (Vercel environment variables, all optional):
 //   SITE_URL            canonical origin, e.g. https://reelscore.in (default: the production domain)
 //   SEO_MIN_VERDICTS    verdicts a title needs before its score goes into search markup (default 10)
-//   SEO_MIN_CREDITS     titles a person needs before they get a pre-rendered page (default 2)
+//   SEO_PERSON_TITLES   titles a person needs for an indexed page with no bio or photo (default 8)
+//   SEO_PERSON_PHOTO    titles a person with a photo (and no bio) needs for an indexed page (default 4)
 //   FULL_REFRESH=1      read every title and person from Firestore even if the last catalogue is recent
 //
 // It also writes /catalogue.json (every title and person), which the app loads instead of reading the whole
@@ -49,7 +50,10 @@ function npSection(d, today) {
 const SITE = (process.env.SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL ? 'https://' + process.env.VERCEL_PROJECT_PRODUCTION_URL : 'https://reelscore-xi.vercel.app')).replace(/\/+$/, '');
 const MIN_VERDICTS = Math.max(1, parseInt(process.env.SEO_MIN_VERDICTS, 10) || 10);
-const MIN_CREDITS = Math.max(1, parseInt(process.env.SEO_MIN_CREDITS, 10) || 2);
+// Person pages open to search engines (the rest are kept for visitors with noindex,follow and left out of the sitemap):
+// a bio, or a photo and PERSON_PHOTO titles, or PERSON_TITLES titles. Titles count only if they have real content (richTitle).
+const PERSON_TITLES = Math.max(1, parseInt(process.env.SEO_PERSON_TITLES, 10) || 8);
+const PERSON_PHOTO = Math.max(1, parseInt(process.env.SEO_PERSON_PHOTO, 10) || 4);
 const SKIP = new Set(['dist', 'scripts', 'node_modules', 'README.md', 'package.json', 'package-lock.json', 'vercel.json', 'firestore.rules', 'content']);
 
 // ---------- helpers shared with the app (keep in step with app/main.js) ----------
@@ -483,7 +487,8 @@ async function main() {
   const richCount = slug => new Set((credits[slug] || []).filter(c => richTitle(c.m.data)).map(c => c.m.id)).size;
   const indexedPerson = slug => {
     const st = people[slug] || {};
-    return richCount(slug) >= MIN_CREDITS || (richCount(slug) >= 1 && (safeUrl(st.photoUrl) || st.bio)) || (titleCount(slug) >= 1 && !!st.bio);
+    const r = richCount(slug);
+    return !!st.bio || (!!safeUrl(st.photoUrl) && r >= PERSON_PHOTO) || r >= PERSON_TITLES;
   };
   const personName = slug => {
     const st = people[slug]; if (st && st.name) return st.name;
@@ -1102,7 +1107,7 @@ async function main() {
   }
 
   console.log(`[seo] SEO tiers: ${JSON.stringify(tierCount)}`);
-  console.log(`[seo] wrote ${nTitles} title pages and ${nVideoPages} video pages (${nThinTitles} kept out of the index until they have more substance; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (min ${MIN_CREDITS} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  console.log(`[seo] wrote ${nTitles} title pages and ${nVideoPages} video pages (${nThinTitles} kept out of the index until they have more substance; ${nRated} with rating markup, min ${MIN_VERDICTS} verdicts), ${nPeople} person pages (bio, or photo + ${PERSON_PHOTO} titles, or ${PERSON_TITLES} titles), sitemap ${sitemap.length} URLs, site ${SITE}, ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 
 main().catch(e => { console.error('[seo] build failed:', e && e.stack || e); process.exit(1); });
