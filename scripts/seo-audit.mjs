@@ -77,7 +77,8 @@ function main() {
       h1pr: pr ? (pr.match(/<h1\b/gi) || []).length : 0,
       words: words(text(body)),
       links, ld,
-      imgs: [...(pr || '').matchAll(/<img\b[^>]*>/gi)].map(m => m[0])
+      imgs: [...(pr || '').matchAll(/<img\b[^>]*>/gi)].map(m => m[0]),
+      staticHero: /class="[^"]*\brs-static\b/.test(html)
     });
   }
   // /movie/<slug>/trailer, /tv/<slug>/song/<name>… are video pages, not title pages.
@@ -193,7 +194,8 @@ function main() {
   if (noDim.length) add('Images', 'Low', 'img-no-size', noDim.length + ' images have no width/height (layout shift)', '', sample(noDim.map(i => i.p)));
   const withImg = content.filter(p => p.imgs.length).length;
   if (withImg < content.length / 2) add('Images', 'Medium', 'few-images', 'Only ' + withImg + ' of ' + content.length + ' pages have an image', 'Most titles have no poster and most people no photo; image search and rich results need them.');
-  const lcpHint = titles.filter(p => p.imgs.some(i => /class="pr-poster"/.test(i)) && !/fetchpriority="high"/.test(p.imgs.find(i => /class="pr-poster"/.test(i))));
+  // Pages with the hero written in (class rs-static) show that first; their search-engine poster sits lower and loads lazily.
+  const lcpHint = titles.filter(p => !p.staticHero && p.imgs.some(i => /class="pr-poster"/.test(i)) && !/fetchpriority="high"/.test(p.imgs.find(i => /class="pr-poster"/.test(i))));
   if (lcpHint.length) add('Images', 'Low', 'lcp-priority', lcpHint.length + ' poster images lack fetchpriority="high"', 'The poster is usually the largest element on the first screen.', sample(lcpHint));
 
   // ---------- AI search readiness ----------
