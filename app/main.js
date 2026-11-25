@@ -764,12 +764,17 @@
     });
     return { g: g, l: l, p: p };
   }
+  // Once the row has been shown, it stays put for the session: saving one of its picks to your list doesn't pull the
+  // card out or reshuffle the row (the watchlist it was built from is held until the page reloads).
+  var mlShown = Object.create(null), mlWatch = null;
   function becauseListSection() {
-    if (!S.uid && !(S.mine.watchlist || []).length) return null;
+    if (mlWatch && mlWatch.uid !== S.uid) { mlWatch = null; mlShown = Object.create(null); }
+    var wl = mlWatch || S.mine.watchlist || [];
+    if (!S.uid && !wl.length) return null;
     var seeds = {}, add = function (id, w, why) { if (!S.byId[id]) return; var s = seeds[id]; if (!s || Math.abs(w) > Math.abs(s.w)) seeds[id] = { w: w, why: why }; };
-    (S.mine.watchlist || []).forEach(function (id) { add(id, 1, 'saved'); });
+    wl.forEach(function (id) { add(id, 1, 'saved'); });
     var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
-    var ck = (S.mine.watchlist || []).join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length + '|' + (S.navLang || '');
+    var ck = wl.join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length + '|' + (S.navLang || '');
     if (becauseListSection.ck === ck) return becauseListSection.draw();
     Object.keys(vv).forEach(function (id) { var x = vv[id]; add(id, x === 'a' ? 1.5 : x === 'b' ? 0.5 : -1, x === 'c' ? 'skip' : 'rated'); });
     var ids = Object.keys(seeds), W = 0, pg = {}, pl = {}, pp = {}, feat = {};
@@ -783,7 +788,7 @@
     var myLangs = {}; ids.forEach(function (id) { if (seeds[id].w > 0) Object.keys(feat[id].l).forEach(function (k) { myLangs[k] = 1; }); });
     var scored = [];
     S.movies.forEach(function (m) {
-      if (seeds[m.id] || inList(m.id) || vv[m.id] || m.data.published === false || !inNavLang(m)) return;
+      if (seeds[m.id] || (inList(m.id) && !mlShown[m.id]) || vv[m.id] || m.data.published === false || !inNavLang(m)) return;
       var f = tasteFeatures(m), gs = 0, ps = 0, gk = Object.keys(f.g), pk = Object.keys(f.p);
       if (!Object.keys(f.l).some(function (k) { return myLangs[k]; })) return;
       gk.forEach(function (k) { gs += (pg[k] || 0) / W; });
@@ -814,8 +819,9 @@
     }
     becauseListSection.ck = ck;
     becauseListSection.draw = function () {
-      var list = out.filter(function (m) { return S.byId[m.id] && !inList(m.id); });
+      var list = out.filter(function (m) { return S.byId[m.id] && (!inList(m.id) || mlShown[m.id]); });
       if (list.length < 6) return null;
+      list.forEach(function (m) { mlShown[m.id] = 1; }); if (!mlWatch) { mlWatch = (S.mine.watchlist || []).slice(); mlWatch.uid = S.uid; }
       var sec = rowSection('More like what you love', list, { noNew: true, tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
       if (sec) sec.id = 'becauselist';
       return sec;
