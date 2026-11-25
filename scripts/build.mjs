@@ -56,7 +56,9 @@ const SKIP = new Set(['dist', 'scripts', 'node_modules', 'README.md', 'package.j
 const slugify = t => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const personSlug = n => String(n || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80);
 const CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
-const charOf = c => { if (!c) return ''; const x = String(c.character || '').trim(); if (x) return x; const r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; };
+const HOST_RE = /^(as\s+)?(host|co-host|judge|narrator|guest|presenter|anchor|mentor|contestant|self)\b/i;
+const hostOf = c => HOST_RE.test(String((c && c.role) || '').trim()) ? String(c.role).trim().replace(/^as\s+/i, '') : '';
+const charOf = c => { if (!c) return ''; const x = String(c.character || '').trim(); if (x) return x; const r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) && !HOST_RE.test(r) ? r.replace(/^as\s+/i, '') : ''; };
 const VERD = {
   theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Skip', 'Not worth it']],
   ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Skip']]
@@ -506,7 +508,7 @@ async function main() {
       upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', released: !!d.releaseDate && d.releaseDate <= TODAY,
       languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, episodes: d.episodes, endYear: d.endYear,
       platform: d.platform, director: d.director, cast, verdicts: { pct: sc.pct, tot: sc.tot } })) + '</p>';
-    if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (charOf(c) ? ' <span class="note">as ' + esc(charOf(c)) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
+    if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (charOf(c) || hostOf(c) ? ' <span class="note">' + (charOf(c) ? 'as ' + esc(charOf(c)) : esc(hostOf(c))) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d), vpaths = videoPaths(d);
     if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vpaths.map(x => '<li><a href="' + url + x.path + '"><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + '</a> <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';

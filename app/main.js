@@ -2690,7 +2690,7 @@
       return ph ? h('img', { src: ph, alt: '', class: cls, loading: 'lazy' }) : h('span', { class: cls, style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
     };
     var link = function (c, cls, kids, label) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name), 'aria-label': label }, kids) : h('div', { class: cls }, kids); };
-    var sub = function (c) { return [CREW_RE.test(c.role || '') ? c.role : charOf(c), tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
+    var sub = function (c) { return [CREW_RE.test(c.role || '') ? c.role : charOf(c) || (HOST_RE.test(c.role || '') ? String(c.role).replace(/^as\s+/i, '') : ''), tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
     // Leads: the cast marked ★ in Admin; with none marked, the first two actors.
     var marked = actors.filter(function (c) { return c.lead; });
     var leads = marked.length ? marked : actors.slice(0, actors.length > 2 ? 2 : actors.length);
@@ -3045,7 +3045,8 @@
   // ---------- people (cast & crew pages: /person/<name>) ----------
   var CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
   // Character name for an acting credit: the new `character` field, else an old free-text role that isn't a crew job.
-  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; }
+  var HOST_RE = /^(as\s+)?(host|co-host|judge|narrator|guest|presenter|anchor|mentor|contestant|self)\b/i;
+  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) && !HOST_RE.test(r) ? r.replace(/^as\s+/i, '') : ''; }
   function personSlug(name) { return String(name || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function personUrl(name) { return '/person/' + personSlug(name); }
   function personPhotoUrl(name, w) { var p = S.people[personSlug(name)]; return p && safeUrl(p.photoUrl) ? cld(p.photoUrl, w || 320) : ''; }
@@ -3053,7 +3054,7 @@
   function creditsOf(slug) {
     var out = [];
     S.movies.forEach(function (m) {
-      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: CREW_RE.test(c.role || '') ? c.role : charOf(c), crew: CREW_RE.test(c.role || ''), episodes: c.episodes || '', year: c.year || '' }); });
+      (m.data.cast || []).forEach(function (c) { if (personSlug(c.name) === slug) out.push({ m: m, name: c.name, role: CREW_RE.test(c.role || '') ? c.role : charOf(c) || (HOST_RE.test(c.role || '') ? String(c.role).replace(/^as\s+/i, '') : ''), crew: CREW_RE.test(c.role || ''), episodes: c.episodes || '', year: c.year || '' }); });
       if (!(m.data.cast || []).some(function (c) { return personSlug(c.name) === slug; })) {
         String(m.data.director || '').split(/,| and /).forEach(function (d) { if (d.trim() && personSlug(d) === slug) out.push({ m: m, name: d.trim(), role: 'Director', crew: true }); });
       }
@@ -3206,7 +3207,7 @@
         var y = t.w.up && !t.m.data.releaseDate ? 'Upcoming' : t.key.slice(0, 4) || 'Year not listed';
         if (y !== cur) { cur = y; box.appendChild(h('div', { class: 'pyr', text: y })); }
         var d = t.m.data, pa = artLazy(t.m, 'poster');
-        var ch = t.roles.filter(function (x) { return !CREW_RE.test(x); }), cr = t.roles.filter(function (x) { return CREW_RE.test(x); });
+        var ch = t.roles.filter(function (x) { return !CREW_RE.test(x) && !HOST_RE.test(x); }), cr = t.roles.filter(function (x) { return CREW_RE.test(x) || HOST_RE.test(x); });
         var role = [ch.length ? 'as ' + ch.join(' · ') : '', cr.join(' · '), t.tv && t.eps ? epText(t.eps) : ''].filter(Boolean).join(' · ');
         box.appendChild(h('a', { class: 'prow', href: movieUrl(t.m) }, [
           h('span', { class: 'prt art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),

@@ -11,7 +11,8 @@
   function langs(v) { return String(v || '').split(/\s*[,;]\s*/).map(function (x) { return x.trim(); }).filter(Boolean); }
   var CREW_RE = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i;
   var SKIP_ROLE = /^(cast|actor|actress|self)$/i;
-  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) ? r.replace(/^as\s+/i, '') : ''; }
+  var HOST_RE = /^(as\s+)?(host|co-host|judge|narrator|guest|presenter|anchor|mentor|contestant|self)\b/i;
+  function charOf(c) { if (!c) return ''; var x = String(c.character || '').trim(); if (x) return x; var r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) && !HOST_RE.test(r) ? r.replace(/^as\s+/i, '') : ''; }
 
   // t: { title, tv, date, year, upcoming, released, languages, genre, runtime, certificate, seasons, episodes, endYear, platform,
   //      director, cast: [{name, role}], verdicts: {pct, tot} }
