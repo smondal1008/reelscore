@@ -292,7 +292,19 @@
     if (!needUser()) return;
     var i = S.mine.watchlist.indexOf(id);
     if (i === -1) S.mine.watchlist.push(id); else S.mine.watchlist.splice(i, 1);
-    render(); saveMine(i === -1 ? 'Added to your watchlist' : 'Removed from your watchlist');
+    // On home, flip the + / ✓ buttons in place rather than redrawing every row (which made the page flicker).
+    if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); else render();
+    saveMine(i === -1 ? 'Added to your watchlist' : 'Removed from your watchlist');
+  }
+  function patchListButtons() {
+    var v = $('view-home'); if (!v) return;
+    v.querySelectorAll('.pc[data-id] .addl').forEach(function (b) {
+      var id = b.closest('.pc').getAttribute('data-id'), m = S.byId[id]; if (!m) return;
+      var on = inList(id), t = m.data.title;
+      b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '✓' : '+';
+      b.setAttribute('aria-label', on ? 'Remove ' + t + ' from my watchlist' : 'Add ' + t + ' to my watchlist');
+      b.title = on ? 'In my watchlist' : 'Add to my watchlist';
+    });
   }
   function toggleFollow(uid) {
     if (!needUser() || uid === S.uid) return;
@@ -4195,6 +4207,9 @@
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
+      var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || []]); };
+      // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
+      if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
       S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice() };
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; render();
