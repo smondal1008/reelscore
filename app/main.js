@@ -2434,7 +2434,7 @@
       h('div', { class: 'kicker', text: my ? 'Your verdict · tap again to clear' : 'Your verdict' }),
       h('div', { class: 'vbtns' }, vs.map(function (x) {
         return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setVerdict(m.id, x[0]); } } },
-          [h('span', { class: 'vi' }, [icon(vIconName(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
+          [h('span', { class: 'vi i-' + vIconName(m, x[0]) }, [icon(vIconName(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
       }))
     ]) : h('div', { class: 'vs-mine' }, [
       h('div', { class: 'kicker', text: 'Releases ' + fmtDate(d.releaseDate, true) }),

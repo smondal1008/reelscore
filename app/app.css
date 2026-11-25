@@ -604,6 +604,18 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .vb2[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
 .vb2[aria-pressed="true"] .vi { background: rgba(11,10,15,.16); color: #0B0A0F; }
 .vb2[aria-pressed="true"] small { color: #3A2A08; }
+/* Title page verdict buttons (movies and TV): the same icon animations as the poster-card buttons, on hover */
+.vb2[aria-pressed="true"] .vi.i-star svg path { fill: currentColor; }
+@media (hover: hover) {
+  .vb2:hover .vi.i-star svg { animation: qpop .5s ease; }
+  .vb2:hover .vi.i-star svg path { fill: currentColor; }
+  .vb2:hover .vi.i-thumb svg { animation: qnod .55s ease; transform-origin: 30% 85%; }
+  .vb2:hover .vi.i-screen svg { animation: qglow .6s ease; }
+  .vb2:hover .vi.i-screen svg path:first-child { fill: currentColor; fill-opacity: .35; }
+  .vb2:hover .vi.i-tv svg { animation: qtvon .5s ease; }
+  .vb2:hover .vi.i-skip svg { animation: qshake .45s ease; }
+}
+@media (prefers-reduced-motion: reduce) { .vb2 .vi svg { animation: none !important; } }
 .tpage .ptabs { margin-top: 28px; }
 .tside { float: right; width: 340px; margin: 32px 40px 0 28px; display: flex; flex-direction: column; gap: 18px; }
 .tpage > .tsec { margin: 32px 408px 0 40px; display: flex; flex-direction: column; gap: 16px; }
