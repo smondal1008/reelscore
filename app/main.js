@@ -3161,7 +3161,8 @@
       }))
     ]));
     // Known for: released titles, most-rated first, then ones with a poster, then newest.
-    var kfl = titles.filter(function (t) { return !t.w.up && (t.acting || !acting.length); }).slice().sort(function (a, b) {
+    var inNow = {}; nowList.forEach(function (t) { inNow[t.m.id] = 1; });
+    var kfl = titles.filter(function (t) { return !t.w.up && !t.tv && !inNow[t.m.id] && (t.acting || !acting.length); }).slice().sort(function (a, b) {
       return (score(b.m.id).tot - score(a.m.id).tot) || ((safeUrl(b.m.data.posterUrl) ? 1 : 0) - (safeUrl(a.m.data.posterUrl) ? 1 : 0)) || b.key.localeCompare(a.key);
     }).slice(0, 6);
     if (titles.length > 6 && kfl.length >= 3) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pkf' }, [
