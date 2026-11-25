@@ -2043,6 +2043,8 @@ window.ReelAdmin = function (env) {
     panel.appendChild(h('p', { class: 'note', text: todo.length + (todo.length === 1 ? ' title' : ' titles') + ' in this list have no trailer' + (todo.length > MAX ? '. YouTube allows about 95 searches a day, so this run covers the first ' + MAX + '; run it again tomorrow for the rest.' : '.') + ' You pick which matches to keep before anything is saved. Only tick videos from an official channel: the studio, the TV channel or the streaming service.' }));
     panel.appendChild(h('div', {}, [h('button', { type: 'button', class: 'btn primary', text: 'Search YouTube for ' + run.length + (run.length === 1 ? ' title' : ' titles'), on: { click: start } })]));
     document.body.appendChild(box);
+    function short(n) { return n >= 1e9 ? (n / 1e9).toFixed(n < 1e10 ? 1 : 0).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'K' : String(n); }
+    function statLine(o) { var a = []; if (o.views != null) a.push(short(o.views) + ' views'); if (o.likes != null) a.push(short(o.likes) + ' likes'); return a.join(' · '); }
     function dec(t) { var x = document.createElement('textarea'); x.innerHTML = t; return x.value; }
     function words(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').split(/[^a-z0-9]+/).filter(function (w) { return w.length > 1 && ['the', 'and', 'of', 'season', 'part'].indexOf(w) === -1; }); }
     function rank(m, r) {
@@ -2065,11 +2067,11 @@ window.ReelAdmin = function (env) {
         var r = x.res[x.pick], tr = x.tr || (x.tr = h('tr')); tr.innerHTML = '';
         var cb = h('input', { type: 'checkbox', checked: x.on, disabled: !r, 'aria-label': 'Keep the match for ' + x.m.data.title, on: { change: function () { x.on = cb.checked; count(); } } });
         var sel = x.res.length > 1 ? h('select', { class: 'in', style: 'max-width:420px', 'aria-label': 'Other matches for ' + x.m.data.title, on: { change: function () { x.pick = +sel.value; x.on = false; drawRow(x); count(); } } },
-          x.res.map(function (o, k) { return h('option', { value: String(k), selected: k === x.pick, text: o.title + ' — ' + o.ch }); })) : null;
+          x.res.map(function (o, k) { return h('option', { value: String(k), selected: k === x.pick, text: (statLine(o) ? statLine(o) + ' — ' : '') + o.title + ' — ' + o.ch }); })) : null;
         tr.appendChild(h('td', {}, [cb]));
         tr.appendChild(h('td', {}, [h('b', { text: x.m.data.title }), h('div', { class: 'note', text: [x.m.data.section, x.m.data.platform, String(x.m.data.releaseDate || '').slice(0, 4)].filter(Boolean).join(' · ') })]));
         tr.appendChild(h('td', {}, r ? [h('a', { href: 'https://www.youtube.com/watch?v=' + r.id, target: '_blank', rel: 'noopener', style: 'display:flex;gap:10px;align-items:center;color:inherit' }, [h('img', { src: 'https://i.ytimg.com/vi/' + r.id + '/mqdefault.jpg', alt: '', width: 96, height: 54, style: 'border-radius:6px;flex:none' }), h('span', { text: r.title })]), sel] : [h('span', { class: 'note', text: x.st === 'wait' ? 'Waiting…' : x.st === 'quota' ? 'Not searched: YouTube’s daily limit is used up' : x.st === 'err' ? 'Search failed' : 'No match found' })]));
-        tr.appendChild(h('td', {}, r ? [h('span', { class: 'bostat ' + (x.res[x.pick].full && OFFICIAL_CH.test(r.ch) ? 'ok' : 'warn'), text: r.kind }), h('div', { class: 'note', style: 'margin-top:4px', text: r.ch })] : []));
+        tr.appendChild(h('td', {}, r ? [h('span', { class: 'bostat ' + (x.res[x.pick].full && OFFICIAL_CH.test(r.ch) ? 'ok' : 'warn'), text: r.kind }), h('div', { class: 'note', style: 'margin-top:4px', text: r.ch }), statLine(r) ? h('div', { class: 'note', style: 'margin-top:2px', text: statLine(r) }) : null] : []));
         if (!tr.parentNode) tb.appendChild(tr);
       }
       rows.forEach(drawRow);
@@ -2084,6 +2086,14 @@ window.ReelAdmin = function (env) {
             if (j && j.error) { if (/quota/i.test(JSON.stringify(j.error))) { quota = true; x.st = 'quota'; } else { x.st = 'err'; } drawRow(x); return; }
             x.res = (j.items || []).filter(function (r) { return r.id && r.id.videoId; }).map(function (r) { return rank(x.m, r); }).filter(function (o) { return o.sc > 1; }).sort(function (a, b) { return b.sc - a.sc; });
             x.st = 'done'; x.on = !!x.res[0] && x.res[0].full && OFFICIAL_CH.test(x.res[0].ch) && /trailer|teaser|promo/i.test(x.res[0].title); drawRow(x);
+            // Views and likes for every match (1 quota unit for all of them), shown beside each choice so the real trailer stands out.
+            if (!x.res.length) return;
+            return fetch('https://www.googleapis.com/youtube/v3/videos?part=statistics&fields=items(id,statistics(viewCount,likeCount))&id=' + x.res.map(function (o) { return o.id; }).join(',') + '&key=' + encodeURIComponent(key))
+              .then(function (r) { return r.json(); }).then(function (k) {
+                var st = {}; ((k && k.items) || []).forEach(function (it) { st[it.id] = it.statistics || {}; });
+                x.res.forEach(function (o) { var s2 = st[o.id]; if (s2) { o.views = s2.viewCount != null ? +s2.viewCount : null; o.likes = s2.likeCount != null ? +s2.likeCount : null; } });
+                drawRow(x);
+              }).catch(function () {});
           }).catch(function () { x.st = 'err'; drawRow(x); }).then(function () { count(); next(); });
       }
       next();
@@ -2174,7 +2184,9 @@ window.ReelAdmin = function (env) {
           return page('');
         }).catch(function (e) { if (!c.err) c.err = quota ? 'stopped: daily limit' : 'couldn’t read (' + (e && e.message || 'error') + ')'; }).then(function () { c.done = true; done++; status(); });
       }
-      function dec(t) { var x = document.createElement('textarea'); x.innerHTML = t; return x.value; }
+      function short(n) { return n >= 1e9 ? (n / 1e9).toFixed(n < 1e10 ? 1 : 0).replace(/\.0$/, '') + 'B' : n >= 1e6 ? (n / 1e6).toFixed(n < 1e7 ? 1 : 0).replace(/\.0$/, '') + 'M' : n >= 1e3 ? (n / 1e3).toFixed(n < 1e4 ? 1 : 0).replace(/\.0$/, '') + 'K' : String(n); }
+    function statLine(o) { var a = []; if (o.views != null) a.push(short(o.views) + ' views'); if (o.likes != null) a.push(short(o.likes) + ' likes'); return a.join(' · '); }
+    function dec(t) { var x = document.createElement('textarea'); x.innerHTML = t; return x.value; }
       var q = handles.slice(), workers = [];
       for (var w = 0; w < 4; w++) workers.push((function loop() { var hd = q.shift(); return hd && !stop ? readChannel(hd).then(loop) : Promise.resolve(); })());
       Promise.all(workers).then(function () { if (!stop) review(); });
