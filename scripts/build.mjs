@@ -707,8 +707,23 @@ async function main() {
   const isOlder = m => m.data.section === 'Older releases' && String(m.data.releaseDate || '') < '2025';
   // Visitors' parts leave out unpublished titles (catalogue.json keeps them for the next build).
   const pub = m => m.data.published !== false;
-  write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => pub(m) && !isOlder(m)), people: cat.people }));
-  write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(m => pub(m) && isOlder(m)) }));
+  // Visitors' parts carry what lists, rows, search and people pages need. Fields only a title's own page shows (trivia,
+  // interviews, filming locations, source notes) are left out and the synopsis is cut to its start; such titles are marked
+  // _part, and the app fetches the rest from the title page's own seed when that page opens (app/main.js loadFull).
+  // A YouTube thumbnail that is the video's standard HD still is left out too (the app rebuilds it from the video id).
+  const DETAIL_ONLY = ['trivia', 'interviews', 'locations', 'srcTvmaze', 'wikidata', 'castFrom', 'synopsisFrom', 'platformUrlFrom', '_synFile'];
+  const listData = d => {
+    const o = { ...d }; let part = false;
+    for (const k of DETAIL_ONLY) if (k in o) { delete o[k]; part = true; }
+    if (typeof o.synopsis === 'string' && o.synopsis.length > 320) { const cut = o.synopsis.slice(0, 300); o.synopsis = cut.slice(0, Math.max(cut.lastIndexOf(' '), 200)) + '…'; part = true; }
+    if (Array.isArray(o.videos)) o.videos = o.videos.map(v => { if (!v || typeof v !== 'object') return v; const x = { ...v }; delete x.artistsChecked;
+      const id = ytId(safeUrl(x.url)); if (id && x.thumbHd && x.thumbUrl === 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg') delete x.thumbUrl; return x; });
+    if (part) o._part = 1;
+    return o;
+  };
+  const listed = m => ({ id: m.id, data: listData(m.data) });
+  write('catalogue-core.json', JSON.stringify({ builtAt: cat.builtAt, fullAt: cat.fullAt, movies: cat.movies.filter(m => pub(m) && !isOlder(m)).map(listed), people: cat.people }));
+  write('catalogue-older.json', JSON.stringify({ builtAt: cat.builtAt, movies: cat.movies.filter(m => pub(m) && isOlder(m)).map(listed) }));
   console.log(`[seo] catalogue split: core ${(fs.statSync(path.join(OUT, 'catalogue-core.json')).size / 1024).toFixed(0)} KB, older ${(fs.statSync(path.join(OUT, 'catalogue-older.json')).size / 1024).toFixed(0)} KB`);
   console.log(`[seo] catalogue.json: ${cat.movies.length} titles, ${Object.keys(cat.people).length} people, ${(Buffer.byteLength(JSON.stringify(cat)) / 1024).toFixed(0)} KB`);
   // Home page (also the app shell other routes fall back to): share image and WebSite / Organization data.

@@ -1069,6 +1069,20 @@
   }
 
   // ---------- home ----------
+  // A stand-in that becomes the real section when it nears the screen. Sections already shown in this visit are built at
+  // once on a redraw, so the page never collapses under the visitor.
+  var homeShown = {}, homeIO = 'IntersectionObserver' in window ? new IntersectionObserver(function (es) {
+    es.forEach(function (e) {
+      if (!e.isIntersecting) return; var ph = e.target; homeIO.unobserve(ph);
+      if (!ph.parentNode) return; homeShown[ph._key] = 1;
+      var n = ph._make(); if (n) ph.parentNode.replaceChild(n, ph); else ph.parentNode.removeChild(ph);
+    });
+  }, { rootMargin: '600px 0px' }) : null;
+  function lazySection(make, key) {
+    if (!homeIO || homeShown[key] || S.restoreHome) return make();
+    var ph = h('div', { class: 'lazysec', 'aria-hidden': 'true', style: 'min-height:380px' }); ph._make = make; ph._key = key;
+    homeIO.observe(ph); return ph;
+  }
   function drawHome() {
     var v = $('view-home');
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
@@ -1094,27 +1108,31 @@
     var mine = S.movies.filter(function (x) { return inNavLang(x) && inList(x.id); });
     var langNote = S.navLang ? h('div', { class: 'sect-h', style: 'margin-top:18px' }, [h('span', { class: 'sub' }, ['Showing ' + S.navLang + ' titles · ', h('a', { href: '#', on: { click: function (e) { e.preventDefault(); setNavLang(''); } }, text: 'Show all languages' })])]) : null;
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
-    [langNote, none,
+    // Rows below the first screen are built as they come near it (lazySection): the home page holds thousands of
+    // elements, and building them all at once kept phones busy just after the hero appeared.
+    [
+      langNote,
+      none,
       tonightSection(),
-      mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null,
-      becauseListSection(),
-      trailerSection(),
-      rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
+      lazySection(function () { return mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
+      lazySection(function () { return becauseListSection(); }, 1),
+      lazySection(function () { return trailerSection(); }, 2),
+      lazySection(function () { return rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])),
-      rateSection(),
-      friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null,
-      rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')),
-      songSection(),
-      genreSection(),
-      rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')),
-      rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')),
-      tvPromoSection(),
-      yearSection(),
-      rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])),
-      langSection()
+      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])); }, 3),
+      lazySection(function () { return rateSection(); }, 4),
+      lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
+      lazySection(function () { return rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
+      lazySection(function () { return songSection(); }, 7),
+      lazySection(function () { return genreSection(); }, 8),
+      lazySection(function () { return rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
+      lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
+      lazySection(function () { return tvPromoSection(); }, 11),
+      lazySection(function () { return yearSection(); }, 12),
+      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])); }, 13),
+      lazySection(function () { return langSection(); }, 14)
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
   }
@@ -1785,6 +1803,7 @@
     if (!S.loaded || !m) { v.style.minHeight = ''; S.titleDrawnId = null; }
     if (!S.loaded) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading…' })])); return; }
     if (!m) { put(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This title isn’t in the catalogue. ', h('a', { href: '/', text: 'Back to home' })])])); return; }
+    if (m.data._part && S.loadFull) S.loadFull(m); // the full story, trivia and interviews follow in a moment
     var d = m.data, rel = released(m), ott = isOtt(m);
     v.classList.add('tpage');
     // Badges: status (with the day count while it runs in theatres), then what's new or the release note.
@@ -2043,7 +2062,9 @@
     if (clip) out.push({ title: 'Trailer', kind: 'Trailer', clip: clip, cat: 'trailers' });
     (d.videos || []).forEach(function (x) {
       var u = safeUrl(x.url), id = ytId(u);
-      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(x.thumbUrl) && x.thumbUrl.indexOf('/vi/' + id + '/') !== -1 ? x.thumbUrl : '', thumbHd: !!x.thumbHd,
+      // The catalogue leaves out a thumbnail that is the video's standard HD still (thumbHd set): rebuilt here from the id.
+      var tu = x.thumbUrl || (x.thumbHd && id ? 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg' : '');
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(tu) && tu.indexOf('/vi/' + id + '/') !== -1 ? tu : '', thumbHd: !!x.thumbHd,
         artists: String(x.artists || '').trim().slice(0, 120), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
     });
     // Announcements and trailer breakdowns (Admin > their own card) come after, so the indexes above stay the same.
@@ -2096,7 +2117,10 @@
     S.vpKey = key; v.innerHTML = '';
     var w = h('section', { class: 'wrapx vpage', style: 'padding-top:24px', 'aria-label': 'Video' }); v.appendChild(w);
     if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
-    var m = findMovie(S.param), all = m ? videoPaths(m.data) : [], cur = all.filter(function (p) { return p.path === S.vpath; })[0];
+    var m = findMovie(S.param);
+    // A title from the catalogue without its full record: interviews and other videos may be missing until it loads.
+    if (m && m.data._part && S.loadFull) { S.loadFull(m); S.vpKey = null; w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+    var all = m ? videoPaths(m.data) : [], cur = all.filter(function (p) { return p.path === S.vpath; })[0];
     if (!m || !cur) {
       document.title = 'Video not found | Reelscore'; setCanonical(null); setNoindex(true);
       w.appendChild(h('div', { class: 'empty' }, ['This video isn’t on Reelscore any more. ', m ? h('a', { href: movieUrl(m), text: 'See ' + m.data.title }) : h('a', { href: '/trailers', text: 'See the latest trailers' })]));
@@ -3954,6 +3978,22 @@
         apply();
       }, function () {});
     }
+    // A title marked _part (see scripts/build.mjs listData) gets its full record from its own page's seed, once.
+    var fullP = {};
+    S.loadFull = function (m) {
+      if (!m || !m.data || !m.data._part || fullP[m.id] || !window.fetch) return;
+      fullP[m.id] = window.fetch(movieUrl(m)).then(function (r) { if (!r.ok) throw new Error('page ' + r.status); return r.text(); }).then(function (html) {
+        var mm = html.match(/<script type="application\/json" id="rs-seed"[^>]*>([\s\S]*?)<\/script>/), seed = mm && JSON.parse(mm[1]);
+        var full = seed && (seed.movies || []).filter(function (x) { return x && x.id === m.id; })[0];
+        if (!full || !full.data) throw new Error('no seed');
+        if (!(m.id in dm)) base[m.id] = full.data;
+        Object.keys(seed.people || {}).forEach(function (k) { if (!(k in baseP)) baseP[k] = seed.people[k]; });
+        apply();
+      }).catch(function () {
+        // No seed to read: the database has the record (once Firebase is in).
+        needDb(function (db) { db.doc('movies/' + m.id).get().then(function (snap) { if (snap.exists && !(m.id in dm)) { base[m.id] = snap.data(); apply(); } }).catch(function () {}); });
+      });
+    };
     function addOlder() {
       older().then(function (o) {
         (o && o.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
