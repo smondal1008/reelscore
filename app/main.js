@@ -2392,7 +2392,7 @@
       h('div', { class: 'kicker', text: 'Your plan · how will you watch it?' }),
       h('div', { class: 'vbtns' }, ps.map(function (x) {
         return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setPlan(m.id, x[0]); } } },
-          [h('span', { class: 'vi' }, [icon(planIcon(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
+          [h('span', { class: 'vi i-' + planIcon(m, x[0]) }, [icon(planIcon(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
       })),
       foot
     ]);

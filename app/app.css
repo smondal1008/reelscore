@@ -604,7 +604,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
 .vb2[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
 .vb2[aria-pressed="true"] .vi { background: rgba(11,10,15,.16); color: #0B0A0F; }
 .vb2[aria-pressed="true"] small { color: #3A2A08; }
-/* Title page verdict buttons (movies and TV): the same icon animations as the poster-card buttons, on hover */
+/* Title page verdict and plan buttons (movies and TV): the same icon animations as the poster-card buttons, on hover */
 .vb2[aria-pressed="true"] .vi.i-star svg path { fill: currentColor; }
 @media (hover: hover) {
   .vb2:hover .vi.i-star svg { animation: qpop .5s ease; }
