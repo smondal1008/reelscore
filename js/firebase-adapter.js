@@ -4,11 +4,36 @@ const V = '10.14.1';
 const base = 'https://www.gstatic.com/firebasejs/' + V + '/';
 
 const cfg = window.REEL_FIREBASE_CONFIG || {};
-if (!cfg.apiKey || /PASTE/.test(cfg.apiKey)) {
-  console.error('Reelscore: fill in firebase-config.js');
-  window.__reelProvide({});
-} else {
-  start().catch((e) => { console.error('Reelscore: Firebase failed to start', e); window.__reelProvide({}); });
+// Firebase (about 1 MB) is not needed to show a page: the page and catalogue come from the CDN. So it starts at once only
+// for signed-in visitors and the admin panel, and for everyone else on their first tap, key, or scroll, or a few seconds
+// after the page has loaded, whichever comes first. Sign-in starts it too.
+const AUTH_FLAG = 'rs_auth';
+const flagged = () => { try { return localStorage.getItem(AUTH_FLAG) === '1'; } catch (e) { return false; } };
+const setFlag = (on) => { try { if (on) localStorage.setItem(AUTH_FLAG, '1'); else localStorage.removeItem(AUTH_FLAG); } catch (e) {} };
+let started = null, signInReady = null;
+const signInWhenReady = new Promise((res) => { signInReady = res; });
+function go() {
+  if (started) return started;
+  if (window.__reelFailOpen) window.__reelFailOpen();
+  if (!cfg.apiKey || /PASTE/.test(cfg.apiKey)) {
+    console.error('Reelscore: fill in firebase-config.js');
+    window.__reelProvide({});
+    started = Promise.resolve();
+  } else {
+    started = start().catch((e) => { console.error('Reelscore: Firebase failed to start', e); window.__reelProvide({}); });
+  }
+  return started;
+}
+window.__reelStartFirebase = go;
+// Until Firebase is in, sign-in starts it and then signs in (a popup, or a redirect if the browser blocks it).
+window.reelSignIn = async () => { setFlag(true); go(); const real = await signInWhenReady; if (real) return real(); };
+if (/^\/admin(\/|$)/.test(location.pathname) || flagged()) go();
+else {
+  const evs = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel'];
+  const kick = () => { evs.forEach((e) => window.removeEventListener(e, kick, true)); go(); };
+  evs.forEach((e) => window.addEventListener(e, kick, { capture: true, passive: true }));
+  const later = () => setTimeout(() => { if (window.requestIdleCallback) requestIdleCallback(kick, { timeout: 2000 }); else kick(); }, 6000);
+  if (document.readyState === 'complete') later(); else window.addEventListener('load', later, { once: true });
 }
 
 async function start() {
@@ -26,7 +51,7 @@ async function start() {
   const user = await new Promise((res) => {
     let first = true;
     A.onAuthStateChanged(auth, (u) => {
-      if (first) { first = false; res(u); return; }
+      if (first) { first = false; setFlag(!!u); res(u); return; }
       location.reload(); // signed in or out after load: simplest way to resubscribe everything
     });
   });
@@ -151,23 +176,29 @@ async function start() {
   });
 
   // ---- sign-in / sign-out control in the header ----
-  window.reelSignIn = async () => {
+  const realSignIn = async () => {
+    setFlag(true);
     const p = new A.GoogleAuthProvider();
     try { await A.signInWithPopup(auth, p); }
     catch (e) { if (/popup-blocked|operation-not-supported/.test(e.code || '')) await A.signInWithRedirect(auth, p); else console.warn(e); }
   };
-  window.reelSignOut = () => A.signOut(auth);
-  // Signed out: a Sign in button. Signed in: the profile picture opens a menu with Sign out (app/main.js).
-  const mountAuthUi = () => {
-    const navr = document.querySelector('.navr');
-    if (!navr || document.getElementById('authBtn') || user) return;
-    const b = document.createElement('button');
-    b.type = 'button'; b.id = 'authBtn'; b.className = 'authbtn';
-    b.textContent = user ? 'Sign out' : 'Sign in';
-    b.addEventListener('click', () => { if (user) A.signOut(auth); else window.reelSignIn(); });
-    navr.appendChild(b);
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountAuthUi); else mountAuthUi();
+  window.reelSignIn = realSignIn; signInReady(realSignIn);
+  window.reelSignOut = () => { setFlag(false); return A.signOut(auth); };
+  // The Sign in button usually went up before Firebase loaded (below): signed in, it goes; signed out after all, it comes back.
+  if (user) { const b = document.getElementById('authBtn'); if (b) b.remove(); } else mountAuthUi();
 
   window.__reelProvide({ db, assets, user: userNs });
 }
+
+// Signed out: a Sign in button, shown at once (it starts Firebase when tapped). Signed in: the profile picture opens a menu
+// with Sign out (app/main.js). Visitors we know are signed in get no button; the menu appears once Firebase is in.
+const mountAuthUi = () => {
+  const navr = document.querySelector('.navr');
+  if (!navr || document.getElementById('authBtn') || flagged()) return;
+  const b = document.createElement('button');
+  b.type = 'button'; b.id = 'authBtn'; b.className = 'authbtn';
+  b.textContent = 'Sign in';
+  b.addEventListener('click', () => { window.reelSignIn(); });
+  navr.appendChild(b);
+};
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', mountAuthUi); else mountAuthUi();

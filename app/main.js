@@ -12,7 +12,7 @@
   // ---------- state ----------
   var S = {
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
-    featured: [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [], wtw: [] }, mineLoaded: false,
+    featured: Array.isArray(window.RS_FEATURED) ? window.RS_FEATURED.slice() : [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [], wtw: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 }, cat: { movies: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 }, tv: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 } }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, yr: { year: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
@@ -584,9 +584,10 @@
   // it; other pages wait for the rest so "not found" and counts are never decided on part of the data.
   // A title page found in the core part draws at once too; the rest is fetched once the page is idle.
   function syncLoaded() {
-    var early = S.route === 'home' || (S.route === 'title' && !!S.hasCat && !!findMovie(S.param));
+    // (While only a title page's seed is in, the home page waits for the catalogue too.)
+    var early = (S.route === 'home' && !S.seedOnly) || (S.route === 'title' && !!S.hasCat && !!findMovie(S.param));
     S.loaded = !!S.hasCat && (!S.partial || early);
-    if (S.partial && S.kickOlder) { if (!early) S.kickOlder(); else if (S.route === 'title') idleKick(); }
+    if (S.partial && S.kickOlder) { if (!early) S.kickOlder(); else if (S.route === 'title' && !S.seedOnly) idleKick(); }
   }
   function idleKick() { if (idleKick.on) return; idleKick.on = 1; var k = function () { if (S.kickOlder) S.kickOlder(); }; if (window.requestIdleCallback) requestIdleCallback(k, { timeout: 4000 }); else setTimeout(k, 3000); }
   function draw() {
@@ -3866,6 +3867,7 @@
     S.hasCat = true; syncLoaded(); render();
   }
   function loadAllFromFirestore(db) {
+    if (loadAllFromFirestore.on) return; loadAllFromFirestore.on = 1;
     db.collection('movies').orderBy('order').onSnapshot(function (snap) {
       if (!snap.metadata.fromCache) clearTimeout(timer);
       setMovies(snap.docs.map(function (s) { return { id: s.id, data: s.data() }; }));
@@ -3875,65 +3877,61 @@
     }, function () {});
   }
   function getJson(u) { return window.fetch(u).then(function (r) { if (!r.ok) throw new Error(u + ' ' + r.status); return r.json(); }); }
+  // Firebase loads after the page has settled (js/firebase-adapter.js); anything that needs the database waits here for it.
+  var dbWait = [];
+  function whenDb(fn) { if (S.db) fn(S.db); else dbWait.push(fn); }
+  // ...and when the page can't do without it (the catalogue files failed), it starts Firebase now.
+  function needDb(fn) { whenDb(fn); if (!S.db && window.__reelStartFirebase) window.__reelStartFirebase(); }
+  // Runs fn on the visitor's first tap, key or scroll, or a few seconds after the page has loaded, whichever is first.
+  function whenSettled(fn) {
+    var done = false, evs = ['pointerdown', 'keydown', 'touchstart', 'scroll', 'wheel'];
+    function run() { if (done) return; done = true; evs.forEach(function (ev) { window.removeEventListener(ev, run, true); }); fn(); }
+    evs.forEach(function (ev) { window.addEventListener(ev, run, { capture: true, passive: true }); });
+    function later() { setTimeout(function () { if (window.requestIdleCallback) requestIdleCallback(run, { timeout: 2000 }); else run(); }, 5000); }
+    if (document.readyState === 'complete') later(); else window.addEventListener('load', later);
+  }
+  // The page's own seed (title pages): the title, the titles in its rows, its people and their verdicts, written by the build.
+  function readSeed() {
+    var el = document.getElementById('rs-seed'); if (!el) return null;
+    try { var x = JSON.parse(el.textContent); return x && Array.isArray(x.movies) && x.movies.length && x.builtAt ? x : null; } catch (e) { return null; }
+  }
   // The catalogue comes in two parts: a small core (every section except Older releases, plus people) that the home page
   // needs first, and the much larger Older releases part, fetched right after the home page has drawn (or at once on
   // any other page). Pages built before the split only know the single full file.
-  function loadCatalogue(db) {
+  // A title page with a seed draws from it at once and fetches the catalogue once the page has settled.
+  // Live changes (admin edits since the file was built) are followed once Firebase is in.
+  function loadCatalogue() {
     var split = !!(window.RS_CAT_CORE && window.RS_CAT_OLD && window.fetch), olderP = null;
     function older() { if (!olderP) olderP = getJson(window.RS_CAT_OLD); return olderP; }
-    if (split && S.route !== 'home') older();
-    var f = !window.fetch ? Promise.reject() : split ? getJson(window.RS_CAT_CORE)
-      : (window.RS_CAT ? getJson(window.RS_CAT) : window.fetch('/catalogue.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }));
-    f.then(function (cat) {
-      if (!cat || !Array.isArray(cat.movies) || !cat.builtAt) throw new Error('bad catalogue');
-      clearTimeout(timer);
-      S.partial = split;
+    function core() {
+      return !window.fetch ? Promise.reject() : split ? getJson(window.RS_CAT_CORE)
+        : (window.RS_CAT ? getJson(window.RS_CAT) : window.fetch('/catalogue.json', { cache: 'no-cache' }).then(function (r) { if (!r.ok) throw new Error('catalogue ' + r.status); return r.json(); }));
+    }
+    var base = {}, baseP = {}, dm = {}, dp = {}, goneM = {}, goneP = {}, tomb = { movies: {}, people: {} }, builtAt = null, live = false, seeded = false;
+    function dead(kind, id, d) { var t = tomb[kind][id]; return !!t && (!d || !d.updatedAt || t > d.updatedAt); }
+    function apply() {
+      var out = [];
+      Object.keys(base).forEach(function (id) { if (!(id in dm) && !goneM[id] && !dead('movies', id, base[id])) out.push({ id: id, data: base[id] }); });
+      Object.keys(dm).forEach(function (id) { if (!dead('movies', id, dm[id])) out.push({ id: id, data: dm[id] }); });
+      var ppl = {};
+      Object.keys(baseP).forEach(function (id) { if (!goneP[id] && !dead('people', id, baseP[id])) ppl[id] = baseP[id]; });
+      Object.keys(dp).forEach(function (id) { if (!dead('people', id, dp[id])) ppl[id] = dp[id]; });
+      S.people = ppl; setMovies(out);
+    }
+    function track(store, gone) {
+      return function (snap) {
+        snap.docChanges().forEach(function (c) {
+          // A record leaves this query only when it is deleted (updatedAt never goes backwards).
+          if (c.type === 'removed') { delete store[c.doc.id]; gone[c.doc.id] = 1; }
+          else { store[c.doc.id] = c.doc.data(); delete gone[c.doc.id]; }
+        });
+        apply();
+      };
+    }
+    function attachLive(db) {
+      if (live || !builtAt) return; live = true;
       // An hour of overlap covers admins whose clocks run a little behind.
-      var since = new Date(Date.parse(cat.builtAt) - 3600 * 1000).toISOString();
-      var base = {}, baseP = cat.people || {}, dm = {}, dp = {}, goneM = {}, goneP = {}, tomb = { movies: {}, people: {} };
-      cat.movies.forEach(function (m) { base[m.id] = m.data; });
-      function dead(kind, id, d) { var t = tomb[kind][id]; return !!t && (!d || !d.updatedAt || t > d.updatedAt); }
-      function apply() {
-        var out = [];
-        Object.keys(base).forEach(function (id) { if (!(id in dm) && !goneM[id] && !dead('movies', id, base[id])) out.push({ id: id, data: base[id] }); });
-        Object.keys(dm).forEach(function (id) { if (!dead('movies', id, dm[id])) out.push({ id: id, data: dm[id] }); });
-        var ppl = {};
-        Object.keys(baseP).forEach(function (id) { if (!goneP[id] && !dead('people', id, baseP[id])) ppl[id] = baseP[id]; });
-        Object.keys(dp).forEach(function (id) { if (!dead('people', id, dp[id])) ppl[id] = dp[id]; });
-        S.people = ppl; setMovies(out);
-      }
-      function track(store, gone) {
-        return function (snap) {
-          snap.docChanges().forEach(function (c) {
-            // A record leaves this query only when it is deleted (updatedAt never goes backwards).
-            if (c.type === 'removed') { delete store[c.doc.id]; gone[c.doc.id] = 1; }
-            else { store[c.doc.id] = c.doc.data(); delete gone[c.doc.id]; }
-          });
-          apply();
-        };
-      }
-      apply();
-      if (split) {
-        var addOlder = function () {
-          older().then(function (o) {
-            (o && o.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
-            S.partial = false; apply();
-          }).catch(function () {
-            getJson(window.RS_CAT || '/catalogue.json').then(function (full) {
-              (full && full.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
-              S.partial = false; apply();
-            }).catch(function () { loadAllFromFirestore(db); });
-          });
-        };
-        S.kickOlder = function () { S.kickOlder = null; addOlder(); };
-        // The home page has all it needs in the core part. The rest (older films, ~0.9 MB) is fetched on the first
-        // scroll, tap or key press, or when the visitor moves to another page or the search box.
-        if (S.route === 'home') {
-          var kick = function () { ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.removeEventListener(ev, kick, true); }); if (S.kickOlder) S.kickOlder(); };
-          ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, kick, { capture: true, passive: true }); });
-        } else if (S.route === 'title' && S.loaded) idleKick();
-        else S.kickOlder();
-      }
+      var since = new Date(Date.parse(builtAt) - 3600 * 1000).toISOString();
       db.collection('movies').where('updatedAt', '>', since).onSnapshot(track(dm, goneM), function () {});
       db.collection('people').where('updatedAt', '>', since).onSnapshot(track(dp, goneP), function () {});
       db.doc('settings/deleted').onSnapshot(function (snap) {
@@ -3941,7 +3939,58 @@
         ['movies', 'people'].forEach(function (k) { (d[k] || []).forEach(function (x) { if (x && x.id) tomb[k][x.id] = x.at || ''; }); });
         apply();
       }, function () {});
-    }).catch(function () { loadAllFromFirestore(db); });
+    }
+    function addOlder() {
+      older().then(function (o) {
+        (o && o.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
+        S.partial = false; apply();
+      }).catch(function () {
+        getJson(window.RS_CAT || '/catalogue.json').then(function (full) {
+          (full && full.movies || []).forEach(function (m) { if (!(m.id in base)) base[m.id] = m.data; });
+          S.partial = false; apply();
+        }).catch(function () { needDb(loadAllFromFirestore); });
+      });
+    }
+    function gotCore(cat) {
+      if (!cat || !Array.isArray(cat.movies) || !cat.builtAt) throw new Error('bad catalogue');
+      clearTimeout(timer);
+      S.partial = split;
+      var wasSeeded = seeded; seeded = false; S.seedOnly = false;
+      builtAt = cat.builtAt;
+      cat.movies.forEach(function (m) { base[m.id] = m.data; });
+      // The seed's people are a subset of the catalogue's; the catalogue's copy wins.
+      baseP = Object.assign({}, baseP, cat.people || {});
+      apply();
+      if (split) {
+        S.kickOlder = function () { S.kickOlder = null; addOlder(); };
+        // The home page has all it needs in the core part. The rest (older films, ~0.9 MB) is fetched on the first
+        // scroll, tap or key press, or when the visitor moves to another page or the search box.
+        if (wasSeeded) S.kickOlder();
+        else if (S.route === 'home') {
+          var kick = function () { ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.removeEventListener(ev, kick, true); }); if (S.kickOlder) S.kickOlder(); };
+          ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, kick, { capture: true, passive: true }); });
+        } else if (S.route === 'title' && S.loaded) idleKick();
+        else S.kickOlder();
+      }
+      whenDb(attachLive);
+    }
+    function fetchCore() { core().then(gotCore).catch(function () { needDb(loadAllFromFirestore); }); }
+    var seed = S.route === 'title' ? readSeed() : null;
+    if (seed) {
+      seeded = true; builtAt = seed.builtAt; S.partial = true; S.seedOnly = true;
+      seed.movies.forEach(function (m) { if (m && m.id && m.data) base[m.id] = m.data; });
+      baseP = seed.people || {};
+      if (seed.verdicts && !Object.keys(S.verdicts).length) S.verdicts = seed.verdicts;
+      clearTimeout(timer);
+      apply();
+      whenDb(attachLive);
+      // Moving to another page or the search box needs the whole catalogue now; otherwise it comes once the page has settled.
+      S.kickOlder = function () { S.kickOlder = null; fetchCore(); };
+      whenSettled(function () { if (S.kickOlder) S.kickOlder(); });
+    } else {
+      if (split && S.route !== 'home') older();
+      fetchCore();
+    }
   }
 
   // Profile picture in the header: opens a small menu with your name, My List and Sign out.
@@ -3961,6 +4010,8 @@
     menu.addEventListener('click', function (e) { if (e.target.tagName === 'A') close(); });
     wrap.hidden = false;
   }
+  // The catalogue comes from the CDN and doesn't wait for Firebase.
+  loadCatalogue();
   var cl = window.claude;
   if (!cl || typeof cl.use !== 'function') { clearTimeout(timer); S.loadMsg = 'Couldn’t start. Check firebase-config.js.'; render(true); return; }
   cl.use('user').then(function (u) {
@@ -3979,9 +4030,9 @@
       S.hiddenAdmin = {}; snap.docs.forEach(function (x) { S.hiddenAdmin[x.id] = { id: x.id, data: fixSection(x.data()) }; }); render();
     }, function () {});
     S.db = db;
-    if (!db) { clearTimeout(timer); S.loadMsg = 'Couldn’t connect to the catalogue. Check firebase-config.js.'; render(true); return; }
+    if (!db) { if (!S.hasCat) { clearTimeout(timer); S.loadMsg = 'Couldn’t connect to the catalogue. Check firebase-config.js.'; render(true); } return; }
     if (S.route === 'admin') startAdmin();
-    loadCatalogue(db);
+    dbWait.splice(0).forEach(function (fn) { fn(db); });
     db.collection('verdicts').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (s) { o[s.id] = s.data(); });
       if (S.uid && writing.v && S.verdicts[S.uid]) o[S.uid] = S.verdicts[S.uid];

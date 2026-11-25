@@ -226,9 +226,11 @@ function pinFirst(list, ids) {
   return list.filter(m => pos.has(m.id)).sort((a, b) => pos.get(a.id) - pos.get(b.id)).concat(list.filter(m => !pos.has(m.id)));
 }
 
-// Returns { movies, people, verdicts, rows, builtAt, fullAt, source }.
+// The home page's featured titles (settings/home, set in the admin panel), so the hero is right before Firestore loads.
+const cleanIds = a => Array.isArray(a) ? a.filter(x => typeof x === 'string' && x).slice(0, 50) : [];
+// Returns { movies, people, verdicts, rows, buttons, featured, builtAt, fullAt, source }.
 async function loadData() {
-  if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, rows: cleanRows(f.rows), buttons: cleanBtns(f.buttons), builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
+  if (process.env.FIXTURE) { const f = loadFixture(process.env.FIXTURE); return { ...f, rows: cleanRows(f.rows), buttons: cleanBtns(f.buttons), featured: cleanIds(f.featured), builtAt: new Date().toISOString(), fullAt: new Date().toISOString(), source: 'fixture' }; }
   // scripts/catalogue-seed.json (if present) stands in for the live file on the very first deploy.
   let prev = await previousCatalogue();
   const seedFile = path.join(ROOT, 'scripts', 'catalogue-seed.json');
@@ -239,7 +241,7 @@ async function loadData() {
   try {
     if (fresh) {
       const since = new Date(Date.parse(prev.builtAt) - 3600 * 1000).toISOString();
-      const [dm, dp, del, verdicts, rows, btns] = await Promise.all([db.changedSince('movies', since), db.changedSince('people', since), db.get('settings/deleted'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null)]);
+      const [dm, dp, del, verdicts, rows, btns, home] = await Promise.all([db.changedSince('movies', since), db.changedSince('people', since), db.get('settings/deleted'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null), db.get('settings/home').catch(() => null)]);
       const tomb = { movies: {}, people: {} }; ((del && del.data) || {}).movies?.forEach(x => x && x.id && (tomb.movies[x.id] = x.at || ''));
       ((del && del.data) || {}).people?.forEach(x => x && x.id && (tomb.people[x.id] = x.at || ''));
       const merge = (baseList, delta, t) => {
@@ -248,16 +250,16 @@ async function loadData() {
       };
       const p = fromPrev();
       console.log(`[seo] incremental: ${dm.length} titles and ${dp.length} people changed since ${since}; ${db.reads} reads`);
-      return { movies: merge(p.movies, dm, tomb.movies), people: merge(p.people, dp, tomb.people), verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), builtAt: started, fullAt: prev.fullAt, source: 'incremental' };
+      return { movies: merge(p.movies, dm, tomb.movies), people: merge(p.people, dp, tomb.people), verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), featured: cleanIds(home && home.data && home.data.featured), builtAt: started, fullAt: prev.fullAt, source: 'incremental' };
     }
-    const [movies, people, verdicts, rows, btns] = await Promise.all([db.list('movies'), db.list('people'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null)]);
+    const [movies, people, verdicts, rows, btns, home] = await Promise.all([db.list('movies'), db.list('people'), db.list('verdicts'), db.get('settings/rows').catch(() => null), db.get('settings/buttons').catch(() => null), db.get('settings/home').catch(() => null)]);
     console.log(`[seo] full read: ${db.reads} reads`);
-    return { movies, people, verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), builtAt: started, fullAt: started, source: 'full' };
+    return { movies, people, verdicts, rows: cleanRows(rows && rows.data), buttons: cleanBtns(btns && btns.data), featured: cleanIds(home && home.data && home.data.featured), builtAt: started, fullAt: started, source: 'full' };
   } catch (e) {
     if (!prev) throw e;
     // Keep builtAt from the previous file so the app still asks for every change made since then.
     console.warn('[seo] Firestore unavailable (' + e.message + '); reusing the live catalogue.json from ' + prev.builtAt);
-    return { ...fromPrev(), verdicts: [], rows: cleanRows(prev.rows), buttons: cleanBtns(prev.buttons), builtAt: prev.builtAt, fullAt: prev.fullAt, source: 'previous' };
+    return { ...fromPrev(), verdicts: [], rows: cleanRows(prev.rows), buttons: cleanBtns(prev.buttons), featured: cleanIds(prev.featured), builtAt: prev.builtAt, fullAt: prev.fullAt, source: 'previous' };
   }
 }
 
@@ -279,7 +281,7 @@ function copyDir(from, to) {
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
 const OG_DEFAULT = '/og-default.png';
-function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots }) {
+function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed }) {
   // Pages without a poster or photo share the site-wide card (1200x630).
   const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
@@ -304,7 +306,9 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
   html = html.replace('<body class="r-home">', '<body class="r-' + route + '">');
   const slot = '<div class="view" id="view-' + route + '"></div>';
   if (!html.includes(slot)) throw new Error('index.html is missing ' + slot);
-  return html.replace(slot, '<div class="view" id="view-' + route + '"><div class="pr" data-prerendered>' + body + '</div></div>');
+  // A seed is data for the app, not markup: a JSON block the browser never runs ("<" escaped so it can't close the tag).
+  const seedTag = seed ? '<script type="application/json" id="rs-seed">' + JSON.stringify(seed).replace(/</g, '\\u003c') + '</script>' : '';
+  return html.replace(slot, '<div class="view" id="view-' + route + '"><div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
 }
 
 // ---------- main ----------
@@ -467,6 +471,25 @@ async function main() {
   const sitemap = [{ loc: '/', pri: '1.0' }, { loc: '/browse', pri: '0.6' }, { loc: '/people', pri: '0.6' }];
   const seen = new Set(), aliasSeen = new Set(), aliases = []; let nTitles = 0, nRated = 0, nPeople = 0, nThinTitles = 0, nVideoPages = 0; const tierCount = {};
 
+  // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
+  const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
+  // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
+  // empty lists and the default "Cast" role.
+  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId;
+    if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
+    if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
+    return o; };
+  // Each title page carries a small seed (the title, the titles in its "More" rows, its people and their verdicts on them),
+  // so the app draws the page at once; the catalogue and Firebase load once the page has settled (app/main.js).
+  const verdictsFor = ids => { const out = {}; data.verdicts.forEach(u => { const v = (u.data && u.data.v) || {}, w = {}; let n = 0;
+    ids.forEach(id => { if (/^[abc]$/.test(v[id] || '')) { w[id] = v[id]; n++; } }); if (n) out[u.id] = { v: w }; }); return out; };
+  const seedFor = (m, related) => {
+    const list = [m].concat(related.filter((o, i, a) => o.id !== m.id && a.indexOf(o) === i)), ppl = {};
+    (m.data.cast || []).forEach(c => { const k = c && personSlug(c.name); if (k && people[k] && !(k in ppl)) ppl[k] = compact(people[k]); });
+    String(m.data.director || '').split(/,| and /).forEach(n => { const k = personSlug(n.trim()); if (k && people[k] && !(k in ppl)) ppl[k] = compact(people[k]); });
+    return { builtAt: data.builtAt, movies: list.map(o => ({ id: o.id, data: slim(o.data) })), people: ppl, verdicts: verdictsFor(list.map(o => o.id)) };
+  };
+
   // ----- title pages -----
   for (const m of movies) {
     const d = m.data, url = movieUrl(m), tv = isTv(d);
@@ -511,7 +534,8 @@ async function main() {
     if (actors.length) body += '<h2>Cast</h2><ul>' + actors.map(c => '<li>' + personLink(c.name) + (charOf(c) || hostOf(c) ? ' <span class="note">' + (charOf(c) ? 'as ' + esc(charOf(c)) : esc(hostOf(c))) + (c.episodes ? ' · ' + esc(c.episodes) + ' ep.' : '') + '</span>' : '') + '</li>').join('') + '</ul>';
     if (crew.length) body += '<h2>Crew</h2><ul>' + crew.map(c => '<li>' + personLink(c.name) + ' <span class="note">' + esc(c.role) + '</span></li>').join('') + '</ul>';
     const vids = ytVideos(d), vpaths = videoPaths(d);
-    if (vids.length) body += '<h2>Trailers &amp; songs</h2><iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + vids[0].yt + '?rel=0" title="' + esc(d.title + ' · ' + vids[0].title) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe><ul class="pr-vids">' + vpaths.map(x => '<li><a href="' + url + x.path + '"><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + '</a> <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
+    // No YouTube player here: it cost a megabyte on every visit. The list links to each video's own page, which plays it.
+    if (vids.length) body += '<h2>Trailers &amp; songs</h2><ul class="pr-vids">' + vpaths.map(x => '<li><a href="' + url + x.path + '"><img src="' + ytThumb(x.yt) + '" alt="' + esc(d.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> ' + esc(x.title) + '</a> <span class="note">' + esc(x.kind) + '</span></li>').join('') + '</ul>';
     if (d.srcTvmaze) body += '<p class="note">Show details and image from <a href="' + esc(safeUrl(d.srcTvmaze) || 'https://www.tvmaze.com/') + '" rel="noopener">TVmaze</a> (<a href="https://creativecommons.org/licenses/by-sa/4.0/" rel="noopener license">CC BY-SA 4.0</a>).</p>';
     else if (d.wikidata) body += '<p class="note">Film facts from <a href="https://www.wikidata.org/wiki/' + esc(d.wikidata) + '" rel="noopener">Wikidata</a> (CC0).</p>';
     // Same rule as the app's "More from Cast & Crew" row: titles sharing people with this one, top-billed cast weighing more.
@@ -549,7 +573,7 @@ async function main() {
 
     // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
     const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, robots: thinTitle ? 'noindex,follow' : undefined }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
       const au = (tv ? '/tv/' : '/movie/') + alias;
@@ -641,15 +665,8 @@ async function main() {
     nPeople++;
   }
 
-  // The app's catalogue: every title and person, empty top-level fields dropped to keep it small.
-  const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
-  // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
-  // empty lists and the default "Cast" role.
-  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId;
-    if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
-    if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
-    return o; };
-  const cat = { builtAt: data.builtAt, fullAt: data.fullAt, rows: data.rows, buttons: data.buttons,
+  // compact and slim are defined above the title pages, which use them for each page's seed.
+  const cat = { builtAt: data.builtAt, fullAt: data.fullAt, rows: data.rows, buttons: data.buttons, featured: data.featured || [],
     movies: data.movies.filter(m => m.data).map(m => ({ id: m.id, data: slim(m.data) })),
     people: Object.fromEntries(data.people.filter(p => p.data).map(p => [p.id, compact(p.data)])) };
   write('catalogue.json', JSON.stringify(cat));
@@ -973,14 +990,16 @@ async function main() {
   const stats = { lang: {}, year: {} };
   movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(), y = String(m.data.releaseDate || '').slice(0, 4);
     if (/^[A-Za-z]+$/.test(l)) stats.lang[l] = (stats.lang[l] || 0) + 1; if (/^\d{4}$/.test(y)) stats.year[y] = (stats.year[y] || 0) + 1; });
-  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
   const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
   for (const f of htmlFiles) {
     let html = fs.readFileSync(f, 'utf8'), changed = false;
     for (const [from, to] of Object.entries(hashed)) { if (/^\/catalogue/.test(from)) continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
-    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script defer src="' + catPtr + '"></script>'); changed = true; }
+    // Pages without a seed need the core catalogue first, so the browser starts fetching it while it reads the page.
+    const pre = html.includes('id="rs-seed"') ? '' : '\n<link rel="preload" href="' + hashed['/catalogue-core.json'] + '" as="fetch" crossorigin="anonymous">';
+    if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script defer src="' + catPtr + '"></script>' + pre); changed = true; }
     if (changed) fs.writeFileSync(f, html);
   }
 
