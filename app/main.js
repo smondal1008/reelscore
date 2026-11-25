@@ -2690,7 +2690,8 @@
       var ph = personPhotoUrl(c.name);
       return ph ? h('img', { src: ph, alt: '', class: cls, loading: 'lazy' }) : h('span', { class: cls, style: 'background:' + PAL[i % PAL.length][1], 'aria-hidden': 'true', text: initials(c.name) });
     };
-    var link = function (c, cls, kids, label) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name), 'aria-label': label }, kids) : h('div', { class: cls }, kids); };
+    // No aria-label: the card's visible text (name, role or character) is its name for screen readers too.
+    var link = function (c, cls, kids) { var pk = personSlug(c.name); return pk ? h('a', { class: cls, href: personUrl(c.name) }, kids) : h('div', { class: cls }, kids); };
     var sub = function (c) { return [CREW_RE.test(c.role || '') ? c.role : charOf(c) || (HOST_RE.test(c.role || '') ? String(c.role).replace(/^as\s+/i, '') : ''), tv ? epText(c.episodes) : '', tv ? c.year || '' : ''].filter(Boolean).join(' · '); };
     // Leads: the cast marked ★ in Admin; with none marked, the first two actors.
     var marked = actors.filter(function (c) { return c.lead; });
@@ -3804,13 +3805,24 @@
 
   // ---------- admin ----------
   // The admin screen's markup lives in a <template> and its code in /app/admin.js, so public pages carry neither.
+  // Its styles are in /app/admin.css, loaded with it (public pages carry neither).
+  var adminCss = null;
+  function loadAdminCss() {
+    if (adminCss) return adminCss;
+    adminCss = new Promise(function (res) {
+      var l = document.createElement('link'); l.rel = 'stylesheet'; l.href = '/app/admin.css';
+      l.onload = l.onerror = function () { res(); }; document.head.appendChild(l);
+    });
+    return adminCss;
+  }
   function adminDom() {
+    loadAdminCss();
     var t = $('adminTpl'); if (t) { t.parentNode.appendChild(t.content); t.remove(); }
   }
   function loadAdminCode(done) {
-    if (window.ReelAdmin) return done();
+    if (window.ReelAdmin) return loadAdminCss().then(done);
     var sc = document.createElement('script'); sc.src = '/app/admin.js';
-    sc.onload = done; sc.onerror = function () { S.adminStarted = false; toast('Couldn’t load the admin tools. Reload to retry.'); };
+    sc.onload = function () { loadAdminCss().then(done); }; sc.onerror = function () { S.adminStarted = false; toast('Couldn’t load the admin tools. Reload to retry.'); };
     document.head.appendChild(sc);
   }
   function startAdmin() {

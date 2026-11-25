@@ -17,10 +17,8 @@
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 <link rel="manifest" href="/site.webmanifest">
 <meta name="theme-color" content="#0B0A0F">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap" id="fontcss">
-<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@600;800&family=Inter:wght@400;500;600;700&display=swap"></noscript>
+<link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="/fonts/anton-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="stylesheet" href="/app/app.css">
 <style>.authbtn{background:transparent;border:1px solid rgba(255,255,255,.35);color:#fff;border-radius:6px;padding:6px 12px;font:inherit;font-size:13px;cursor:pointer;white-space:nowrap}.authbtn:hover{background:rgba(255,255,255,.1)}</style>
 <script defer src="/firebase-config.js"></script>
@@ -63,6 +61,7 @@
   </div>
 </header>
 
+<main id="content">
 <div class="view" id="view-home"></div>
 <div class="view" id="view-title"></div>
 <div class="view" id="view-list"></div>
@@ -121,7 +120,7 @@
     <nav class="pager" id="pager" aria-label="Pages"></nav>
   </div>
   <div class="apage" id="editPage" hidden>
-    <main class="main" id="main"><div class="empty">Loading…</div></main>
+    <div class="main" id="main"><div class="empty">Loading…</div></div>
   </div>
   <div class="savebar" id="savebar" hidden>
     <div class="msg" id="saveMsg"></div>
@@ -131,6 +130,7 @@
     </div>
   </div>
 </template></div>
+</main>
 
 <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
 

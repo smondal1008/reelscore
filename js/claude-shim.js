@@ -14,5 +14,3 @@
   // Firebase now starts after the page has settled (js/firebase-adapter.js), so the clock starts when it does.
   window.__reelFailOpen = function () { setTimeout(function () { resolveReady({}); }, 12000); };
 })();
-// Web fonts: the font CSS is preloaded in index.html and switched on here (no inline onload; see the CSP in vercel.json).
-(function () { var l = document.getElementById('fontcss'); if (l) l.rel = 'stylesheet'; })();

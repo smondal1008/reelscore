@@ -1,0 +1,8 @@
+{
+  "name": "reelscore",
+  "private": true,
+  "description": "Build tools only: the site itself needs no packages. esbuild minifies the app's scripts and styles at deploy (scripts/build.mjs).",
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

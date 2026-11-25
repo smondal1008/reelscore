@@ -270,6 +270,23 @@ function loadFixture(file) {
 }
 
 // ---------- output helpers ----------
+// Minify the app's scripts and styles in dist/ (esbuild, from package.json). Without it the build still works, unminified.
+// Only whitespace, syntax and local names change: each file keeps its global names, so the files still work together.
+const MINIFY = ['app/main.js', 'app/admin.js', 'app/about.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'app/app.css', 'app/admin.css'];
+async function minifyAssets() {
+  let esbuild; try { esbuild = await import('esbuild'); } catch (e) { console.warn('[seo] esbuild not installed: scripts and styles left unminified'); return; }
+  let before = 0, after = 0;
+  for (const rel of MINIFY) {
+    const f = path.join(OUT, rel); if (!fs.existsSync(f)) continue;
+    const src = fs.readFileSync(f, 'utf8'), css = rel.endsWith('.css');
+    try {
+      const r = await esbuild.transform(src, { loader: css ? 'css' : 'js', minify: true, legalComments: 'none', charset: 'utf8',
+        target: css ? ['chrome100', 'safari15', 'firefox100'] : 'es2020' });
+      fs.writeFileSync(f, r.code); before += src.length; after += r.code.length;
+    } catch (e) { console.warn('[seo] could not minify ' + rel + ' (left as is): ' + e.message); }
+  }
+  console.log(`[seo] minified scripts and styles: ${(before / 1024).toFixed(0)} KB -> ${(after / 1024).toFixed(0)} KB`);
+}
 function copyDir(from, to) {
   fs.mkdirSync(to, { recursive: true });
   for (const e of fs.readdirSync(from, { withFileTypes: true })) {
@@ -979,6 +996,7 @@ async function main() {
   // Every HTML page points at the hashed copies, so a deploy changes the URLs and browsers never run stale code.
   // The plain files stay too (catalogue.json is read by the next build; admin.js is loaded by name).
   const crypto = await import('node:crypto');
+  await minifyAssets();
   const hashed = {};
   for (const rel of ['app/app.css', 'app/about.js', 'app/main.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'catalogue.json', 'catalogue-core.json', 'catalogue-older.json']) {
     const buf = fs.readFileSync(path.join(OUT, rel)), h8 = crypto.createHash('sha256').update(buf).digest('hex').slice(0, 10);

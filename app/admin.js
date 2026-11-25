@@ -152,7 +152,7 @@ window.ReelAdmin = function (env) {
       var nm = nameOf(k);
       var row = h('div', { class: 'poprow', draggable: canWrite ? 'true' : 'false', 'data-i': String(i), style: rowStyle + ';cursor:' + (canWrite ? 'grab' : 'default') }, [
         h('span', { 'aria-hidden': 'true', style: 'color:var(--dim);font-size:18px;letter-spacing:-2px;user-select:none', text: '⋮⋮' }),
-        h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+        h('span', { style: 'font-family:Anton,"Anton Fallback",Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
         avatarBtn(nm, 44),
         h('span', { style: 'flex:1;min-width:160px' }, [h('div', { style: 'font-weight:600', text: nm }), h('div', { class: 'note', text: meta(k) })]),
         h('span', { style: 'display:flex;gap:6px' }, [
@@ -631,7 +631,7 @@ window.ReelAdmin = function (env) {
         var m = byId[id], d = m.data, poster = safeUrl(d.posterUrl);
         var row = h('div', { class: 'rowpin', draggable: canWrite ? 'true' : 'false', style: rowStyle + ';cursor:' + (canWrite ? 'grab' : 'default') }, [
           h('span', { 'aria-hidden': 'true', style: 'color:var(--dim);font-size:18px;letter-spacing:-2px;user-select:none', text: '⋮⋮' }),
-          h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+          h('span', { style: 'font-family:Anton,"Anton Fallback",Impact,sans-serif;font-size:20px;width:28px;text-align:center;color:var(--accent)', text: String(i + 1) }),
           poster ? h('img', { src: poster, alt: '', loading: 'lazy', style: 'width:34px;height:50px;object-fit:cover;border-radius:6px' }) : h('span', { style: 'width:34px;height:50px;border-radius:6px;background:var(--panel2)' }),
           h('span', { style: 'flex:1;min-width:160px' }, [h('a', { href: titleHref(m), style: 'font-weight:600', text: d.title || 'Untitled' }), h('div', { class: 'note', text: filmMeta(d) })]),
           h('span', { style: 'display:flex;gap:6px' }, [
@@ -751,7 +751,7 @@ window.ReelAdmin = function (env) {
     items.forEach(function (m, i) {
       var d = m.data, hasBanner = !!safeUrl(d.bannerUrl);
       list.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)' }, [
-        h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:22px;width:24px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+        h('span', { style: 'font-family:Anton,"Anton Fallback",Impact,sans-serif;font-size:22px;width:24px;text-align:center;color:var(--accent)', text: String(i + 1) }),
         h('span', { class: 'thumb', style: 'width:112px;height:63px;' + bgUrl(d.bannerUrl), 'aria-hidden': 'true' }, [hasBanner ? null : 'No banner']),
         h('span', { style: 'flex:1;min-width:160px' }, [
           h('div', { class: 't', style: 'font-weight:600', text: d.title || 'Untitled' }),
@@ -1021,7 +1021,7 @@ window.ReelAdmin = function (env) {
       var d = m.data, hasBanner = !!safeUrl(d.bannerUrl), med = c.media(d);
       var warn = [hasBanner ? '' : 'add a banner image', med ? '' : 'add a ' + c.mediaWord].filter(Boolean).join(' and ');
       list.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;padding:10px;border:1px solid var(--line);border-radius:12px;background:var(--bg)' }, [
-        h('span', { style: 'font-family:Anton,Impact,sans-serif;font-size:22px;width:24px;text-align:center;color:var(--accent)', text: String(i + 1) }),
+        h('span', { style: 'font-family:Anton,"Anton Fallback",Impact,sans-serif;font-size:22px;width:24px;text-align:center;color:var(--accent)', text: String(i + 1) }),
         h('span', { class: 'thumb', style: 'width:112px;height:63px;' + bgUrl(d.bannerUrl), 'aria-hidden': 'true' }, [hasBanner ? null : 'No banner']),
         h('span', { style: 'flex:1;min-width:160px' }, [
           h('div', { class: 't', style: 'font-weight:600', text: d.title || 'Untitled' }),
