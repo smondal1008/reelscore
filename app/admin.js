@@ -2346,7 +2346,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'boDaily' ? ' bod' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awd' : '') + (key === 'trivia' ? ' trv' : '') + (av ? ' cast' : '') }, cells);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'boDaily' ? ' bod' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awd' : '') + (key === 'trivia' ? ' trv' : '') + (av ? ' cast' + (cols.length > 3 ? ' tvc' : '') : '') }, cells);
         if (key === 'videos' || key === 'extras' || key === 'interviews' || key === 'posters') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
