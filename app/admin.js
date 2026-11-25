@@ -220,13 +220,16 @@ window.ReelAdmin = function (env) {
       b.classList.toggle('has', !!url); b.textContent = url ? '' : '📷';
     });
   }
+  // Names in a title's Director field ("A, B" or "A and B"). Directors have person pages too, cast row or not.
+  function directorNames(d) { return String(d.director || '').split(/,| and /).map(function (x) { return x.trim(); }).filter(Boolean); }
   function allPeople() {
     var map = {};
-    movies.forEach(function (m) { (m.data.cast || []).forEach(function (c) {
-      var k = personKey(c.name); if (!k) return;
-      if (!map[k]) map[k] = { name: c.name.trim(), titles: [] };
+    var add = function (name, m) {
+      var k = personKey(name); if (!k) return;
+      if (!map[k]) map[k] = { name: String(name).trim(), titles: [] };
       if (map[k].titles.indexOf(m.data.title) === -1) map[k].titles.push(m.data.title);
-    }); });
+    };
+    movies.forEach(function (m) { (m.data.cast || []).forEach(function (c) { add(c.name, m); }); directorNames(m.data).forEach(function (n) { add(n, m); }); });
     Object.keys(people).forEach(function (k) { if (!map[k] && people[k].name) map[k] = { name: people[k].name, titles: [] }; });
     return Object.keys(map).map(function (k) { return { key: k, name: map[k].name, titles: map[k].titles }; })
       .sort(function (a, b) { return b.titles.length - a.titles.length || a.name.localeCompare(b.name); });
@@ -340,12 +343,29 @@ window.ReelAdmin = function (env) {
     if (!newKey) return Promise.reject(new Error('Enter a name.'));
     var jobs = [];
     movies.forEach(function (m) {
-      var cast = (m.data.cast || []), hit = false;
+      var cast = (m.data.cast || []), hit = false, up = {};
       var next = cast.map(function (c) { if (personKey(c.name) === oldKey) { hit = true; return Object.assign({}, c, { name: newName, role: c.role || '' }); } return c; });
-      if (!hit) return;
-      // drop a duplicate row if the title already had the target person with the same role
-      var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || '') + '|' + (c.character || ''); if (seen[k]) return false; seen[k] = 1; return true; });
-      jobs.push(db.doc('movies/' + m.id).update({ cast: next, updatedAt: new Date().toISOString() }));
+      if (hit) {
+        // drop a duplicate row if the title already had the target person with the same role
+        var seen = {}; next = next.filter(function (c) { var k = personKey(c.name) + '|' + (c.role || '') + '|' + (c.character || ''); if (seen[k]) return false; seen[k] = 1; return true; });
+        up.cast = next;
+      }
+      // The Director field too: rename the matching name, keep the others and their separators, and drop a repeat.
+      if (directorNames(m.data).some(function (n) { return personKey(n) === oldKey; })) {
+        var parts = String(m.data.director).split(/(,\s*| and )/), names = [], out = [];
+        for (var i = 0; i < parts.length; i += 2) {
+          var nm = parts[i].trim(), lead = parts[i].match(/^\s*/)[0], trail = parts[i].match(/\s*$/)[0];
+          if (personKey(nm) === oldKey) nm = newName;
+          if (nm && names.indexOf(personKey(nm)) !== -1) continue; // already listed
+          if (nm) names.push(personKey(nm));
+          if (out.length) out.push(parts[i - 1] || ', ');
+          out.push(nm ? lead + nm + trail : parts[i]);
+        }
+        up.director = out.join('').trim();
+      }
+      if (!up.cast && up.director === undefined) return;
+      up.updatedAt = new Date().toISOString();
+      jobs.push(db.doc('movies/' + m.id).update(up));
     });
     var from = people[oldKey], to = people[newKey];
     if (oldKey !== newKey) {
