@@ -1212,15 +1212,17 @@ window.ReelAdmin = function (env) {
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section', star: 'Star power' };
   var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Films not in Google': 'films-not-in-google', 'TV not in Google': 'tv-not-in-google', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
-  // Star power, the site's popularity rule (app/main.js popularityOf) without verdicts: for each title, the number of
-  // published titles each of its first 4 actors has, added up. Counted once per change to the titles list.
-  var STAR_TIERS = [['top', 'Star power: top (200+)', 200], ['high', 'Star power: high (100–199)', 100], ['mid', 'Star power: medium (30–99)', 30], ['low', 'Star power: low (1–29)', 1], ['none', 'Star power: none (0)', 0]];
-  var STAR_CREW = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i, starFor = null, starScore = {};
+  // Star power: how many lead roles a title's two leads have. A lead role is a published title where the person is one of
+  // the first 2 billed actors (crew, hosts, judges, narrators, guests, cameos and voices don't count). A title's score
+  // adds up its first 2 billed actors' lead roles, so prolific supporting actors no longer lift it. Counted once per change.
+  var STAR_TIERS = [['top', 'Star power: top (100+)', 100], ['high', 'Star power: high (60–99)', 60], ['mid', 'Star power: medium (30–59)', 30], ['low', 'Star power: low (1–29)', 1], ['none', 'Star power: none (0)', 0]];
+  var STAR_CREW = /(director|producer|music|writer|screenplay|composer|cinematograph|editor)/i, STAR_SKIP = /^(host|co-host|judge|narrator|guest|presenter|cameo|voice)/i, starFor = null, starScore = {};
+  function starLeads(d) { return (d.cast || []).filter(function (c) { return c && String(c.name || '').trim() && !STAR_CREW.test(c.role || '') && !STAR_SKIP.test(String(c.role || '').trim()); }).slice(0, 2); }
   function starOf(id) {
     if (starFor !== movies) {
-      var credits = {}; starScore = {}; starFor = movies;
-      movies.forEach(function (m) { if (m.data.published !== false) (m.data.cast || []).forEach(function (c) { var k = personKey(c && c.name); if (k) credits[k] = (credits[k] || 0) + 1; }); });
-      movies.forEach(function (m) { var t = 0; (m.data.cast || []).filter(function (c) { return c && !STAR_CREW.test(c.role || ''); }).slice(0, 4).forEach(function (c) { t += credits[personKey(c.name)] || 0; }); starScore[m.id] = t; });
+      var leadRoles = {}; starScore = {}; starFor = movies;
+      movies.forEach(function (m) { if (m.data.published !== false) starLeads(m.data).forEach(function (c) { var k = personKey(c.name); if (k) leadRoles[k] = (leadRoles[k] || 0) + 1; }); });
+      movies.forEach(function (m) { var t = 0; starLeads(m.data).forEach(function (c) { t += leadRoles[personKey(c.name)] || 0; }); starScore[m.id] = t; });
     }
     return starScore[id] || 0;
   }
