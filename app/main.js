@@ -956,9 +956,9 @@
     var pool = tnPool(t), picks = pool.slice(0, 3);
     var kids = picks.map(function (o) {
       var m = o.m, d = m.data, pa = artLazy(m, 'poster');
-      var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
+      var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), isTv(m) ? (o.rt ? 'Series · ' + o.rt + 'm episodes' : 'Series') : o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
       return h('article', { class: 'tnpick' }, [
-        h('a', { class: 'tnart art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]),
+        h('a', { class: 'tnart art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, pa.bg ? [] : [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]),
         h('div', { class: 'tnbody' }, [
           h('a', { class: 'tnt', href: movieUrl(m), text: d.title }),
           h('div', { class: 'tnm', text: meta }),

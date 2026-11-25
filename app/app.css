@@ -1051,7 +1051,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnt { font-size: 16px; font-weight: 700; line-height: 1.25; color: var(--text); text-decoration: none; }
   .tnm { font-size: 12px; color: var(--muted); }
   .tnwhy { align-self: flex-start; font-size: 12px; font-weight: 700; color: var(--accent); padding: 3px 8px; border-radius: 10px; border: 1px solid #5A4520; }
-  .tncta { margin-top: auto; width: 100%; }
+  .tncta { margin-top: auto; width: 100%; text-decoration: none; }
   .tnempty { padding: 18px; border-radius: 14px; border: 1px dashed var(--line2); font-size: 14px; line-height: 1.5; color: var(--muted); }
   .tnapps { font-size: 13px; color: var(--muted); }
   .linkbtn { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
