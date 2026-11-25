@@ -1070,3 +1070,80 @@ a.lead:hover .ln { text-decoration: underline; }
     .tnnarrow { display: flex; flex-direction: column; gap: 10px; }
     .tnh { font-size: 32px; }
   }
+
+/* Person page (/person/…): breadcrumb, stat tiles, Watch now, Known for, filmography by year, side column */
+.pcrumb { margin: 20px 40px 0; font-size: 13px; color: var(--dim); }
+.pcrumb a { color: var(--muted); text-decoration: none; }
+.pcrumb a:hover { color: var(--text); text-decoration: underline; }
+.phx { margin: 16px 40px 0; padding: 28px; border-radius: 20px; background: var(--panel); border: 1px solid var(--line); }
+.kicker.acc { color: var(--accent); }
+.pstats { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.pstat { padding: 10px 14px; border-radius: 12px; background: var(--panel2); border: 1px solid var(--line); display: flex; flex-direction: column; gap: 2px; }
+.pstat b { font-size: 20px; }
+.pstat span { font-size: 12px; color: var(--muted); }
+.pwrap { display: flex; flex-direction: column; gap: 30px; padding-top: 28px; }
+.psec h2, .pfilm h2, .pbox h2 { margin: 0 0 14px; font-size: 20px; }
+.pnow { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.pnc { display: flex; gap: 12px; padding: 12px; border-radius: 14px; background: var(--panel); border: 1px solid var(--line); }
+.pnp { width: 76px; height: 108px; flex: none; border-radius: 8px; background-size: cover; background-position: center; }
+.pnb { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 5px; }
+.pntag { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--accent); }
+.pntag.th { color: var(--ok); }
+.pnt { font-size: 15px; font-weight: 700; line-height: 1.2; color: var(--text); text-decoration: none; }
+.pnt:hover { text-decoration: underline; }
+.pnm { font-size: 12px; color: var(--muted); }
+.pnb .cta { margin-top: auto; }
+.pnb .cta.watch { background: var(--text); border-color: var(--text); color: #0B0A0F; font-weight: 700; }
+.pnb .cta.book { background: var(--accent); border-color: var(--accent); color: #0B0A0F; font-weight: 700; }
+.pnb .cta .ctalogo { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; flex: none; }
+.pkf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
+.pkc { display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; }
+.pkp { position: relative; aspect-ratio: 2 / 3; border-radius: 10px; background-size: cover; background-position: center; overflow: hidden; }
+.pkp .ptitle { position: absolute; left: 10px; right: 10px; bottom: 10px; font-family: Anton, Impact, sans-serif; font-size: 20px; line-height: 1.02; text-transform: uppercase; }
+.pkt { font-size: 14px; font-weight: 700; line-height: 1.2; }
+.pkc:hover .pkt { text-decoration: underline; }
+.pkm { font-size: 12px; color: var(--muted); }
+.pcols { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
+.pfilm { flex: 999 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 12px; }
+.pfhd { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.pfhd h2 { margin: 0; }
+.pfilm .chips { margin: 0; }
+.pyl { border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+.pyr { padding: 9px 16px; background: var(--panel); border-bottom: 1px solid var(--line); font-family: Anton, Impact, sans-serif; font-size: 18px; letter-spacing: .5px; color: var(--accent); }
+.prow { display: flex; align-items: center; gap: 14px; padding: 10px 16px; border-bottom: 1px solid #1F1C27; color: var(--text); text-decoration: none; }
+.prow:last-child { border-bottom: 0; }
+.prow:hover { background: var(--panel); }
+.prow:hover .prn { text-decoration: underline; }
+.prow:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+.prt { width: 40px; height: 56px; flex: none; border-radius: 6px; background-size: cover; background-position: center; }
+.prb { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.prn { font-size: 15px; font-weight: 700; }
+.prm { font-size: 12px; color: var(--muted); }
+.prr { font-size: 13px; color: #D9D5DF; }
+.prw { flex: none; max-width: 150px; text-align: right; font-size: 12px; font-weight: 600; color: var(--accent); }
+.prw.up { color: var(--ok); }
+.pside { flex: 1 1 300px; min-width: 0; display: flex; flex-direction: column; gap: 20px; }
+.pbox { padding: 20px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); }
+.pbox h2 { font-size: 17px; margin-bottom: 12px; }
+.pbox .about { font-size: 14px; color: #D9D5DF; }
+.pbox .about.clamp { display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; }
+.linkbtn { margin-top: 8px; border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
+.linkbtn:hover { text-decoration: underline; }
+.pcw { display: flex; flex-direction: column; gap: 12px; }
+.pcwr { display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; }
+.pcwr:hover b { text-decoration: underline; }
+.pcwi { width: 40px; height: 40px; border-radius: 50%; flex: none; object-fit: cover; object-position: center top; display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 700; color: #0B0A0F; }
+.pcwn { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.pcwn b { font-size: 14px; }
+.pcwn span { font-size: 12px; color: var(--muted); }
+.pcwk { font-size: 13px; font-weight: 700; color: var(--accent); }
+.plb { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; }
+.plbt { display: flex; justify-content: space-between; font-size: 13px; }
+.plbb { height: 6px; border-radius: 3px; background: var(--line); }
+.plbb i { display: block; height: 6px; border-radius: 3px; background: var(--accent); }
+@media (max-width: 760px) {
+  .pcrumb { margin: 16px 16px 0; }
+  .phx { margin: 12px 16px 0; padding: 20px; }
+  .prow { padding: 10px 12px; gap: 12px; }
+  .prw { max-width: 96px; }
+}

@@ -3108,61 +3108,142 @@
     var known = acting.length >= crew.length ? 'Acting' : (crew[0] && /direct/i.test(crew[0].roles.join(' ')) ? 'Directing' : 'Crew');
     var upcoming = titles.filter(function (t) { return !t.tv && isUpcoming(t.m); }).length;
     var years = []; titles.forEach(function (t) { (t.tv && t.yrs.length ? t.yrs : [(t.m.data.releaseDate || '').slice(0, 4)]).forEach(function (y) { if (y) years.push(y); }); }); years.sort();
-    v.appendChild(h('a', { href: '/people', style: 'display:inline-block;margin:24px 40px 0;color:var(--muted);font-weight:600;font-size:14px;text-decoration:none', on: { click: function (e) { if (history.length > 1) { e.preventDefault(); history.back(); } else { e.preventDefault(); go('/'); } } }, text: '← Back' }));
-    v.appendChild(h('section', { class: 'ph' }, [
+    if (!S.pf || S.pf.slug !== slug) S.pf = { slug: slug, tab: 'all', lang: '', asc: false, all: false, about: false };
+    var PF = S.pf;
+    // Where a title can be seen right now: in theatres with tickets, or on a streaming app.
+    function whereOf(t) {
+      var m = t.m, d = m.data, np = nowPlayingOf(d);
+      if (!t.tv && isUpcoming(m)) return { up: true, text: d.releaseDate ? 'Coming ' + fmtDate(d.releaseDate, true) : 'Coming soon' };
+      if (!t.tv && np === 'theatres' && released(m)) return { text: 'In theatres', book: hasBooking(d) };
+      if (safeUrl(d.platformUrl)) return { text: 'On ' + (d.platform || 'streaming'), url: d.platformUrl };
+      if (d.platform && (t.tv || np === 'ott' || np === 'direct' || isOtt(m))) return { text: 'On ' + d.platform };
+      return { text: '' };
+    }
+    titles.forEach(function (t) { t.w = whereOf(t); t.lang = langOf(t.m.data); t.key = t.w.up && !t.m.data.releaseDate ? '9999' : when(t); });
+    var langCount = {}; titles.forEach(function (t) { if (t.lang) langCount[t.lang] = (langCount[t.lang] || 0) + 1; });
+    var langList = Object.keys(langCount).sort(function (a, b) { return langCount[b] - langCount[a] || a.localeCompare(b); });
+    var nowList = titles.filter(function (t) { return t.w.book || t.w.url; }).slice(0, 4);
+    var roleWords = []; if (acting.length) roleWords.push('Actor'); crew.forEach(function (t) { t.roles.forEach(function (r) { if (CREW_RE.test(r)) { var w = r.replace(/^(co-|executive )/i, ''); w = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); if (roleWords.indexOf(w) === -1) roleWords.push(w); } }); });
+    function stat(n, l) { return h('div', { class: 'pstat' }, [h('b', { text: String(n) }), h('span', { text: l })]); }
+    v.appendChild(h('nav', { class: 'pcrumb', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › ', h('a', { href: '/people', text: 'People' }), ' › ', h('span', { 'aria-current': 'page', text: name })]));
+    v.appendChild(h('section', { class: 'ph phx' }, [
       photo ? h('img', { class: 'pimg', src: photo, alt: name }) : h('span', { class: 'pini', style: 'background:' + PAL[hash(slug) % PAL.length][1], 'aria-hidden': 'true', text: initials(name) }),
-      h('div', { style: 'min-width:0;flex:1' }, [
-        h('div', { class: 'kicker', text: 'Known for · ' + known }),
+      h('div', { style: 'min-width:0;flex:999 1 420px' }, [
+        h('div', { class: 'kicker acc', text: roleWords.slice(0, 3).join(' · ') || 'Known for · ' + known }),
         h('h1', { class: 'display', style: 'font-size:clamp(36px,5vw,64px);margin-top:6px', text: name }),
         stored && stored.bio ? h('p', { class: 'lede', style: 'margin:10px 0 0;max-width:720px', text: stored.bio }) : null,
         personFacts(stored),
-        h('div', { class: 'facts2' }, [
-          h('span', { class: 'tag', text: titles.length + (titles.length === 1 ? ' title' : ' titles') + ' on Reelscore' }),
-          upcoming ? h('span', { class: 'tag hot', text: upcoming + ' upcoming' }) : null,
-          years.length ? h('span', { class: 'tag', text: years[0] === years[years.length - 1] ? years[0] : years[0] + '–' + years[years.length - 1] }) : null
+        h('div', { class: 'pstats' }, [
+          stat(titles.length, titles.length === 1 ? 'title on Reelscore' : 'titles on Reelscore'),
+          years.length ? stat(years[0] === years[years.length - 1] ? years[0] : years[0] + '–' + years[years.length - 1], 'years listed') : null,
+          langList.length > 1 ? stat(langList.length, 'languages') : null,
+          upcoming ? stat(upcoming, 'upcoming') : null,
+          nowList.length ? stat(nowList.length, 'to watch now') : null
         ])
       ])
     ]));
-    function section(title, list) {
-      if (!list.length) return null;
-      return h('section', { class: 'wrapx', style: 'padding-top:20px;padding-bottom:0' }, [
-        h('h2', { style: 'margin:0 0 14px;font-size:22px', text: title + ' (' + list.length + ')' }),
-        h('div', { class: 'grid-posters' }, list.map(function (t) {
-          var card = posterCard(t.m, t.m.data.section === 'Coming soon' ? { dateBadge: true } : null);
-          var r = title === 'Upcoming' || title === 'TV shows' ? t.roles : t.roles.filter(function (x) { return title === 'Acting' ? !CREW_RE.test(x) : CREW_RE.test(x); });
-          var ch = r.filter(function (x) { return !CREW_RE.test(x); }), cr = r.filter(function (x) { return CREW_RE.test(x); });
-          var label = title === 'TV shows' ? [ch.length ? 'as ' + ch.join(' · ') : '', cr.join(' · '), t.eps ? epText(t.eps) : '', t.yrs.slice().sort().join(', ')].filter(Boolean).join(' · ') : title === 'Acting' ? 'as ' + r.join(' · ') : title === 'Upcoming' ? (ch.length ? 'as ' + ch.join(' · ') : '') + (ch.length && cr.length ? ' · ' : '') + cr.join(' · ') : r.join(' · ');
-          if (label) card.appendChild(h('span', { class: 'pcrole', text: label }));
-          return card;
-        }))
-      ]);
+    var main = h('div', { class: 'wrapx pwrap' }); v.appendChild(main);
+    // Watch now: in theatres with tickets, or streaming with a link.
+    if (nowList.length) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pnow' }, [
+      h('h2', { id: 'pnow', text: 'Watch now' }),
+      h('div', { class: 'pnow' }, nowList.map(function (t) {
+        var d = t.m.data, pa = artLazy(t.m, 'poster');
+        var cta = t.w.book ? bookBtn(t.m, 'btn small cta book') : h('a', { class: 'btn small cta watch', href: t.w.url, target: '_blank', rel: 'noopener', 'aria-label': 'Watch ' + d.title + ' on ' + (d.platform || 'streaming') }, [platLogo(d.platform), h('span', { text: 'Watch on ' + (d.platform || 'streaming') })]);
+        return h('article', { class: 'pnc' }, [
+          h('a', { class: 'pnp art', href: movieUrl(t.m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }),
+          h('div', { class: 'pnb' }, [
+            h('span', { class: 'pntag' + (t.w.book ? ' th' : ''), text: t.w.book ? 'In theatres' : 'Streaming' }),
+            h('a', { class: 'pnt', href: movieUrl(t.m), text: d.title }),
+            h('span', { class: 'pnm', text: [t.lang, d.genre, d.runtime].filter(Boolean).join(' · ') }),
+            cta
+          ])
+        ]);
+      }))
+    ]));
+    // Known for: released titles, most-rated first, then ones with a poster, then newest.
+    var kfl = titles.filter(function (t) { return !t.w.up && (t.acting || !acting.length); }).slice().sort(function (a, b) {
+      return (score(b.m.id).tot - score(a.m.id).tot) || ((safeUrl(b.m.data.posterUrl) ? 1 : 0) - (safeUrl(a.m.data.posterUrl) ? 1 : 0)) || b.key.localeCompare(a.key);
+    }).slice(0, 6);
+    if (titles.length > 6 && kfl.length >= 3) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pkf' }, [
+      h('h2', { id: 'pkf', text: 'Known for' }),
+      h('div', { class: 'pkf' }, kfl.map(function (t) {
+        var pa = artLazy(t.m, 'poster');
+        return h('a', { class: 'pkc', href: movieUrl(t.m) }, [
+          h('span', { class: 'pkp art', style: pa.style, 'data-bg': pa.bg }, [safeUrl(t.m.data.posterUrl) ? null : h('span', { class: 'ptitle', 'aria-hidden': 'true', text: t.m.data.title })]),
+          h('span', { class: 'pkt', text: t.m.data.title }),
+          h('span', { class: 'pkm', text: [t.key.slice(0, 4), t.lang].filter(Boolean).join(' · ') })
+        ]);
+      }))
+    ]));
+    var cols = h('div', { class: 'pcols' }); main.appendChild(cols);
+    // Filmography: grouped by year, with credit-type and language filters.
+    var TABS = [['all', 'All credits', titles], ['act', 'Acting', titles.filter(function (t) { return t.acting && !t.tv; })], ['tv', 'TV shows', titles.filter(function (t) { return t.tv; })], ['crew', 'Behind the camera', titles.filter(function (t) { return t.crew && !t.tv; })]].filter(function (x) { return x[0] === 'all' || x[2].length; });
+    if (!TABS.some(function (x) { return x[0] === PF.tab; })) PF.tab = 'all';
+    if (PF.lang && !langCount[PF.lang]) PF.lang = '';
+    var film = h('section', { class: 'pfilm', 'aria-labelledby': 'pfh' }); cols.appendChild(film);
+    function drawFilm(focusSel) {
+      film.innerHTML = '';
+      var base = TABS.filter(function (x) { return x[0] === PF.tab; })[0][2];
+      var list = base.filter(function (t) { return !PF.lang || t.lang === PF.lang; }).slice().sort(function (a, b) { return PF.asc ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key); });
+      var LIM = 14, shown = PF.all ? list : list.slice(0, LIM);
+      function upd(ch, sel) { return function () { Object.keys(ch).forEach(function (k) { PF[k] = ch[k]; }); drawFilm(sel); }; }
+      film.appendChild(h('div', { class: 'pfhd' }, [
+        h('h2', { id: 'pfh' }, ['Filmography ', h('span', { class: 'note', text: '· ' + list.length + (list.length === 1 ? ' title' : ' titles') })]),
+        list.length > 1 ? h('button', { type: 'button', class: 'chip', id: 'pfsort', text: PF.asc ? 'Oldest first' : 'Newest first', 'aria-label': 'Sort: ' + (PF.asc ? 'oldest first' : 'newest first') + '. Tap to change', on: { click: upd({ asc: !PF.asc }, '#pfsort') } }) : null
+      ]));
+      if (TABS.length > 1) film.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Credit type' }, TABS.map(function (x) {
+        return h('button', { type: 'button', class: 'chip', 'data-k': x[0], 'aria-pressed': String(PF.tab === x[0]), text: x[1] + ' · ' + x[2].length, on: { click: upd({ tab: x[0], all: false }, '[data-k="' + x[0] + '"]') } });
+      })));
+      if (langList.length > 1) film.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Language' }, [['', 'Any language']].concat(langList.map(function (l) { return [l, l]; })).map(function (x) {
+        return h('button', { type: 'button', class: 'chip', 'data-l': x[0], 'aria-pressed': String(PF.lang === x[0]), text: x[1], on: { click: upd({ lang: x[0], all: false }, '[data-l="' + x[0] + '"]') } });
+      })));
+      if (!list.length) film.appendChild(h('div', { class: 'empty', text: 'Nothing matches. Try another language or All credits.' }));
+      var box = h('div', { class: 'pyl' }), cur = null;
+      shown.forEach(function (t) {
+        var y = t.w.up && !t.m.data.releaseDate ? 'Upcoming' : t.key.slice(0, 4) || 'Year not listed';
+        if (y !== cur) { cur = y; box.appendChild(h('div', { class: 'pyr', text: y })); }
+        var d = t.m.data, pa = artLazy(t.m, 'poster');
+        var ch = t.roles.filter(function (x) { return !CREW_RE.test(x); }), cr = t.roles.filter(function (x) { return CREW_RE.test(x); });
+        var role = [ch.length ? 'as ' + ch.join(' · ') : '', cr.join(' · '), t.tv && t.eps ? epText(t.eps) : ''].filter(Boolean).join(' · ');
+        box.appendChild(h('a', { class: 'prow', href: movieUrl(t.m) }, [
+          h('span', { class: 'prt art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),
+          h('span', { class: 'prb' }, [
+            h('span', { class: 'prn', text: d.title }),
+            h('span', { class: 'prm', text: [t.lang, d.genre, t.tv ? 'TV' : d.runtime, d.certificate].filter(Boolean).join(' · ') }),
+            role ? h('span', { class: 'prr', text: role }) : null
+          ]),
+          t.w.text ? h('span', { class: 'prw' + (t.w.up ? ' up' : ''), text: t.w.text }) : null
+        ]));
+      });
+      if (shown.length) film.appendChild(box);
+      if (!PF.all && list.length > LIM) film.appendChild(h('button', { type: 'button', class: 'btn more', id: 'pfmore', text: 'Show all ' + list.length, on: { click: upd({ all: true }, '.prow:nth-of-type(' + (LIM + 1) + ')') } }));
+      if (focusSel) { var f = film.querySelector(focusSel); if (f) f.focus(); }
     }
-    // About, Known for and Frequent collaborators (app/about.js; the pre-rendered page uses the same text and picks).
+    drawFilm();
+    // Side column: About, languages, collaborators.
+    var side = h('aside', { class: 'pside' }); cols.appendChild(side);
     if (window.RS_ABOUT) {
       var facts = titles.map(function (t) { return { m: t.m, title: t.m.data.title, year: when(t).slice(0, 4), date: t.m.data.releaseDate || '', languages: t.m.data.languages, genre: t.m.data.genre,
         tv: t.tv, acting: t.acting, crew: t.crew, roles: t.roles, synopsis: t.m.data.synopsis || '', upcoming: !t.tv && isUpcoming(t.m) }; });
       var collab = RS_ABOUT.collaborators(slug, titles.map(function (t) { return t.m.data; }), personSlug);
-      var kf = RS_ABOUT.knownFor(facts);
-      var cw = collab.directors.map(function (x) { return [x, 'director']; }).concat(collab.costars.slice(0, 6).map(function (x) { return [x, 'co-star']; }));
-      v.appendChild(h('section', { class: 'wrapx pabout', style: 'padding-top:20px;padding-bottom:0' }, [
-        h('h2', { style: 'margin:0 0 10px;font-size:22px', text: 'About ' + name }),
-        h('p', { class: 'about', text: RS_ABOUT.person({ name: name, titles: facts, collab: collab }) }),
-        kf.length ? h('h3', { text: 'Known for' }) : null,
-        kf.length ? h('ul', { class: 'kfor' }, kf.map(function (k) { return h('li', {}, [h('a', { href: movieUrl(k.t.m), text: k.t.title }), ' ', h('span', { class: 'note', text: k.t.year }), ' – ' + k.line]); })) : null,
-        cw.length ? h('h3', { text: 'Frequent collaborators' }) : null,
-        cw.length ? h('div', { class: 'collab' }, cw.map(function (p) { return h('a', { class: 'tag', href: personUrl(p[0].name), text: p[0].name + ' · ' + p[1] + ' · ' + p[0].n }); })) : null
-      ]));
+      var ap = h('p', { class: 'about' + (PF.about ? '' : ' clamp'), id: 'pabout', text: RS_ABOUT.person({ name: name, titles: facts, collab: collab }) });
+      var more = h('button', { type: 'button', class: 'linkbtn', 'aria-expanded': String(!!PF.about), 'aria-controls': 'pabout', text: PF.about ? 'Show less' : 'Read more', on: { click: function () { PF.about = !PF.about; ap.classList.toggle('clamp', !PF.about); more.textContent = PF.about ? 'Show less' : 'Read more'; more.setAttribute('aria-expanded', String(PF.about)); } } });
+      side.appendChild(h('section', { class: 'pbox pabout', 'aria-labelledby': 'pab' }, [h('h2', { id: 'pab', text: 'About ' + name }), ap, more]));
+      var cw = collab.directors.filter(function (x) { return x.n >= 2; }).map(function (x) { return [x, 'Director']; }).concat(collab.costars.filter(function (x) { return x.n >= 2; }).slice(0, 6).map(function (x) { return [x, 'Co-star']; }));
+      if (cw.length) side.appendChild(h('section', { class: 'pbox', 'aria-labelledby': 'pcw' }, [h('h2', { id: 'pcw', text: 'Works most with' }),
+        h('div', { class: 'pcw' }, cw.map(function (p) {
+          var ph = personPhotoUrl(p[0].name, 96);
+          return h('a', { class: 'pcwr', href: personUrl(p[0].name) }, [
+            ph ? h('img', { class: 'pcwi', src: ph, alt: '', loading: 'lazy', width: 40, height: 40 }) : h('span', { class: 'pcwi', 'aria-hidden': 'true', style: 'background:' + PAL[hash(p[0].slug) % PAL.length][1], text: initials(p[0].name) }),
+            h('span', { class: 'pcwn' }, [h('b', { text: p[0].name }), h('span', { text: p[1] })]),
+            h('span', { class: 'pcwk', text: p[0].n + ' titles' })
+          ]);
+        }))]));
     }
-    // Unreleased titles first, in their own section (soonest first; undated last), then released work.
-    var films = titles.filter(function (t) { return !t.tv; }), tv = titles.filter(function (t) { return t.tv; });
-    var soon = films.filter(function (t) { return isUpcoming(t.m); }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
-    var out = films.filter(function (t) { return !isUpcoming(t.m); });
-    v.appendChild(section('Upcoming', soon) || h('span'));
-    acting = out.filter(function (t) { return t.acting; }); crew = out.filter(function (t) { return t.crew; });
-    v.appendChild(section('Acting', acting) || h('span'));
-    v.appendChild(section('TV shows', tv) || h('span'));
-    v.appendChild(section(acting.length ? 'Behind the camera' : 'Credits', crew) || h('span'));
-    v.appendChild(h('div', { style: 'height:40px' }));
+    if (langList.length > 1) side.appendChild(h('section', { class: 'pbox', 'aria-labelledby': 'plg' }, [h('h2', { id: 'plg', text: 'By language' })].concat(langList.slice(0, 6).map(function (l) {
+      return h('div', { class: 'plb' }, [h('div', { class: 'plbt' }, [h('span', { text: l }), h('span', { class: 'note', text: String(langCount[l]) })]),
+        h('div', { class: 'plbb', 'aria-hidden': 'true' }, [h('i', { style: 'width:' + Math.max(2, Math.round(langCount[l] / langCount[langList[0]] * 100)) + '%' })])]);
+    }))));
   }
 
   // ---------- people directory (/people) ----------
