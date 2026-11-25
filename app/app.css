@@ -774,7 +774,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .lead .lf { width: 64px; height: 64px; font-size: 20px; }
 }
 @media (max-width: 720px) { .row.v.news { grid-template-columns: 80px 1fr 1fr; } }
-@media (max-width: 720px) { .row.v.cast { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 720px) { .row.v.cast, .row.v.cast.tvc { grid-template-columns: 1fr 1fr; } }
 
 /* Header: search collapsed to an icon, opens on hover or focus; profile menu */
 /* The box opens over the header (absolutely placed) so the layout never shifts under the pointer. */
