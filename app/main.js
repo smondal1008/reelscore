@@ -584,8 +584,8 @@
   // it; other pages wait for the rest so "not found" and counts are never decided on part of the data.
   // A title page found in the core part draws at once too; the rest is fetched once the page is idle.
   function syncLoaded() {
-    // (While only a title page's seed is in, the home page waits for the catalogue too.)
-    var early = (S.route === 'home' && !S.seedOnly) || (S.route === 'title' && !!S.hasCat && !!findMovie(S.param));
+    // (While only a title page's seed is in, the home page waits for the catalogue; its own seed draws just the hero.)
+    var early = (S.route === 'home' && (!S.seedOnly || S.seedKind === 'home')) || (S.route === 'title' && !!S.hasCat && !!findMovie(S.param));
     S.loaded = !!S.hasCat && (!S.partial || early);
     if (S.partial && S.kickOlder) { if (!early) S.kickOlder(); else if (S.route === 'title' && !S.seedOnly) idleKick(); }
   }
@@ -1087,6 +1087,8 @@
     var heroBox = h('div', { id: 'heroBox' });
     v.appendChild(heroBox);
     drawHero();
+    // Only the home seed is in (the featured titles): the hero now, the rows once the catalogue arrives.
+    if (S.seedOnly) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading titles…' })])); return; }
 
     var friendPicks = S.movies.filter(function (x) { return inNavLang(x) && S.mine.following.length && score(x.id, S.mine.following).tot > 0; });
     var mine = S.movies.filter(function (x) { return inNavLang(x) && inList(x.id); });
@@ -3977,7 +3979,7 @@
         S.kickOlder = function () { S.kickOlder = null; addOlder(); };
         // The home page has all it needs in the core part. The rest (older films, ~0.9 MB) is fetched on the first
         // scroll, tap or key press, or when the visitor moves to another page or the search box.
-        if (wasSeeded) S.kickOlder();
+        if (wasSeeded && S.seedKind === 'title') S.kickOlder();
         else if (S.route === 'home') {
           var kick = function () { ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.removeEventListener(ev, kick, true); }); if (S.kickOlder) S.kickOlder(); };
           ['scroll', 'pointerdown', 'keydown', 'touchstart'].forEach(function (ev) { window.addEventListener(ev, kick, { capture: true, passive: true }); });
@@ -3987,9 +3989,17 @@
       whenDb(attachLive);
     }
     function fetchCore() { core().then(gotCore).catch(function () { needDb(loadAllFromFirestore); }); }
-    var seed = S.route === 'title' ? readSeed() : null;
-    if (seed) {
-      seeded = true; builtAt = seed.builtAt; S.partial = true; S.seedOnly = true;
+    var seedEl = document.getElementById('rs-seed'), seedKind = seedEl && seedEl.getAttribute('data-kind');
+    var seed = (S.route === 'title' && seedKind !== 'home') || (S.route === 'home' && seedKind === 'home') ? readSeed() : null;
+    if (seed && S.route === 'home') {
+      // The home page's seed holds its featured titles: the hero draws from it while the catalogue loads (at once).
+      seeded = true; builtAt = seed.builtAt; S.partial = true; S.seedOnly = true; S.seedKind = 'home';
+      seed.movies.forEach(function (m) { if (m && m.id && m.data) base[m.id] = m.data; });
+      if (seed.verdicts && !Object.keys(S.verdicts).length) S.verdicts = seed.verdicts;
+      apply();
+      fetchCore();
+    } else if (seed) {
+      seeded = true; builtAt = seed.builtAt; S.partial = true; S.seedOnly = true; S.seedKind = 'title';
       seed.movies.forEach(function (m) { if (m && m.id && m.data) base[m.id] = m.data; });
       baseP = seed.people || {};
       if (seed.verdicts && !Object.keys(S.verdicts).length) S.verdicts = seed.verdicts;

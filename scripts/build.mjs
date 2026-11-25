@@ -266,12 +266,22 @@ async function loadData() {
 function loadFixture(file) {
   const j = JSON.parse(fs.readFileSync(file, 'utf8'));
   const wrap = (arr) => (arr || []).map(x => x.data ? x : { id: x.id, data: Object.fromEntries(Object.entries(x).filter(([k]) => k !== 'id')), updated: x.updated || '' });
-  return { movies: wrap(j.movies), people: wrap(j.people), verdicts: wrap(j.verdicts), rows: j.rows, buttons: j.buttons };
+  return { movies: wrap(j.movies), people: wrap(j.people), verdicts: wrap(j.verdicts), rows: j.rows, buttons: j.buttons, featured: j.featured };
 }
 
 // ---------- output helpers ----------
 // Minify the app's scripts and styles in dist/ (esbuild, from package.json). Without it the build still works, unminified.
 // Only whitespace, syntax and local names change: each file keeps its global names, so the files still work together.
+// Runs from the small catalogue script, before app/main.js: asks for the page's hero pictures at once, at exactly the
+// sizes app/main.js will ask for (same rules as its cld, bannerW and poster width), so the app finds them already loading.
+// The home seed is in index.html, which also stands in for /browse and other app pages: only "/" preloads its banner.
+const HERO_JS = "(function(){try{var e=document.getElementById('rs-seed');if(!e)return;var k=e.getAttribute('data-kind');" +
+  "if(k==='home'&&location.pathname!=='/')return;" +
+  "var D=Math.min(window.devicePixelRatio||1,2),V=Math.max(320,Math.min(window.innerWidth||1280,2560));" +
+  "var c=function(u,w){var m=u.match(/^(https:\\/\\/res\\.cloudinary\\.com\\/[^/]+\\/image\\/upload\\/)(.*)$/);if(!m||/^[a-z]{1,3}_[^/]*\\//.test(m[2]))return u;return m[1]+'f_auto,q_auto,c_limit,w_'+w+'/'+m[2];};" +
+  "var p=function(u,hi){if(!/^https:\\/\\//.test(u||''))return;var l=document.createElement('link');l.rel='preload';l.as='image';l.href=u;if(hi)l.setAttribute('fetchpriority','high');document.head.appendChild(l);};" +
+  "var b=e.getAttribute('data-banner'),q=e.getAttribute('data-poster');" +
+  "if(b)p(c(b,Math.min(1920,Math.ceil(V*D/320)*320)),true);if(q&&k==='title')p(c(q,480),!b);}catch(x){}})();";
 const MINIFY = ['app/main.js', 'app/admin.js', 'app/about.js', 'js/claude-shim.js', 'js/firebase-adapter.js', 'firebase-config.js', 'app/app.css', 'app/admin.css'];
 async function minifyAssets() {
   let esbuild; try { esbuild = await import('esbuild'); } catch (e) { console.warn('[seo] esbuild not installed: scripts and styles left unminified'); return; }
@@ -298,7 +308,7 @@ function copyDir(from, to) {
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
 const OG_DEFAULT = '/og-default.png';
-function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed }) {
+function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed, hero }) {
   // Pages without a poster or photo share the site-wide card (1200x630).
   const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
@@ -324,7 +334,9 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
   const slot = '<div class="view" id="view-' + route + '"></div>';
   if (!html.includes(slot)) throw new Error('index.html is missing ' + slot);
   // A seed is data for the app, not markup: a JSON block the browser never runs ("<" escaped so it can't close the tag).
-  const seedTag = seed ? '<script type="application/json" id="rs-seed">' + JSON.stringify(seed).replace(/</g, '\\u003c') + '</script>' : '';
+  // data-banner / data-poster name the page's first big pictures, which the small catalogue script preloads (see HERO_JS).
+  const heroAttrs = hero ? (hero.banner ? ' data-banner="' + esc(hero.banner) + '"' : '') + (hero.poster ? ' data-poster="' + esc(hero.poster) + '"' : '') : '';
+  const seedTag = seed ? '<script type="application/json" id="rs-seed" data-kind="' + route + '"' + heroAttrs + '>' + JSON.stringify(seed).replace(/</g, '\\u003c') + '</script>' : '';
   return html.replace(slot, '<div class="view" id="view-' + route + '"><div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
 }
 
@@ -590,7 +602,7 @@ async function main() {
 
     // Only pages with real substance are indexed (see seoTier); the rest come back once they have more.
     const tier = seoTier(d, sc.tot), thinTitle = tier !== 'good'; tierCount[tier] = (tierCount[tier] || 0) + 1;
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), robots: thinTitle ? 'noindex,follow' : undefined }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: tv ? 'video.tv_show' : 'video.movie', image: banner || poster, wide: !!banner, jsonld: [node, crumbs], route: 'title', body, seed: seedFor(m, byCrew.concat(more)), hero: { banner: safeUrl(d.bannerUrl), poster: safeUrl(d.posterUrl) }, robots: thinTitle ? 'noindex,follow' : undefined }));
     // The bare id (or an old slug) still opens the title, as a pointer to the canonical page that isn't indexed.
     for (const alias of new Set([m.id, slugify(m.data.title) || ''])) {
       const au = (tv ? '/tv/' : '/movie/') + alias;
@@ -759,8 +771,13 @@ async function main() {
   { const ny = new Date().getFullYear(), ys = []; for (let k = ny; k > ny - 10; k--) ys.push(k);
     homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
   homeBody += '<p><a href="/about">About Reelscore and how scores work</a></p>';
+  // The home page's seed: its featured titles (the hero carousel), so the hero draws before the catalogue arrives.
+  const byIdPub = new Map(movies.map(m => [m.id, m]));
+  const featured = (data.featured || []).map(id => byIdPub.get(id)).filter(Boolean);
+  const homeSeed = featured.length ? { builtAt: data.builtAt, movies: featured.map(o => ({ id: o.id, data: slim(o.data) })), people: {}, verdicts: verdictsFor(featured.map(o => o.id)) } : null;
   const homeHtml = page(shell, { title: 'Reelscore — Reviews for Indian movies and series', description: 'Verdicts, reviews and trailers for Bollywood and regional Indian films and series, with scores from people you follow.',
-    canonical: '/', ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody });
+    canonical: '/', ogPath: '/', ogType: 'website', image: null, jsonld: homeLd, route: 'home', body: homeBody,
+    seed: homeSeed, hero: homeSeed ? { banner: safeUrl(featured[0].data.bannerUrl) } : null });
   write('index.html', homeHtml);
 
   // Browse: all sections, then one page per section listing every title in it
@@ -1008,7 +1025,7 @@ async function main() {
   const stats = { lang: {}, year: {} };
   movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(), y = String(m.data.releaseDate || '').slice(0, 4);
     if (/^[A-Za-z]+$/.test(l)) stats.lang[l] = (stats.lang[l] || 0) + 1; if (/^\d{4}$/.test(y)) stats.year[y] = (stats.year[y] || 0) + 1; });
-  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';' + HERO_JS + 'window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
   const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
@@ -1016,7 +1033,7 @@ async function main() {
     let html = fs.readFileSync(f, 'utf8'), changed = false;
     for (const [from, to] of Object.entries(hashed)) { if (/^\/catalogue/.test(from)) continue; const a = '"' + from + '"'; if (html.includes(a)) { html = html.split(a).join('"' + to + '"'); changed = true; } }
     // Pages without a seed need the core catalogue first, so the browser starts fetching it while it reads the page.
-    const pre = html.includes('id="rs-seed"') ? '' : '\n<link rel="preload" href="' + hashed['/catalogue-core.json'] + '" as="fetch" crossorigin="anonymous">';
+    const pre = html.includes('id="rs-seed" data-kind="title"') ? '' : '\n<link rel="preload" href="' + hashed['/catalogue-core.json'] + '" as="fetch" crossorigin="anonymous">';
     if (html.includes('<!--/seo-->')) { html = html.replace('<!--/seo-->', '<!--/seo-->\n<script defer src="' + catPtr + '"></script>' + pre); changed = true; }
     if (changed) fs.writeFileSync(f, html);
   }
