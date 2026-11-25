@@ -741,7 +741,7 @@
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
-    if (opts.rate && !cta) {
+    if (opts.rate && !cta && released(m)) {
       kids.push(qvButtons(m));
     }
     if (opts.myVerdict) {
@@ -777,14 +777,15 @@
   }
   // Once the row has been shown, it stays put for the session: saving one of its picks to your list doesn't pull the
   // card out or reshuffle the row (the watchlist it was built from is held until the page reloads).
-  var mlShown = Object.create(null), mlWatch = null;
+  var mlShown = Object.create(null), mlWatch = null, mlVerd = null;
   function becauseListSection() {
-    if (mlWatch && mlWatch.uid !== S.uid) { mlWatch = null; mlShown = Object.create(null); }
+    if ((mlWatch && mlWatch.uid !== S.uid) || (mlVerd && mlVerd.uid !== S.uid)) { mlWatch = null; mlVerd = null; mlShown = Object.create(null); }
     var wl = mlWatch || S.mine.watchlist || [];
     if (!S.uid && !wl.length) return null;
     var seeds = {}, add = function (id, w, why) { if (!S.byId[id]) return; var s = seeds[id]; if (!s || Math.abs(w) > Math.abs(s.w)) seeds[id] = { w: w, why: why }; };
     wl.forEach(function (id) { add(id, 1, 'saved'); });
-    var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
+    // Verdicts given this visit (from the row's own buttons, say) don't reshuffle the row either: it uses the ones from when it was first shown.
+    var vv = mlVerd || (S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {});
     var ck = wl.join(',') + '|' + JSON.stringify(vv) + '|' + S.movies.length + '|' + (S.navLang || '');
     if (becauseListSection.ck === ck) return becauseListSection.draw();
     Object.keys(vv).forEach(function (id) { var x = vv[id]; add(id, x === 'a' ? 1.5 : x === 'b' ? 0.5 : -1, x === 'c' ? 'skip' : 'rated'); });
@@ -833,7 +834,8 @@
       var list = out.filter(function (m) { return S.byId[m.id] && (!inList(m.id) || mlShown[m.id]); });
       if (list.length < 6) return null;
       list.forEach(function (m) { mlShown[m.id] = 1; }); if (!mlWatch) { mlWatch = (S.mine.watchlist || []).slice(); mlWatch.uid = S.uid; }
-      var sec = rowSection('More like what you love', list, { noNew: true, tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
+      if (!mlVerd && S.uid && S.verdictsIn) { mlVerd = clone(vv); mlVerd.uid = S.uid; }
+      var sec = rowSection('More like what you love', list, { noNew: true, rate: true, tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
       if (sec) sec.id = 'becauselist';
       return sec;
     };
@@ -1169,13 +1171,13 @@
       none,
       tonightSection(),
       lazySection(function () { return mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
-      lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return trailerSection(); }, 2),
       lazySection(function () { return rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
       }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])); }, 3),
+      lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return rateSection(); }, 4),
       lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
       lazySection(function () { return rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
