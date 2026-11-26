@@ -988,7 +988,17 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnfoot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   /* Tonight: shortlist (+ on the art), Seen it / Not for me, and the shortlist bar above the cards */
   .tngrid { perspective: 1100px; }
-  .tnpick { transition: border-color .2s ease, box-shadow .2s ease; }
+  .tnpick { transition: border-color .2s ease, box-shadow .25s ease, transform .25s cubic-bezier(.2,.8,.2,1), background-color .25s ease; }
+  .tnmedia .tnart { transition: transform .45s cubic-bezier(.2,.8,.2,1), filter .3s ease; }
+  .tnmedia:not(.playing) { border-radius: 10px; overflow: hidden; }
+  @media (hover: hover) {
+    .tnpick:hover, .tnpick:focus-within { transform: translateY(-4px); border-color: #5A4520; background-color: #1E1C26; box-shadow: 0 14px 34px rgba(0,0,0,.45), 0 0 0 1px rgba(245,165,36,.18); }
+    .tnpick.on:hover, .tnpick.on:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 16px 36px rgba(245,165,36,.2); }
+    .tnpick:hover .tnart { transform: scale(1.05); filter: brightness(1.08); }
+    .tnpick:hover .tnplay .pb { transform: scale(1.06); }
+    .tnpick:hover .tnplay:hover .pb { transform: scale(1.1); }
+    .tnpick:hover .tnt { color: #fff; }
+  }
   .tnpick.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(245,165,36,.12); }
   .tnpick.tnin0 { animation: tnflip0 .55s cubic-bezier(.2,.8,.2,1); }
   .tnpick.tnin1 { animation: tnflip1 .55s cubic-bezier(.2,.8,.2,1); }
@@ -1045,7 +1055,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnpage .tneslot { justify-content: center; }
   .tnpage .tnmini { display: none; }
   .tnpage .tnname { font-size: 12px; padding: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  @media (prefers-reduced-motion: reduce) { .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .tnpick:hover, .tnpick:focus-within, .tnpick:hover .tnart { transform: none !important; } .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
   @media (max-width: 899px) {
     .tonight { margin: 16px 16px 0; padding: 20px; }
     .tnwide { display: none; }

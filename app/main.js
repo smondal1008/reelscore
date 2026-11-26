@@ -1095,9 +1095,10 @@
     // A shortlisted title brought back from the bar may not fit tonight's answers: it still gets its card.
     t.pins.forEach(function (id) { var m = S.byId[id]; if (m && !byId[id] && t.slots.indexOf(id) !== -1) byId[id] = { m: m, taste: 0, pct: null, age: 9999, rt: runtimeMin(m.data), cert: '', pinned: true }; });
     // A card whose title no longer fits (rated or listed elsewhere) gets the next pick, without a flip.
+    var used = t.slots.filter(function (id) { return id && byId[id]; });
     t.slots = t.slots.map(function (id, i) {
       if (!id || byId[id]) return id;
-      var next = tnNext(t).filter(function (x) { return t.slots.indexOf(x) === -1; })[0] || null; t.drawn[i] = t.n[i]; return next;
+      var next = tnNext(t).filter(function (x) { return used.indexOf(x) === -1; })[0] || null; if (next) used.push(next); t.drawn[i] = t.n[i]; return next;
     });
     var any = t.slots.some(Boolean);
     var kids = t.slots.map(function (id, i) {
