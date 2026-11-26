@@ -980,12 +980,13 @@
   function tnQuestions(t, onChange) {
     var set = function (k, v) { t[k] = v; t.seen = []; t.rating = null; tnSave(); tnFill(t, false); onChange(); };
     var group = function (label, kids) { return h('div', { class: 'tnq', role: 'group', 'aria-label': label }, [h('div', { class: 'tnql', text: label }), h('div', { class: 'tnopts' }, kids)]); };
-    var opt = function (k, v, label) { return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(t[k] === v), text: label, on: { click: function () { set(k, v); } } }); };
+    var opt = function (k, v, label, ic) { return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(t[k] === v), on: { click: function () { set(k, v); } } }, ic ? [icon(ic, 16), h('span', { text: label })] : [label]); };
+    var MOOD_IC = { thrill: 'zap', laugh: 'smile', feel: 'heart', think: 'bulb', family: 'users', scare: 'ghost' };
     var langs = TN_LANGS.concat(t.allLangs ? TN_MORE_LANGS : []);
     return [
-      group('Where are you watching?', [opt('where', 'home', 'At home'), opt('where', 'out', 'Going out')]),
+      group('Where are you watching?', [opt('where', 'home', 'At home', 'home'), opt('where', 'out', 'Going out', 'ticket')]),
       group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
-      group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1]); })),
+      group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1], MOOD_IC[x[0]]); })),
       group('Languages (pick any)', [h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(!t.langs.length), text: 'Any', on: { click: function () { set('langs', []); } } })]
         .concat(langs.map(function (l) { var on = t.langs.indexOf(l) !== -1; return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(on), text: l, on: { click: function () { set('langs', on ? t.langs.filter(function (y) { return y !== l; }) : t.langs.concat([l])); } } }); }))
         .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
@@ -2501,6 +2502,14 @@
   // ---------- title page blocks (2026 redesign) ----------
   // Small inline icons; static markup only.
   var ICONS = {
+    home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/>',
+    ticket: '<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5V14a2 2 0 0 0 0-4z"/><path d="M14 6v2.5M14 11v2M14 15.5V18"/>',
+    zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
+    smile: '<circle cx="12" cy="12" r="9"/><path d="M8 14s1.5 2.5 4 2.5 4-2.5 4-2.5"/><path d="M9 9.5h.01M15 9.5h.01"/>',
+    heart: '<path d="M12 20s-7-4.4-9-9a4.5 4.5 0 0 1 9-3 4.5 4.5 0 0 1 9 3c-2 4.6-9 9-9 9z"/>',
+    bulb: '<path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/>',
+    users: '<circle cx="9" cy="8" r="3.2"/><path d="M3 20a6 6 0 0 1 12 0"/><circle cx="17" cy="9" r="2.6"/><path d="M15.5 14.3A5 5 0 0 1 21 19"/>',
+    ghost: '<path d="M5 21V10a7 7 0 0 1 14 0v11l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><path d="M9.5 10h.01M14.5 10h.01"/>',
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',

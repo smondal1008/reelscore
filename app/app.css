@@ -956,6 +956,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnql { font-size: 13px; font-weight: 700; color: var(--muted); }
   .tnopts { display: flex; flex-wrap: wrap; gap: 8px; }
   .tnchip { height: 40px; padding: 0 14px; border-radius: 20px; font-size: 14px; }
+  .tnchip { display: inline-flex; align-items: center; gap: 6px; } .tnchip .ic { display: flex; }
   .tnhead { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
   .tnhead h3 { margin: 0; font-size: 18px; }
   .tnhead .sub { font-size: 14px; font-weight: 500; color: var(--muted); }
