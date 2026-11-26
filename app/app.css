@@ -123,7 +123,7 @@
   .results a:hover, .results a:focus { background: var(--panel2); outline: none; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: var(--panel2); }
   .view { display: none; }
-  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-movies #view-movies, body.r-tvshows #view-tvshows, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-video #view-video, body.r-notfound #view-home, body.r-about #view-about, body.r-admin #view-admin { display: block; }
+  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-movies #view-movies, body.r-tvshows #view-tvshows, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-video #view-video, body.r-notfound #view-home, body.r-about #view-about, body.r-privacy #view-privacy, body.r-contact #view-contact, body.r-admin #view-admin { display: block; }
   body:not(.r-admin) #savebar { display: none !important; }
   .nav { background: linear-gradient(to bottom, #1a0f10, var(--bg)); border-bottom: 0; padding-top: 18px; padding-bottom: 18px; }
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
@@ -1247,3 +1247,24 @@ a.lead:hover .ln { text-decoration: underline; }
    the app adds; on phones it keeps at least the height of the app's hero so the swap doesn't change the first screen. */
 /* Phones: the app's title page is a flex column, which keeps the hero's top margin inside it; flow-root does the same here. */
 @media (max-width: 900px) { .tp.rs-static { min-height: 660px; } .rs-statwrap { display: flow-root; } }
+
+/* Ads rule: nothing ad-related shows on pages marked ad-free (see applyAdsRule in main.js) */
+body.noads ins.adsbygoogle, body.noads .google-auto-placed, body.noads .adsbygoogle { display: none !important; }
+/* Contact form */
+.cform { display: flex; flex-direction: column; gap: 16px; max-width: 620px; margin: 8px 0 20px; }
+.cfield { display: flex; flex-direction: column; gap: 6px; }
+.cfield label { font-size: 14px; font-weight: 700; color: var(--text); }
+.cfield input, .cfield select, .cfield textarea { font: inherit; font-size: 15px; color: var(--text); background: var(--panel2); border: 1px solid var(--line2); border-radius: 10px; padding: 10px 12px; }
+.cfield textarea { resize: vertical; min-height: 140px; line-height: 1.5; }
+.cfield input:focus-visible, .cfield select:focus-visible, .cfield textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cfield .note { font-size: 12px; color: var(--muted); }
+.ctrap { position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0; }
+.cact .btn { min-width: 160px; height: 44px; }
+.cout { margin: 0; font-size: 14px; }
+.cout.err { color: #FF8A80; }
+.cdone { padding: 16px 18px; border: 1px solid rgba(245,165,36,.45); border-radius: 12px; background: rgba(245,165,36,.07); max-width: 620px; font-size: 15px; line-height: 1.5; }
+/* Text pages (About, Privacy, Contact): breadcrumb on one line, normal bulleted lists, readable line length */
+body.r-about .pr .crumbs, body.r-privacy .pr .crumbs, body.r-contact .pr .crumbs { display: block; }
+body.r-about .pr > p, body.r-privacy .pr > p, body.r-contact .pr > p, body.r-about .pr > ul, body.r-privacy .pr > ul { max-width: 720px; }
+body.r-about .pr > ul, body.r-privacy .pr > ul { columns: auto; list-style: disc; padding-left: 20px; margin: 0 0 14px; }
+body.r-about .pr > ul > li, body.r-privacy .pr > ul > li { margin: 0 0 8px; line-height: 1.55; }

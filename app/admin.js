@@ -735,6 +735,45 @@ window.ReelAdmin = function (env) {
       main.appendChild(card);
     });
   }
+  // ---------- Messages from the site's contact form (Firestore "contact", newest first) ----------
+  var msgMode = false, msgs = [], msgLoaded = false, msgErr = '', msgShowDone = false;
+  var MSG_TOPICS = { correction: 'Correction', add: 'Add a title or person', takedown: 'Takedown or copyright', privacy: 'Privacy or data', partner: 'Partnership', other: 'Something else' };
+  function renderMsgCount() { var el = $('msgCount'); if (!el) return; var n = msgs.filter(function (m) { return !m.data.done; }).length; el.textContent = msgLoaded && n ? String(n) : ''; }
+  function msgWhen(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function renderMessages() {
+    var main = $('main'); main.innerHTML = '';
+    var open = msgs.filter(function (m) { return !m.data.done; }), done = msgs.length - open.length;
+    var list = msgShowDone ? msgs : open;
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Contact form' }), h('h1', { text: 'Messages' })])]),
+      h('div', { class: 'note', text: msgErr ? msgErr : !msgLoaded ? 'Loading…' : open.length ? open.length + ' to deal with' + (done ? ', ' + done + ' done.' : '.') : 'Nothing waiting.' + (done ? ' ' + done + ' done.' : '') }),
+      done ? h('label', { style: 'display:inline-flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer' }, [
+        (function () { var cb = h('input', { type: 'checkbox', checked: msgShowDone }); cb.addEventListener('change', function () { msgShowDone = cb.checked; renderMessages(); }); return cb; })(),
+        h('span', { text: 'Show done messages' })]) : null
+    ]));
+    list.forEach(function (m) {
+      var d = m.data, reply = 'mailto:' + encodeURIComponent(d.email || '') + '?subject=' + encodeURIComponent('Re: your message to Reelscore');
+      var acts = h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;margin-top:12px' }, [
+        h('a', { class: 'btn', href: reply, text: 'Reply by email', style: 'text-decoration:none' }),
+        h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: d.done ? 'Mark not done' : 'Mark done', on: { click: function () {
+          db.doc('contact/' + m.id).update({ done: !d.done }).then(function () { setStatus(d.done ? 'Marked not done' : 'Marked done'); }).catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+        } } }),
+        h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Delete', on: { click: function () {
+          askConfirm('Delete this message?', 'From ' + (d.name || d.email) + '. This can’t be undone.', 'Delete', true).then(function (yes) {
+            if (yes) db.doc('contact/' + m.id).delete().then(function () { setStatus('Message deleted'); }).catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });
+          });
+        } } })
+      ]);
+      main.appendChild(h('section', { class: 'card', style: d.done ? 'opacity:.6' : '' }, [
+        h('div', { style: 'display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap' }, [
+          h('div', {}, [h('b', { text: MSG_TOPICS[d.topic] || d.topic || 'Message' }), h('span', { class: 'note', text: ' · ' + (d.name ? d.name + ' · ' : '') + (d.email || '') + (d.uid ? ' · signed in' : '') })]),
+          h('span', { class: 'note', text: msgWhen(d.at) + (d.done ? ' · done' : '') })]),
+        d.page ? h('div', { class: 'note', style: 'margin-top:6px' }, ['About: ', h('a', { href: d.page, target: '_blank', rel: 'noopener', text: d.page })]) : null,
+        h('p', { style: 'white-space:pre-wrap;margin:10px 0 0;line-height:1.5', text: d.message || '' }),
+        acts
+      ]));
+    });
+  }
   // ---------- Buttons: Book tickets / Watch now on or off, page by page (settings/buttons) ----------
   var btnMode = false, btnCfg = {}, btnLoaded = false, btnWriting = false;
   var BTN_PLACES = [
@@ -1543,7 +1582,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1557,7 +1596,7 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; pbMode = null; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; wantSlug = null;
+    featuredMode = false; pbMode = null; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
@@ -1565,6 +1604,7 @@ window.ReelAdmin = function (env) {
     else if (parts[0] === 'movies-banner') { page = 'moviesbanner'; pbMode = 'movies'; }
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
+    else if (parts[0] === 'messages') { page = 'messages'; msgMode = true; }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
@@ -2568,6 +2608,7 @@ window.ReelAdmin = function (env) {
     if (pbMode) { renderPageBanner(pbMode); return; }
     if (rowsMode) { renderRows(); return; }
     if (btnMode) { renderButtons(); return; }
+    if (msgMode) { renderMessages(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
       main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/titles', text: '← All titles' })]));
@@ -2945,6 +2986,10 @@ window.ReelAdmin = function (env) {
       if (pbMode === k) renderPageBanner(k); else if (page === 'title' && !dirty) renderEditor();
     }, function () {});
   });
+  db.collection('contact').orderBy('at', 'desc').limit(300).onSnapshot(function (snap) {
+    msgs = snap.docs.map(function (x) { return { id: x.id, data: x.data() || {} }; }); msgLoaded = true; msgErr = '';
+    renderMsgCount(); if (msgMode) renderMessages();
+  }, function () { msgLoaded = true; msgErr = 'Messages can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; if (msgMode) renderMessages(); });
   db.doc('settings/buttons').onSnapshot(function (snap) {
     if (btnWriting) return;
     btnCfg = snap.exists ? snap.data() : {}; btnLoaded = true; renderBtnCount();

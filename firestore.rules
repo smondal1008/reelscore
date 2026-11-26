@@ -34,6 +34,19 @@ service cloud.firestore {
       allow read, write: if isOwner(uid);
     }
 
+    // Contact form: anyone can send a message (fixed fields and sizes); only admins can read, mark done or delete.
+    match /contact/{id} {
+      allow create: if request.resource.data.keys().hasOnly(['topic', 'name', 'email', 'message', 'page', 'at', 'uid'])
+        && request.resource.data.topic in ['correction', 'add', 'takedown', 'privacy', 'partner', 'other']
+        && request.resource.data.email is string && request.resource.data.email.size() >= 5 && request.resource.data.email.size() <= 120
+        && request.resource.data.message is string && request.resource.data.message.size() >= 1 && request.resource.data.message.size() <= 2000
+        && request.resource.data.name is string && request.resource.data.name.size() <= 80
+        && request.resource.data.page is string && request.resource.data.page.size() <= 300
+        && request.resource.data.at is string && request.resource.data.at.size() <= 40
+        && (!('uid' in request.resource.data) || (signedIn() && request.resource.data.uid == request.auth.uid));
+      allow read, update, delete: if isAdmin();
+    }
+
     // Cloudinary upload settings: only admins can read. You create this doc in the console.
     match /private/{id} {
       allow read: if isAdmin();

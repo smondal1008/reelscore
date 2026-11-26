@@ -46,3 +46,18 @@ PageSpeed Insights API key; Search Console data needs the site verified in Searc
 
 Suggested rhythm: glance at the build log after big imports; run the full audit monthly, and after any change to
 page templates, URLs or `robots.txt`.
+
+
+## Ads rule (no ad code yet)
+
+Ads may only ever run on pages with real substance. Every generated page that must stay ad-free carries
+`<meta name="rs-ads" content="off">`:
+
+- title and person pages kept out of Google (anything with `noindex`), so thin and borderline titles never carry ads;
+- every video page (`/movie/…/trailer`, `/song/…`, episodes) and the video hubs (`/trailers`, `/songs`, `/tv-promos`);
+- the site's own pages: About, Privacy, Contact, My List, Tonight, admin and "not found".
+
+`scripts/build.mjs` (`ADS_OFF_ROUTES` and the `noindex` check in `page()`) writes the tag. After in-app navigation,
+`app/main.js` (`applyAdsRule`) works out the same answer, keeps the tag in step and sets `body.noads`, which hides any
+ad already on screen. Any ad script added later must check `window.reelAdsAllowed()` before it loads or shows an ad.
+Before ads go live, update the Advertising section of the privacy policy (`/privacy`, written in `scripts/build.mjs`).

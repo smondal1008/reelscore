@@ -504,6 +504,8 @@
     else if (path === '/tv-shows') { S.route = 'tvshows'; S.param = null; catFromUrl(S.cat.tv, 'All'); }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else if (path === '/about') { S.route = 'about'; S.param = null; }
+    else if (path === '/privacy') { S.route = 'privacy'; S.param = null; }
+    else if (path === '/contact') { S.route = 'contact'; S.param = null; }
     else if ((window.RS_404 || document.querySelector('meta[name="rs-404"]')) && path !== '/') { S.route = 'notfound'; S.param = path; }
     else { S.route = 'home'; S.param = null; if (path !== '/') history.replaceState(null, '', '/'); }
     if (S.route !== (S.heroCtx || 'home') && S.play) leaveHero();
@@ -519,6 +521,8 @@
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
     else if (S.route === 'about') document.title = 'About Reelscore & How Scores Work';
+    else if (S.route === 'privacy') document.title = 'Privacy Policy | Reelscore';
+    else if (S.route === 'contact') document.title = 'Contact | Reelscore';
     else if (S.route === 'tonight') document.title = 'Tonight: what to watch now | Reelscore';
     else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'admin') startAdmin();
@@ -636,6 +640,9 @@
     else if (S.route === 'video') drawVideo();
     else if (S.route === 'notfound') drawNotFound();
     else if (S.route === 'about') drawAbout();
+    else if (S.route === 'privacy') drawAbout('privacy');
+    else if (S.route === 'contact') drawContact();
+    applyAdsRule();
     if (Object.keys(keep).length) {
       document.querySelectorAll('.view .rowx').forEach(function (r) {
         var s = r.closest('section'), k = s && s.getAttribute('aria-label');
@@ -1700,7 +1707,86 @@
                     'tv-promos': { h: 'All TV promotionals', t: 'TV Show Trailers, Promos & Episodes | Reelscore', what: 'TV promotionals', picks: tvPromoPicks, card: tvPromoCard },
                     songs: { h: 'All video songs', t: 'Latest Video Songs | Reelscore', what: 'video songs', picks: songPicks, card: songCard } };
   // /about is a static page; navigating to it inside the app loads it in full.
-  function drawAbout() { if (!$('view-about').querySelector('[data-prerendered]')) location.reload(); }
+  function drawAbout(id) { if (!$('view-' + (id || 'about')).querySelector('[data-prerendered]')) location.reload(); }
+  // ---------- Ads rule (no ad code yet) ----------
+  // Ads may only run on pages with real substance. The build marks every page that must stay ad-free with
+  // <meta name="rs-ads" content="off"> (thin titles and anything kept out of Google, video pages and hubs, the site's own
+  // pages). After in-app navigation the same rule is worked out here, the meta tag is kept in step, and body.noads hides
+  // any ad already on screen. Any ad script added later must call window.reelAdsAllowed() first.
+  var ADS_OFF_ROUTES = { video: 1, vids: 1, about: 1, privacy: 1, contact: 1, list: 1, tonight: 1, admin: 1, notfound: 1 };
+  var adsFirst = { path: location.pathname, off: !!document.querySelector('meta[name="rs-ads"][content="off"]') };
+  function titleHasSubstance(m) {
+    var d = m.data, syn = String(d.synopsis || '').trim().length;
+    return !!(safeUrl(d.posterUrl) || (d.videos || []).some(function (v) { return v && /youtu/.test(v.url || ''); }) || String(d.platform || '').trim() ||
+      safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || syn >= 200 || score(m.id).tot >= 3);
+  }
+  function adsAllowedHere() {
+    if (location.pathname === adsFirst.path) return !adsFirst.off;
+    if (ADS_OFF_ROUTES[S.route] || S.route === 'person') return false;
+    if (S.route === 'title') { var m = S.loaded ? findMovie(S.param) : null; return !!(m && titleHasSubstance(m)); }
+    return true;
+  }
+  function applyAdsRule() {
+    var ok = adsAllowedHere(), el = document.querySelector('meta[name="rs-ads"]');
+    document.body.classList.toggle('noads', !ok);
+    if (!ok && !el) { el = document.createElement('meta'); el.name = 'rs-ads'; document.head.appendChild(el); }
+    if (el) { if (ok) el.parentNode.removeChild(el); else el.content = 'off'; }
+  }
+  window.reelAdsAllowed = adsAllowedHere;
+  // ---------- Contact form: messages go to Firestore "contact"; the admin panel lists them ----------
+  var CONTACT_TOPICS = [['correction', 'A correction or missing information'], ['add', 'Add a title or person'], ['takedown', 'Takedown or copyright'],
+    ['privacy', 'Privacy or my data'], ['partner', 'Partnership or business'], ['other', 'Something else']];
+  function drawContact() {
+    var v = $('view-contact'), slot = v.querySelector('#contactForm');
+    if (!v.querySelector('[data-prerendered]') || !slot) { location.reload(); return; }
+    if (slot.getAttribute('data-ready')) return;
+    slot.setAttribute('data-ready', '1'); slot.innerHTML = '';
+    var me = S.uid && S.user ? S.user : null;
+    var topic = h('select', { id: 'cTopic', required: true }, [h('option', { value: '', text: 'Choose one' })].concat(CONTACT_TOPICS.map(function (t) { return h('option', { value: t[0], text: t[1] }); })));
+    var name = h('input', { id: 'cName', type: 'text', maxlength: '80', autocomplete: 'name' });
+    var email = h('input', { id: 'cEmail', type: 'email', required: true, maxlength: '120', autocomplete: 'email' });
+    var page = h('input', { id: 'cPage', type: 'url', maxlength: '300', placeholder: 'https://reelscore-xi.vercel.app/movie/…' });
+    var msg = h('textarea', { id: 'cMsg', required: true, maxlength: '2000', rows: '7' });
+    var trap = h('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true', class: 'ctrap' });
+    var count = h('span', { class: 'note', text: '0 / 2,000' });
+    var out = h('p', { class: 'cout', role: 'status' });
+    var send = h('button', { type: 'submit', class: 'btn primary', text: 'Send message' });
+    msg.addEventListener('input', function () { count.textContent = msg.value.length.toLocaleString('en-IN') + ' / 2,000'; });
+    var q = new URLSearchParams(location.search); if (q.get('topic') && CONTACT_TOPICS.some(function (t) { return t[0] === q.get('topic'); })) topic.value = q.get('topic');
+    if (q.get('page') && /^https:\/\//.test(q.get('page'))) page.value = q.get('page').slice(0, 300);
+    var field = function (id, label, input, hint) { return h('div', { class: 'cfield' }, [h('label', { for: id, text: label }), input, hint ? h('span', { class: 'note', text: hint }) : null]); };
+    var form = h('form', { class: 'cform', novalidate: true }, [
+      field('cTopic', 'What is it about?', topic),
+      field('cName', 'Your name (optional)', name),
+      field('cEmail', 'Your email', email, 'Only used to reply to you.'),
+      field('cPage', 'Which page is it about? (optional)', page),
+      h('div', { class: 'cfield' }, [h('label', { for: 'cMsg', text: 'Message' }), msg, count]),
+      trap, h('div', { class: 'cact' }, [send]), out]);
+    form.addEventListener('submit', function (e) {
+      e.preventDefault(); out.className = 'cout';
+      var problem = !topic.value ? [topic, 'Choose what your message is about.'] : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim()) ? [email, 'Enter an email address we can reply to.']
+        : !msg.value.trim() ? [msg, 'Write your message.'] : (page.value.trim() && !/^https:\/\//.test(page.value.trim())) ? [page, 'Paste the page address starting with https://, or leave it empty.'] : null;
+      if (problem) { out.className = 'cout err'; out.textContent = problem[1]; problem[0].focus(); return; }
+      if (trap.value) { form.replaceWith(h('p', { class: 'cdone', text: 'Thanks, your message is on its way.' })); return; }
+      send.disabled = true; send.textContent = 'Sending…';
+      var body = { topic: topic.value, name: name.value.trim().slice(0, 80), email: email.value.trim().slice(0, 120), message: msg.value.trim().slice(0, 2000), page: page.value.trim().slice(0, 300), at: new Date().toISOString() };
+      if (S.uid) body.uid = S.uid;
+      var id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+      if (window.__reelStartFirebase) window.__reelStartFirebase();
+      (S.db ? Promise.resolve(S.db) : window.claude.use('db')).then(function (db) {
+        if (!db) throw new Error('offline');
+        return db.doc('contact/' + id).set(body);
+      }).then(function () {
+        var done = h('div', { class: 'cdone', role: 'status' }, [h('b', { text: 'Thanks, your message is on its way.' }), ' We’ll reply to ' + body.email + '.']);
+        form.replaceWith(done); done.setAttribute('tabindex', '-1'); done.focus();
+      }).catch(function () {
+        send.disabled = false; send.textContent = 'Send message';
+        out.className = 'cout err'; out.textContent = 'Your message couldn’t be sent. Check your connection and try again.';
+      });
+    });
+    slot.appendChild(form);
+    if (me) { /* signed-in visitors: nothing extra is shown; the account ID is attached to the message */ }
+  }
   function drawNotFound() {
     var v = $('view-home');
     if (v.querySelector('[data-prerendered]') && !S.nfDrawn) { S.nfDrawn = true; return; }
@@ -2079,7 +2165,7 @@
     return null;
   }
   function footer() {
-    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
+    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('a', { href: '/privacy', text: 'Privacy' }), h('a', { href: '/contact', text: 'Contact' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
   }
 
   // ---------- title ----------

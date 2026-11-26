@@ -24,6 +24,7 @@ import { createHash } from 'node:crypto';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUT = path.join(ROOT, 'dist');
 // The "About" text for titles and people comes from the same file the app runs (app/about.js), so both say the same thing.
+const PRIVACY_UPDATED = '26 November 2026'; // change when the privacy policy text changes
 const ABOUT = (() => { const w = {}; new Function('window', fs.readFileSync(path.join(ROOT, 'app', 'about.js'), 'utf8'))(w); return w.RS_ABOUT; })();
 const TODAY = new Date().toISOString().slice(0, 10);
 // Now playing (set in the admin panel): theatres | out | ott | direct. It decides a film's home page section, and
@@ -381,13 +382,20 @@ function copyDir(from, to) {
 function write(rel, content) { const f = path.join(OUT, rel); fs.mkdirSync(path.dirname(f), { recursive: true }); fs.writeFileSync(f, content); }
 
 const OG_DEFAULT = '/og-default.png';
+// Ads rule: ads may only ever run on pages with real substance. Pages kept out of Google (thin or borderline titles,
+// person pages without enough content, empty video hubs), every video page and hub, and the site's own pages
+// (about, privacy, contact) carry <meta name="rs-ads" content="off">; app/main.js applies the same rule after in-app
+// navigation. There is no ad code yet: whatever ad script is added later must check this first (see seo/README.md).
+const ADS_OFF_ROUTES = new Set(['video', 'vids', 'about', 'privacy', 'contact', 'list', 'tonight', 'admin', 'notfound']);
 function page(shell, { title, description, canonical, ogPath, ogType, image, wide, jsonld, route, body, robots, seed, hero, heroHtml }) {
+  const adsOff = ADS_OFF_ROUTES.has(route) || /noindex/.test(robots || '');
   // Pages without a poster or photo share the site-wide card (1200x630).
   const fallback = !image; if (fallback) { image = SITE + OG_DEFAULT; wide = true; }
   const head = [
     '<title>' + esc(title) + '</title>',
     '<meta name="description" content="' + esc(description) + '">',
     robots ? '<meta name="robots" content="' + robots + '">' : '',
+    adsOff ? '<meta name="rs-ads" content="off">' : '',
     canonical ? '<link rel="canonical" href="' + esc(SITE + canonical) + '">' : '',
     '<meta property="og:site_name" content="Reelscore">',
     '<meta property="og:type" content="' + ogType + '">',
@@ -875,7 +883,7 @@ async function main() {
   homeBody += '<h2>Genres</h2><ul>' + genreLinks() + '</ul>';
   { const ny = new Date().getFullYear(), ys = []; for (let k = ny; k > ny - 10; k--) ys.push(k);
     homeBody += '<h2>Movies by year</h2><ul>' + ys.map(k => '<li><a href="/year/' + k + '">' + k + '</a></li>').join('') + '</ul>'; }
-  homeBody += '<p><a href="/about">About Reelscore and how scores work</a></p>';
+  homeBody += '<p><a href="/about">About Reelscore and how scores work</a> · <a href="/privacy">Privacy</a> · <a href="/contact">Contact</a></p>';
   // The home page's seed: its featured titles (the hero carousel), so the hero draws before the catalogue arrives.
   const byIdPub = new Map(movies.map(m => [m.id, m]));
   const featured = (data.featured || []).map(id => byIdPub.get(id)).filter(Boolean);
@@ -1059,6 +1067,54 @@ async function main() {
       jsonld: [{ '@context': 'https://schema.org', '@type': 'AboutPage', name: 'About Reelscore and how scores work', url: SITE + '/about', about: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' } },
         { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: 'About', item: SITE + '/about' }] }] });
     sitemap.push({ loc: '/about', pri: '0.5' });
+  }
+
+  // ----- Privacy policy (kept in step with what the site actually does: see firestore.rules, js/firebase-adapter.js) -----
+  {
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Privacy</nav>' +
+      '<h1>Privacy policy</h1>' +
+      '<p class="note">Last updated ' + PRIVACY_UPDATED + '.</p>' +
+      '<p>This page explains what Reelscore collects, why, who else is involved and what you can ask us to do. Reelscore is a small independent site. If anything here is unclear, <a href="/contact">contact us</a>.</p>' +
+      '<h2>Browsing without signing in</h2>' +
+      '<p>You can read every page without an account. We don’t use analytics or tracking tools, and we don’t set advertising cookies. Your browser keeps a few of your choices on your own device (local storage) so the site remembers them next time: your language and city, your streaming apps, your Tonight answers, and the titles you marked “Not for me”. These never leave your device unless you sign in, and you can clear them by clearing your browser’s site data.</p>' +
+      '<h2>Signing in</h2>' +
+      '<p>Signing in is optional and uses your Google account through Google Firebase. We receive your name, your profile photo and an account ID from Google. We never see your Google password.</p>' +
+      '<p>When you’re signed in, we store:</p>' +
+      '<ul><li><b>Public:</b> your name and profile photo, your verdicts and your reviews. Anyone can see these, which is how scores and Peer Scores work.</li>' +
+      '<li><b>Private, only you can see them:</b> your watchlist, the people you follow, your release reminders, your streaming apps and your “Not for me” list.</li></ul>' +
+      '<h2>Messages you send us</h2>' +
+      '<p>If you use the <a href="/contact">contact form</a>, we keep what you write, the email address you give and, if you’re signed in, your account ID, so we can reply and find your data if you ask about it. Only the Reelscore team can read messages.</p>' +
+      '<h2>Who else is involved</h2>' +
+      '<ul><li><b>Google Firebase</b> stores accounts, verdicts, reviews, lists and messages, and handles sign-in.</li>' +
+      '<li><b>Vercel</b> hosts the site. Like any web host, its servers see your IP address and the pages you request.</li>' +
+      '<li><b>Cloudinary</b> serves posters and photos.</li>' +
+      '<li><b>YouTube</b> plays trailers and songs. The YouTube player loads only when you press play or open a video’s own page, using YouTube’s privacy-enhanced mode; from then on, YouTube’s own privacy policy applies.</li></ul>' +
+      '<p>We don’t sell your information, and we don’t share it with anyone other than the services above, which handle it to run the site.</p>' +
+      '<h2>Advertising</h2>' +
+      '<p>Reelscore shows no ads today. If we add them, we will update this page before they appear, explaining which ad provider is used and the choices you have. Ads would only appear on pages with full title information, not on video pages.</p>' +
+      '<h2>Your choices</h2>' +
+      '<ul><li>Change or remove any verdict or review at any time on the title’s page.</li>' +
+      '<li>Remove titles from your watchlist, reminders and follows at any time.</li>' +
+      '<li>Ask us to delete your account and everything stored with it, or to send you a copy, through the <a href="/contact">contact form</a>. Choose “Privacy or my data” as the topic. We aim to do it within 30 days.</li></ul>' +
+      '<h2>How long we keep things</h2>' +
+      '<p>Your account data stays until you delete it or ask us to. Messages are kept until the matter is dealt with, and no longer than a year.</p>' +
+      '<h2>Changes</h2>' +
+      '<p>When this policy changes, the date at the top changes too. For significant changes, we’ll say so on the home page.</p>';
+    writeHub('privacy.html', { title: 'Privacy Policy | Reelscore', description: 'What Reelscore collects, why, who else is involved, and how to see, change or delete your information.', canonical: '/privacy', ogPath: '/privacy', route: 'privacy', body,
+      jsonld: [crumbLd(['Home', '/'], ['Privacy', '/privacy'])] });
+    sitemap.push({ loc: '/privacy', pri: '0.2' });
+  }
+
+  // ----- Contact: the text is static; app/main.js adds the form (messages go to Firestore "contact", read in the admin panel) -----
+  {
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Contact</nav>' +
+      '<h1>Contact Reelscore</h1>' +
+      '<p>Spotted a wrong release date, cast name or streaming link? Want a title added, or something taken down? Have a question about your data, or want to work with us? Send us a message and we’ll reply by email.</p>' +
+      '<div id="contactForm"><p class="note">The form needs JavaScript. If it doesn’t appear, reload the page.</p></div>' +
+      '<p class="note">We read every message. What you send is handled as our <a href="/privacy">privacy policy</a> describes.</p>';
+    writeHub('contact.html', { title: 'Contact | Reelscore', description: 'Send Reelscore a correction, a takedown request, a question about your data or a partnership idea.', canonical: '/contact', ogPath: '/contact', route: 'contact', body,
+      jsonld: [crumbLd(['Home', '/'], ['Contact', '/contact'])] });
+    sitemap.push({ loc: '/contact', pri: '0.2' });
   }
 
   // ----- aliases, people with too few credits for an indexed page, 404 -----
