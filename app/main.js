@@ -360,10 +360,16 @@
     if (dupTitles.map[titleKey(m)] > 1 && langOf(d)) parts.push(langOf(d));
     parts = parts.filter(Boolean);
     var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : ''), tot = score(m.id).tot;
-    return titleTail(base, { tv: isTv(m), upcoming: isUpcoming(m), theatres: d.section === 'In theatres', platform: !!String(d.platform || '').trim(),
+    // Same as scripts/build.mjs: a TV show whose title runs past 60 characters uses the first year only.
+    var short = isTv(m) && tvYears(d) ? d.title + ' (' + ['TV series ' + String(tvYears(d)).slice(0, 4)].concat(parts.slice(1)).join(', ') + ')' : null;
+    var tail = function (b) { return titleTail(b, { tv: isTv(m), upcoming: isUpcoming(m), theatres: d.section === 'In theatres', platform: !!String(d.platform || '').trim(),
       verdicts: tot, popular: d.popular === true || tot >= 20,
       songs: (d.videos || []).some(function (v) { return vidCat(v.kind) === 'songs' && !!ytId(safeUrl(v.url)); }),
-      boxOffice: !!boData(m), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= today(), tickets: btnOn('title', 'book') && hasBooking(d) });
+      boxOffice: !!boData(m), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= today(), tickets: btnOn('title', 'book') && hasBooking(d) }); };
+    var full = tail(base);
+    if (full.length <= 60 || !short) return full;
+    var alt = tail(short);
+    return alt.length <= 60 || alt.length < full.length ? alt : full;
   }
   // Same as scripts/build.mjs titleTail: the words after a title's name, picked by what its page actually has.
   function titleTail(base, o) {

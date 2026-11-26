@@ -656,10 +656,16 @@ async function main() {
     if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
     const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : '');
     const tot = score(m.id).tot;
-    return titleTail(base, { tv: isTv(d), upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', theatres: d.section === 'In theatres',
+    // TV shows: when "(TV series 2020–present)" pushes the title past 60 characters, use the first year only.
+    const short = isTv(d) && tvYears(d) ? d.title + ' (' + ['TV series ' + String(tvYears(d)).slice(0, 4)].concat(p.slice(1)).join(', ') + ')' : null;
+    const tail = b => titleTail(b, { tv: isTv(d), upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', theatres: d.section === 'In theatres',
       platform: !!String(d.platform || '').trim(), verdicts: tot, popular: d.popular === true || tot >= 20,
       songs: ytVideos(d).some(v => v.cat === 'songs' && v.yt), boxOffice: !!boOf(d), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= TODAY,
       tickets: !(data.buttons && data.buttons.title && data.buttons.title.book === false) && ticketsOf(d).length > 0 });
+    const full = tail(base);
+    if (full.length <= 60 || !short) return full;
+    const alt = tail(short);
+    return alt.length <= 60 || alt.length < full.length ? alt : full;
   }
   function personTitleTag(name) {
     const a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
