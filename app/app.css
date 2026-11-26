@@ -1061,6 +1061,8 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnact.dim { border-style: dashed; color: var(--muted); }
   @media (hover: hover) { .tnact:hover svg { animation: tnblink .45s ease; } }
   @keyframes tnblink { 0%, 100% { transform: scaleY(1); } 40% { transform: scaleY(.15); } }
+  @media (hover: hover) { .tnact.tnmoon:hover svg { animation: tnmoon .5s ease; } }
+  @keyframes tnmoon { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(-24deg); } }
   .tnrate { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(244,241,234,.05); transform-origin: 50% 0; }
   .tnrate.new { animation: tnratein .38s cubic-bezier(.2,.8,.2,1); }
   @keyframes tnratein { 0% { opacity: 0; transform: rotateX(-70deg); } 100% { opacity: 1; transform: none; } }

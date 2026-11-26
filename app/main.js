@@ -993,11 +993,18 @@
     if (S.uid && S.mineLoaded) { S.mine.nope = (S.mine.nope || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
     else { try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_nope', JSON.stringify(a.slice(-500))); } catch (e) {} }
   }
+  // "Not tonight" in Your 3 for tonight: skipped for the rest of today only, on this device; tomorrow it can come back.
+  function tnSkipped() {
+    try { var o = JSON.parse(localStorage.getItem('rs_tnskip') || '{}') || {}; return o.d === today() && Array.isArray(o.ids) ? o.ids : []; } catch (e) { return []; }
+  }
+  function tnSkipToday(id) {
+    try { var a = tnSkipped(); if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_tnskip', JSON.stringify({ d: today(), ids: a.slice(-200) })); } catch (e) {}
+  }
   // "Movies or TV shows?" only applies at home (cinemas show films). TV shows have no "How much time?": episodes are short.
   function tnKind(t) { return t.where === 'out' ? 'any' : t.kind || 'any'; }
   function tnTime(t) { return tnKind(t) === 'tv' ? 'any' : t.time; }
   function tnPool(t) {
-    var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel(), nope = tnNope();
+    var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel(), nope = tnNope().concat(tnSkipped());
     var out = [];
     S.movies.forEach(function (m) {
       var d = m.data, pinned = t.pins.indexOf(m.id) !== -1;
@@ -1286,10 +1293,10 @@
           tnCta(m, t),
           h('div', { class: 'tnacts' }, [
             h('button', { type: 'button', class: 'tnact', on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } }, [icon('eye', 17), h('span', { text: 'Seen it' })]),
-            h('button', { type: 'button', class: 'tnact dim', on: { click: function () {
-              tnAddNope(id); t.pins = t.pins.filter(function (x) { return x !== id; });
-              var next = tnSwap(t, i); toast('Got it. We won’t suggest ' + title + ' again' + (next ? '. Here’s a new pick.' : '.')); onChange();
-            } } }, [icon('eyeoff', 17), h('span', { text: 'Not for me' })])])
+            h('button', { type: 'button', class: 'tnact dim tnmoon', on: { click: function () {
+              tnSkipToday(id); t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
+              var next = tnSwap(t, i); toast('Okay, not tonight.' + (next ? ' Here’s a new pick.' : '')); onChange();
+            } } }, [icon('moon', 17), h('span', { text: 'Not tonight' })])])
         ]);
       }
       return h('article', { class: 'tnpick' + (pinned ? ' on' : '') + flip + (t.anim.flash === id ? ' glow' : ''), 'data-id': id }, [
@@ -2828,6 +2835,7 @@
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     eyeoff: '<path d="M10.7 5.1A10.7 10.7 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M14.1 14.2a3 3 0 0 1-4.2-4.2"/><path d="M17.5 17.5A10.7 10.7 0 0 1 12 19c-7 0-10-7-10-7a13 13 0 0 1 4.7-5.2"/><path d="M2 2l20 20"/>',
     bell: '<path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10.3 20a2 2 0 003.4 0"/>',
