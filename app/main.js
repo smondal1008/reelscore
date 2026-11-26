@@ -823,7 +823,8 @@
     });
     scored.sort(function (a, b) { return (b.art - a.art) || b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
     var pos = ids.filter(function (id) { return seeds[id].w > 0; }), per = {}, out = [], why = {};
-    for (var i = 0; i < scored.length && out.length < 20 && i < 300; i++) {
+    // 40 picks: the row shows 20; the rest stand by for cards marked "Not for me".
+    for (var i = 0; i < scored.length && out.length < 40 && i < 400; i++) {
       var o = scored[i], best = null, bw = 0;
       pos.forEach(function (id) {
         var f = feat[id], sw = 0, people = 0, sharp = 0;
@@ -839,11 +840,18 @@
     }
     becauseListSection.ck = ck;
     becauseListSection.draw = function () {
-      var list = out.filter(function (m) { return S.byId[m.id] && (!inList(m.id) || mlShown[m.id]); });
+      var nope = tnNope(), fits = function (m) { return S.byId[m.id] && nope.indexOf(m.id) === -1 && (!inList(m.id) || mlShown[m.id]); };
+      var list = out.filter(fits).slice(0, 20);
       if (list.length < 6) return null;
+      var opts = { noNew: true, rate: true, tagFor: function (m) { return why[m.id]; } };
+      S.rateRows = S.rateRows || {};
+      S.rateRows['More like what you love'] = { opts: opts, next: function (shown) {
+        var n = out.filter(function (m) { return fits(m) && !inList(m.id) && !myVerdict(m.id) && shown.indexOf(m.id) === -1; })[0];
+        if (n) mlShown[n.id] = 1; return n;
+      } };
       list.forEach(function (m) { mlShown[m.id] = 1; }); if (!mlWatch) { mlWatch = (S.mine.watchlist || []).slice(); mlWatch.uid = S.uid; }
       if (!mlVerd && S.uid && S.verdictsIn) { mlVerd = clone(vv); mlVerd.uid = S.uid; }
-      var sec = rowSection('More like what you love', list, { noNew: true, rate: true, tagFor: function (m) { return why[m.id]; } }, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
+      var sec = rowSection('More like what you love', list, opts, h('span', { class: 'sub', text: 'Picked from your watchlist and verdicts' }));
       if (sec) sec.id = 'becauselist';
       return sec;
     };
@@ -1452,13 +1460,14 @@
 
   // Full-screen trailer player over the current page; Esc, the close button or a click outside the video closes it.
   // queue: { list: [{m, x}], i } — the row the video was opened from, so the next one can follow.
-  function openTrailerOverlay(m, x, opener, queue) {
+  function openTrailerOverlay(m, x, opener, queue, keepMini) {
+    if (!keepMini) S.tovMini = false; // a video you open yourself starts full size; the next one in the row keeps the mini player
     closeTrailerOverlay();
     var d = m.data, media;
     if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin), title: d.title + ' · ' + x.title,
       allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
     else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
-    var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: closeTrailerOverlay } });
+    var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: function () { S.tovMini = false; closeTrailerOverlay(); } } });
     // Go to the title's page from the player: close it, remember the home row it was opened from, then navigate.
     var toPage = function (e) {
       if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
@@ -1468,35 +1477,62 @@
         var sec = opener.closest('.view section[aria-label]'), row = sec && sec.querySelector('.rowx');
         S.homeSpot = sec ? { label: sec.getAttribute('aria-label'), left: row ? row.scrollLeft : 0 } : null;
       }
-      S.tov && (S.tov.opener = null);
-      closeTrailerOverlay();
+      // In the mini player the video keeps playing while you go to the page.
+      if (!S.tovMini) { S.tov && (S.tov.opener = null); closeTrailerOverlay(); }
       if (S.route === 'title' && location.pathname === href) return;
       go(href);
     };
     var more = h('a', { class: 'btn small tov-go', href: movieUrl(m), text: isTv(m) ? 'Go to show page' : 'Go to movie page', on: { click: toPage } });
     var vu = videoUrl(m, x.yt), vp = vu && videoPaths(m.data).filter(function (p) { return p.yt === x.yt; })[0];
     var shareB = vu ? h('button', { type: 'button', class: 'btn small tov-go', text: 'Share', on: { click: function () { shareVideo(m, vp, vu); } } }) : null;
+    // Autoplay: the next video in the row plays when this one ends. On by default; the choice is remembered.
+    var hasNext = !!(queue && queue.list && queue.list[queue.i + 1]);
+    var auto = hasNext ? h('button', { type: 'button', class: 'tov-auto', role: 'switch', 'aria-checked': String(tovAutoplay()), title: 'Play the next video in the row when this one ends',
+      on: { click: function () { var on = !tovAutoplay(); try { localStorage.setItem('rs_autoplay', on ? '1' : '0'); } catch (e) {} auto.setAttribute('aria-checked', String(on)); if (S.tov && S.tov.autoChanged) S.tov.autoChanged(on); } } },
+      [h('span', { class: 'tov-sw', 'aria-hidden': 'true' }), h('span', { text: 'Autoplay' })]) : null;
+    // Mini player (desktop): the video shrinks to a corner and keeps playing while you browse. The player itself is never
+    // moved in the page, so it doesn't restart.
+    var miniB = tovMiniOk() ? h('button', { type: 'button', class: 'tov-mn', on: { click: function () { setTovMini(!S.tovMini); } } }, [icon('pip', 18), h('span', { class: 'tov-mnl' })]) : null;
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [
         h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
-        h('div', { class: 'tov-acts' }, [shareB, more, close])
+        h('div', { class: 'tov-acts' }, [auto, shareB, more, miniB, close])
       ]),
       h('div', { class: 'tov-v' }, [media])
     ]);
-    box.addEventListener('click', function (e) { if (e.target === box) closeTrailerOverlay(); });
-    S.tov = { node: box, opener: opener, key: function (e) { if (e.key === 'Escape') closeTrailerOverlay(); } };
+    box.addEventListener('click', function (e) { if (e.target === box && !S.tovMini) closeTrailerOverlay(); });
+    S.tov = { node: box, opener: opener, miniB: miniB, key: function (e) { if (e.key === 'Escape' && !S.tovMini) closeTrailerOverlay(); } };
     document.addEventListener('keydown', S.tov.key);
     upNext(box, media, opener, queue);
-    document.body.appendChild(box); document.body.classList.add('tov-open');
-    close.focus();
+    document.body.appendChild(box);
+    if (!tovMiniOk()) S.tovMini = false;
+    setTovMini(!!S.tovMini, true);
+    if (!S.tovMini) close.focus();
+  }
+  function tovAutoplay() { try { return localStorage.getItem('rs_autoplay') !== '0'; } catch (e) { return true; } }
+  function tovMiniOk() { try { return window.matchMedia('(min-width: 900px) and (hover: hover)').matches; } catch (e) { return false; } }
+  function setTovMini(on, quiet) {
+    var t = S.tov; if (!t) return;
+    S.tovMini = on;
+    t.node.classList.toggle('tov-mini', on);
+    t.node.setAttribute('aria-modal', on ? 'false' : 'true');
+    document.body.classList.toggle('tov-open', !on);
+    if (t.miniB) {
+      t.miniB.setAttribute('aria-label', on ? 'Back to the full-size player' : 'Mini player: keep watching while you browse');
+      t.miniB.title = on ? 'Full size' : 'Mini player';
+      t.miniB.querySelector('.tov-mnl').textContent = on ? '' : 'Mini player';
+    }
+    if (!quiet && !on) { var x = t.node.querySelector('.tov-x'); if (x) x.focus(); }
+    if (!quiet && on && t.opener && t.opener.isConnected) t.opener.focus({ preventScroll: true });
   }
   // "Up next": in the last 10 seconds, a card offers the next video from the same row; it plays when this one ends
   // unless the viewer cancels. YouTube reports progress through its embed postMessage protocol (no extra script).
   function upNext(box, media, opener, queue) {
     var nx = queue && queue.list && queue.list[queue.i + 1];
     if (!nx || !nx.m || !nx.x) return;
-    var t = S.tov, shown = false, cancelled = false, done = false, left = null;
-    var playNext = function () { if (done || S.tov !== t) return; done = true; openTrailerOverlay(nx.m, nx.x, opener, { list: queue.list, i: queue.i + 1 }); };
+    var t = S.tov, shown = false, cancelled = false, done = false, left = null, autoOn = tovAutoplay();
+    t.autoChanged = function (on) { autoOn = on; if (on) cancelled = false; if (left !== null && shown) count.textContent = on ? ' · in ' + left + 's' : ''; };
+    var playNext = function () { if (done || S.tov !== t) return; done = true; openTrailerOverlay(nx.m, nx.x, opener, { list: queue.list, i: queue.i + 1 }, true); };
     var count = h('span', { class: 'un-c' });
     var thumb = nx.x.yt ? h('img', { src: 'https://i.ytimg.com/vi/' + nx.x.yt + '/mqdefault.jpg', alt: '', width: 320, height: 180 }) : h('span', { class: 'ph', style: artLazy(nx.m, 'banner', 320).style });
     var card = h('div', { class: 'upnext', role: 'status', hidden: true }, [
@@ -1514,10 +1550,14 @@
     box.querySelector('.tov-v').appendChild(card);
     var tick = function (cur, dur, ended) {
       if (done || S.tov !== t) return;
-      if (ended) { if (!cancelled) playNext(); return; }
+      if (ended) {
+        if (!cancelled && autoOn) playNext();
+        else if (!cancelled) { shown = true; card.hidden = false; box.classList.add('has-next'); count.textContent = ''; }
+        return;
+      }
       if (!(dur > 15) || !(cur >= 0)) return;
       left = Math.max(0, Math.ceil(dur - cur));
-      if (left <= 10 && !cancelled) { if (!shown) { shown = true; card.hidden = false; box.classList.add('has-next'); } count.textContent = ' · in ' + left + 's'; }
+      if (left <= 10 && !cancelled) { if (!shown) { shown = true; card.hidden = false; box.classList.add('has-next'); } count.textContent = autoOn ? ' · in ' + left + 's' : ''; }
       else if (shown && left > 10) { shown = false; card.hidden = true; box.classList.remove('has-next'); } // viewer seeked back
     };
     if (media.tagName === 'VIDEO') {
@@ -1555,13 +1595,17 @@
     if (t.cleanup) t.cleanup();
     if (t.node.parentNode) t.node.parentNode.removeChild(t.node);
     document.body.classList.remove('tov-open');
-    if (t.opener && t.opener.isConnected) t.opener.focus({ preventScroll: true });
+    if (t.opener && t.opener.isConnected && !S.tovMini) t.opener.focus({ preventScroll: true });
   }
 
   // ---------- Give your verdict row: recent and popular titles you haven't rated yet, one tap to rate ----------
   function rateSection() {
     var list = rateList().slice(0, 15);
     S.rateOrder = { lang: S.navLang, ids: list.map(function (m) { return m.id; }) };
+    S.rateRows = S.rateRows || {};
+    S.rateRows['Seen these? Give your verdict'] = { opts: { rate: true }, next: function (shown) {
+      var ro = S.rateOrder.ids; return rateList().filter(function (x) { return ro.indexOf(x.id) === -1 && shown.indexOf(x.id) === -1; })[0];
+    }, swap: function (oldId, newId) { var ro = S.rateOrder.ids, i = ro.indexOf(oldId); if (i === -1) return; if (newId) ro[i] = newId; else ro.splice(i, 1); } };
     return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub' }, [h('span', { class: 'rnote', text: rateNote() }), qvLegend(list)]));
   }
   // Every title the row could show, in row order; titles marked "Not for me" are left out.
@@ -1612,17 +1656,20 @@
     show(false);
     return box;
   }
+  // "Not for me" on a card: the title is hidden from now on, and the card flips to the row's next title, one that
+  // isn't already in the row (each row says where its next title comes from: S.rateRows).
   function rateNope(m, btn) {
     var card = btn.closest('.pc'); tnAddNope(m.id);
-    var ro = S.rateOrder && S.rateOrder.ids || [], i = ro.indexOf(m.id);
-    var next = rateList().filter(function (x) { return ro.indexOf(x.id) === -1; })[0];
     if (!card) return;
-    if (!next) { if (i !== -1) ro.splice(i, 1); card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
-    if (i !== -1) ro[i] = next.id;
-    var nc = posterCard(next, { rate: true }); nc.classList.add('pcflip');
+    var sec = card.closest('section[aria-label]'), R = sec && S.rateRows && S.rateRows[sec.getAttribute('aria-label')];
+    var shown = sec ? Array.prototype.map.call(sec.querySelectorAll('.pc[data-id]'), function (c) { return c.getAttribute('data-id'); }) : [m.id];
+    var next = R ? R.next(shown) : null;
+    if (R && R.swap) R.swap(m.id, next ? next.id : null);
+    toast(m.data.title + ' won\u2019t be suggested again');
+    if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
+    var nc = posterCard(next, R.opts); nc.classList.add('pcflip');
     card.parentNode.replaceChild(nc, card);
     var f = nc.querySelector('.rch .tnact'); if (f) f.focus({ preventScroll: true });
-    toast(m.data.title + ' won\u2019t be suggested again');
   }
   function rateNote() {
     var done = S.justRated || {}, n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
@@ -2594,6 +2641,7 @@
   // ---------- title page blocks (2026 redesign) ----------
   // Small inline icons; static markup only.
   var ICONS = {
+    pip: '<rect x="2.5" y="4.5" width="19" height="15" rx="2"/><rect x="11.5" y="11.5" width="8" height="6" rx="1" fill="currentColor"/>',
     home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/>',
     ticket: '<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5V14a2 2 0 0 0 0-4z"/><path d="M14 6v2.5M14 11v2M14 15.5V18"/>',
     zap: '<path d="M13 2 4 14h7l-1 8 9-12h-7z"/>',
