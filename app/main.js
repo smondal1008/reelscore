@@ -12,7 +12,7 @@
   // ---------- state ----------
   var S = {
     db: null, assets: null, user: null, uid: null, canEdit: false, canWrite: true,
-    featured: Array.isArray(window.RS_FEATURED) ? window.RS_FEATURED.slice() : [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [], wtw: [] }, mineLoaded: false,
+    featured: Array.isArray(window.RS_FEATURED) ? window.RS_FEATURED.slice() : [], popOrder: [], people: {}, movies: [], byId: {}, verdicts: {}, reviews: {}, mine: { watchlist: [], following: [], reminders: [], wtw: [], seen: [] }, mineLoaded: false,
     route: 'home', param: null, slide: 0, rtab: 'all', reviewDraft: {}, spoilerShown: {}, peopleQuery: '', peopleHits: [],
     browse: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 }, cat: { movies: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 }, tv: { status: 'All', lang: '', genre: '', year: '', ott: '', sort: 'new', page: 1 } }, ppl: { q: '', role: 'Popular', lang: '', sort: 'popular', page: 1 }, gen: { genre: '', lang: '', page: 1 }, yr: { year: '', lang: '', page: 1 }, loaded: false, pending: false, adminStarted: false, planPick: {}
   };
@@ -281,6 +281,17 @@
     guard(S.db.doc('data/users/' + S.uid + '/profile').set(clone(S.mine)), msg).then(function () {
       writing.m = false; if (writing.mAgain) { var again = writing.mAgain; writing.mAgain = null; saveMine(again === true ? null : again); }
     });
+  }
+  // Titles you've said you've seen (Seen it on a "Seen these?" card, Don't rate in Tonight's picks). Saved with
+  // My List; the ones without a verdict show in "Seen, not rated" there.
+  function isSeen(id) { return (S.mine.seen || []).indexOf(id) !== -1; }
+  function markSeen(id, on) {
+    if (!S.uid) return;
+    S.mine.seen = S.mine.seen || [];
+    var i = S.mine.seen.indexOf(id);
+    if (on && i === -1) S.mine.seen.push(id); else if (!on && i !== -1) S.mine.seen.splice(i, 1); else return;
+    if (S.mine.seen.length > 500) S.mine.seen = S.mine.seen.slice(-500);
+    saveMine(null);
   }
   function hasReminder(id) { return (S.mine.reminders || []).indexOf(id) !== -1; }
   function toggleRemind(id) {
@@ -752,6 +763,7 @@
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m));
     }
+    if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
@@ -1218,7 +1230,7 @@
           })),
           h('div', { class: 'tnrate-f' }, [
             h('button', { type: 'button', class: 'linkbtn', text: 'Don’t rate', on: { click: function () {
-              t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
+              t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; }); markSeen(id, true);
               var next = tnSwap(t, i); toast(title + ' marked as seen' + (next ? '. Here’s a new pick.' : '.')); onChange();
             } } }),
             h('button', { type: 'button', class: 'linkbtn', text: 'Haven’t seen it', on: { click: function () { t.rating = null; onChange(); } } })])
@@ -1646,17 +1658,17 @@
     var box = h('div', { class: 'rbox' });
     function show(anim) {
       box.textContent = '';
-      var seen = (S.rateSeen && S.rateSeen[m.id]) || myVerdict(m.id), face;
+      var seen = (S.rateSeen && S.rateSeen[m.id]) || isSeen(m.id) || myVerdict(m.id), face;
       if (seen) {
         var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title, title: 'Haven\u2019t seen it',
-          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15)]);
+          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15)]);
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
       } else {
         face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
           h('button', { type: 'button', class: 'tnact', on: { click: function () {
-            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; show(true); var q = box.querySelector('.qb'); if (q) q.focus();
+            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
           } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
           h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not for me' })])
         ]);
@@ -4160,6 +4172,22 @@
     items.push(['skip', 'Skip', 'c']);
     return h('span', { class: 'qlegend' }, items.map(function (x) { return h('span', { class: 'ql ' + x[2] }, [icon(x[0], 14), h('span', { text: x[1] })]); }));
   }
+  // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
+  function seenRateBox(m) {
+    return h('div', { class: 'fu' }, [qvButtons(m), myVerdict(m.id) ? null : h('button', { type: 'button', class: 'linkbtn', style: 'margin-top:6px;font-size:12px', text: 'Haven\u2019t seen it', on: { click: function (e) {
+      var card = e.currentTarget.closest('.pc'); markSeen(m.id, false); toast(m.data.title + ' taken off your seen list');
+      if (card) { var sec = card.closest('section'); card.remove(); if (sec && !sec.querySelector('.pc')) sec.remove(); }
+    } } })]);
+  }
+  // My Watchlist filter: where you can watch a title now. Titles that fit none (older releases with no streaming
+  // details) show under All only.
+  function wlKind(m) {
+    var d = m.data;
+    if (isUpcoming(m)) return 'soon';
+    if (d.section === 'In theatres') return 'theatres';
+    if (d.section === 'On OTT' || d.platform || safeUrl(d.platformUrl)) return 'ott';
+    return '';
+  }
   function followUpBox(m) {
     var box = h('div', { class: 'fu' });
     var showRate = function () { box.innerHTML = ''; box.appendChild(verdictButtons(m, function () { wtwDone(m.id); })); };
@@ -4228,11 +4256,26 @@
     if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen these? Give your verdict' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Rate it. Not yet? Keep it on your watchlist.' }),
       h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { followUp: true }); }))]));
+    // Titles you said you've seen but haven't rated yet (newest first). Ones rated this visit stay, showing the verdict.
+    var jrS = S.justRated || {};
+    var seenNR = (S.mine.seen || []).slice().reverse().map(function (id) { return S.byId[id]; })
+      .filter(function (m) { return m && released(m) && (!myVerdict(m.id) || jrS[m.id]) && fuIds.indexOf(m.id) === -1; });
+    if (seenNR.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
+      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'You said you\u2019ve seen these. One tap each to give your verdict.' }),
+      h('div', { class: 'grid-posters' }, seenNR.map(function (m) { return posterCard(m, { seenRate: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }),
-      mine.length ? h('div', { class: 'grid-posters' }, mine.map(function (m) {
+    var WLF = [['all', 'All'], ['ott', 'OTT'], ['theatres', 'In Theatres'], ['soon', 'Coming Soon']];
+    var wlCount = { all: mine.length, ott: 0, theatres: 0, soon: 0 };
+    mine.forEach(function (m) { var k = wlKind(m); if (k) wlCount[k]++; });
+    var wlf = S.wlFilter && wlCount[S.wlFilter] ? S.wlFilter : 'all';
+    var shownWl = wlf === 'all' ? mine : mine.filter(function (m) { return wlKind(m) === wlf; });
+    var wlChips = mine.length ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter my watchlist', style: 'margin:-2px 0 14px' }, WLF.filter(function (x) { return x[0] === 'all' || wlCount[x[0]]; }).map(function (x) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(wlf === x[0]), text: x[1] + ' (' + wlCount[x[0]] + ')', on: { click: function () { var y = window.scrollY; S.wlFilter = x[0]; drawList(); window.scrollTo(0, y); } } });
+    })) : null;
+    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }), wlChips,
+      mine.length ? h('div', { class: 'grid-posters' }, shownWl.map(function (m) {
         // Watch now for released titles out of theatres with a streaming link; Book tickets for theatre titles (incl. advance booking) with a booking link.
         var th = m.data.section === 'In theatres' || m.data.section === 'Coming soon';
         var o = released(m) ? { stream: !th, book: th } : { dateBadge: true, remind: true, book: th };
@@ -4635,10 +4678,10 @@
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
-      var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || []]); };
+      var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || [], o.seen || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
-      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice() };
+      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice(), seen: (d.seen || []).slice() };
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; render();
     }, function () {});
