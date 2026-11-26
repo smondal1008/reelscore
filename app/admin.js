@@ -1608,6 +1608,7 @@ window.ReelAdmin = function (env) {
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
+    if (page === 'titles') navIds = null;
     resolveTitle();
     showPage();
     if (page === 'titles') renderList(); else renderEditor();
@@ -2579,8 +2580,36 @@ window.ReelAdmin = function (env) {
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, upBtn, extra, add])]), rows, hint]);
   }
 
+  // Previous / next title from the list as it was filtered and sorted when you left it. The order is kept
+  // while you move between titles, so a save that changes the sort (Last updated, Info filled) doesn't reshuffle it.
+  var navIds = null;
+  function titleNav(live) {
+    if (!live) return null;
+    if (!navIds || navIds.indexOf(live.id) === -1) navIds = visible().map(function (m) { return m.id; });
+    var ids = navIds.filter(function (id) { return movies.some(function (m) { return m.id === id; }); }), i = ids.indexOf(live.id);
+    if (i === -1 || ids.length < 2) return null;
+    var byId = function (id) { return movies.find(function (m) { return m.id === id; }); };
+    var link = function (id, dir) {
+      if (!id) return h('span', { class: 'tnav-a off', 'aria-hidden': 'true', text: dir < 0 ? '‹ Previous' : 'Next ›' });
+      var m = byId(id), t = m.data.title || 'Untitled';
+      return h('a', { class: 'tnav-a', href: titleHref(m), title: (dir < 0 ? 'Previous: ' : 'Next: ') + t, 'aria-label': (dir < 0 ? 'Previous title: ' : 'Next title: ') + t },
+        dir < 0 ? [h('span', { text: '‹' }), h('span', { class: 'tnav-t', text: t })] : [h('span', { class: 'tnav-t', text: t }), h('span', { text: '›' })]);
+    };
+    return h('nav', { class: 'tnav', 'aria-label': 'Previous and next title' }, [link(ids[i - 1], -1), h('span', { class: 'tnav-n', text: (i + 1) + ' of ' + ids.length }), link(ids[i + 1], 1)]);
+  }
+  // A floating ↑ on the title editor once you've scrolled down; one tap goes back to the top.
+  var toTopBtn = null;
+  function toTopSync() { if (toTopBtn) toTopBtn.classList.toggle('on', page === 'title' && window.scrollY > 600); }
+  function addToTop() {
+    if (toTopBtn) return;
+    var holder = $('editPage'); if (!holder) return;
+    toTopBtn = h('button', { type: 'button', class: 'totop', 'aria-label': 'Back to top', title: 'Back to top', text: '↑', on: { click: function () { window.scrollTo({ top: 0, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); } } });
+    holder.appendChild(toTopBtn);
+    window.addEventListener('scroll', toTopSync, { passive: true });
+  }
   function renderEditor() {
     if (page === 'titles') { renderList(); return; }
+    addToTop(); toTopSync();
     renderEditorInner();
     if (page === 'title' && draft) addJumpBar();
     showPage();
@@ -2618,6 +2647,7 @@ window.ReelAdmin = function (env) {
     var live = movies.find(function (m) { return m.id === currentId; });
     main.appendChild(h('div', { class: 'crumbs' }, [
       h('a', { href: '/admin/titles', text: '← All titles' }),
+      titleNav(live),
       live ? h('a', { href: pathBase(live.data) + slugOf(live), target: '_blank', rel: 'noopener', text: live.data.published === false ? 'Preview page ↗ (admins only)' : 'View public page ↗' }) : h('span', { class: 'sub', text: 'New title · not saved yet' })
     ]));
     // Publish / Unpublish. Titles without the field (all those from before it existed) count as published;
