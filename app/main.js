@@ -743,7 +743,7 @@
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta && released(m)) {
-      kids.push(qvButtons(m));
+      kids.push(rateBox(m));
     }
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
@@ -1487,11 +1487,17 @@
 
   // ---------- Give your verdict row: recent and popular titles you haven't rated yet, one tap to rate ----------
   function rateSection() {
+    var list = rateList().slice(0, 15);
+    S.rateOrder = { lang: S.navLang, ids: list.map(function (m) { return m.id; }) };
+    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub' }, [h('span', { class: 'rnote', text: rateNote() }), qvLegend(list)]));
+  }
+  // Every title the row could show, in row order; titles marked "Not for me" are left out.
+  function rateList() {
     var today = new Date().toISOString().slice(0, 10), cut = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
-    var done = S.justRated || {};
+    var done = S.justRated || {}, nope = tnNope();
     var list = S.movies.filter(function (m) {
       var d = m.data, r = d.releaseDate || '';
-      if (!inNavLang(m) || !released(m) || d.section === 'Coming soon') return false;
+      if (!inNavLang(m) || !released(m) || d.section === 'Coming soon' || nope.indexOf(m.id) !== -1) return false;
       if (myVerdict(m.id) && !done[m.id]) return false;
       return d.section === 'In theatres' || d.section === 'On OTT' || (isTv(m) ? !d.endYear || String(d.endYear) >= today.slice(0, 4) : r.length === 10 && r >= cut && r <= today);
     });
@@ -1505,9 +1511,45 @@
       list = list.filter(function (m) { return m.id in at; }).sort(function (a, b) { return at[a.id] - at[b.id]; })
         .concat(list.filter(function (m) { return !(m.id in at); }));
     }
-    list = list.slice(0, 15);
-    S.rateOrder = { lang: S.navLang, ids: list.map(function (m) { return m.id; }) };
-    return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub' }, [h('span', { class: 'rnote', text: rateNote() }), qvLegend(list)]));
+    return list;
+  }
+  // The verdict part of a "Seen these?" card: first "Seen it" / "Not for me". Seen it flips to the verdict icons;
+  // Not for me flips the whole card to the next title in the row, in the same place.
+  function rateBox(m) {
+    var box = h('div', { class: 'rbox' });
+    function show(anim) {
+      box.textContent = '';
+      var seen = (S.rateSeen && S.rateSeen[m.id]) || myVerdict(m.id), face;
+      if (seen) {
+        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title, title: 'Haven\u2019t seen it',
+          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15)]);
+        face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
+          var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
+        }), back]);
+      } else {
+        face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
+          h('button', { type: 'button', class: 'tnact', on: { click: function () {
+            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; show(true); var q = box.querySelector('.qb'); if (q) q.focus();
+          } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not for me' })])
+        ]);
+      }
+      box.appendChild(face);
+    }
+    show(false);
+    return box;
+  }
+  function rateNope(m, btn) {
+    var card = btn.closest('.pc'); tnAddNope(m.id);
+    var ro = S.rateOrder && S.rateOrder.ids || [], i = ro.indexOf(m.id);
+    var next = rateList().filter(function (x) { return ro.indexOf(x.id) === -1; })[0];
+    if (!card) return;
+    if (!next) { if (i !== -1) ro.splice(i, 1); card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
+    if (i !== -1) ro[i] = next.id;
+    var nc = posterCard(next, { rate: true }); nc.classList.add('pcflip');
+    card.parentNode.replaceChild(nc, card);
+    var f = nc.querySelector('.rch .tnact'); if (f) f.focus({ preventScroll: true });
+    toast(m.data.title + ' won\u2019t be suggested again');
   }
   function rateNote() {
     var done = S.justRated || {}, n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;

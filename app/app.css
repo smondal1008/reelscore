@@ -1013,6 +1013,20 @@ a.lead:hover .ln { text-decoration: underline; }
   .addl.tnpopin { animation: tnpop .4s ease; }
   @keyframes tnpop { 0% { transform: scale(.4) rotate(-30deg); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
   .tnbody2 { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  /* Home "Seen these?" cards: Seen it / Not for me first; Seen it flips to the verdict icons, Not for me flips in the next title */
+  .rbox { perspective: 600px; min-height: 36px; }
+  .rch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+  .rch .tnact { height: 36px; font-size: 12px; gap: 4px; padding: 0 4px; white-space: nowrap; }
+  .rvq { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: stretch; }
+  .rvq.wb { grid-template-columns: minmax(0, 1fr) 30px; }
+  .rback { border: 1px dashed var(--line2); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .rback:hover { color: var(--text); border-color: var(--muted); }
+  .rback .ic { display: flex; }
+  .rflip { animation: rflip .42s cubic-bezier(.2,.8,.2,1); transform-origin: 50% 50%; }
+  @keyframes rflip { 0% { opacity: 0; transform: rotateX(-90deg); } 60% { opacity: 1; transform: rotateX(10deg); } 100% { transform: none; } }
+  .pc.pcflip { animation: pcflip .55s cubic-bezier(.2,.8,.2,1); }
+  @keyframes pcflip { 0% { opacity: 0; transform: perspective(900px) rotateY(-85deg) scale(.94); } 60% { opacity: 1; transform: perspective(900px) rotateY(8deg); } 100% { transform: none; } }
+  .pc.pcgone { transition: opacity .3s ease, transform .3s ease; opacity: 0; transform: scale(.92); }
   .tnacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .tnact { height: 40px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: border-color .12s ease, background .12s ease; }
   .tnact .ic { display: flex; }
@@ -1055,7 +1069,7 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnpage .tneslot { justify-content: center; }
   .tnpage .tnmini { display: none; }
   .tnpage .tnname { font-size: 12px; padding: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  @media (prefers-reduced-motion: reduce) { .tnpick:hover, .tnpick:focus-within, .tnpick:hover .tnart { transform: none !important; } .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .rflip, .pc.pcflip { animation: none !important; } .tnpick:hover, .tnpick:focus-within, .tnpick:hover .tnart { transform: none !important; } .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
   @media (max-width: 899px) {
     .tonight { margin: 16px 16px 0; padding: 20px; }
     .tnwide { display: none; }
