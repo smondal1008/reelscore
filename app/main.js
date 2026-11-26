@@ -1675,10 +1675,10 @@
     }, swap: function (oldId, newId) { var ro = S.rateOrder.ids, i = ro.indexOf(oldId); if (i === -1) return; if (newId) ro[i] = newId; else ro.splice(i, 1); } };
     return rowSection('Seen these? Give your verdict', list, { rate: true }, h('span', { class: 'sub' }, [h('span', { class: 'rnote', text: rateNote() }), qvLegend(list)]));
   }
-  // Every title the row could show, in row order; titles marked "Not for me" are left out.
+  // Every title the row could show, in row order; titles marked "Not for me" (Tonight) or "Haven't seen" are left out.
   function rateList() {
     var today = new Date().toISOString().slice(0, 10), cut = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
-    var done = S.justRated || {}, nope = tnNope();
+    var done = S.justRated || {}, nope = tnNope().concat(rateUnseen());
     var list = S.movies.filter(function (m) {
       var d = m.data, r = d.releaseDate || '';
       if (!inNavLang(m) || !released(m) || d.section === 'Coming soon' || nope.indexOf(m.id) !== -1) return false;
@@ -1697,8 +1697,8 @@
     }
     return list;
   }
-  // The verdict part of a "Seen these?" card: first "Seen it" / "Not for me". Seen it flips to the verdict icons;
-  // Not for me flips the whole card to the next title in the row, in the same place.
+  // The verdict part of a "Seen these?" card: first "Seen it" / "Haven't seen". Seen it flips to the verdict icons;
+  // Haven't seen flips the whole card to the next title in the row, in the same place.
   function rateBox(m) {
     var box = h('div', { class: 'rbox' });
     function show(anim) {
@@ -1715,7 +1715,7 @@
           h('button', { type: 'button', class: 'tnact', on: { click: function () {
             S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
           } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
-          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not for me' })])
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Haven\u2019t seen' })])
         ]);
       }
       box.appendChild(face);
@@ -1723,16 +1723,25 @@
     show(false);
     return box;
   }
-  // "Not for me" on a card: the title is hidden from now on, and the card flips to the row's next title, one that
-  // isn't already in the row (each row says where its next title comes from: S.rateRows).
+  // "Haven't seen" on a card: the title leaves the "Seen these?" rows (it stays a candidate everywhere else, so it
+  // can still be suggested to watch), and the card flips to the row's next title, one that isn't already in the row
+  // (each row says where its next title comes from: S.rateRows).
+  function rateUnseen() {
+    var a = S.uid && S.mineLoaded ? (S.mine.unseen || []) : []; try { a = a.concat(JSON.parse(localStorage.getItem('rs_unseen') || '[]') || []); } catch (e) {}
+    return a;
+  }
+  function rateAddUnseen(id) {
+    if (S.uid && S.mineLoaded) { S.mine.unseen = (S.mine.unseen || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
+    else { try { var a = JSON.parse(localStorage.getItem('rs_unseen') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_unseen', JSON.stringify(a.slice(-500))); } catch (e) {} }
+  }
   function rateNope(m, btn) {
-    var card = btn.closest('.pc'); tnAddNope(m.id);
+    var card = btn.closest('.pc'); rateAddUnseen(m.id);
     if (!card) return;
     var sec = card.closest('section[aria-label]'), R = sec && S.rateRows && S.rateRows[sec.getAttribute('aria-label')];
     var shown = sec ? Array.prototype.map.call(sec.querySelectorAll('.pc[data-id]'), function (c) { return c.getAttribute('data-id'); }) : [m.id];
     var next = R ? R.next(shown) : null;
     if (R && R.swap) R.swap(m.id, next ? next.id : null);
-    toast(m.data.title + ' won\u2019t be suggested again');
+    toast('Got it. We won\u2019t ask about ' + m.data.title + ' here again');
     if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
     var nc = posterCard(next, R.opts); nc.classList.add('pcflip');
     card.parentNode.replaceChild(nc, card);
@@ -4827,7 +4836,7 @@
       var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || [], o.seen || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
-      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice(), seen: (d.seen || []).slice() };
+      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice(), seen: (d.seen || []).slice(), unseen: (d.unseen || []).slice() };
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; render();
     }, function () {});
