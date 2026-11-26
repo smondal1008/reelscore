@@ -1519,14 +1519,21 @@
     var box = h('div', { class: 'rbox' });
     function show(anim) {
       box.textContent = '';
-      var face;
-      if ((S.rateSeen && S.rateSeen[m.id]) || myVerdict(m.id)) face = h('div', { class: 'rvq' + (anim ? ' rflip' : '') }, [qvButtons(m)]);
-      else face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
-        h('button', { type: 'button', class: 'tnact', on: { click: function () {
-          S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; show(true); var q = box.querySelector('.qb'); if (q) q.focus();
-        } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
-        h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not for me' })])
-      ]);
+      var seen = (S.rateSeen && S.rateSeen[m.id]) || myVerdict(m.id), face;
+      if (seen) {
+        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title, title: 'Haven\u2019t seen it',
+          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15)]);
+        face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
+          var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
+        }), back]);
+      } else {
+        face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
+          h('button', { type: 'button', class: 'tnact', on: { click: function () {
+            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; show(true); var q = box.querySelector('.qb'); if (q) q.focus();
+          } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not for me' })])
+        ]);
+      }
       box.appendChild(face);
     }
     show(false);

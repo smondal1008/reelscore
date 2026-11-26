@@ -1017,6 +1017,11 @@ a.lead:hover .ln { text-decoration: underline; }
   .rbox { perspective: 600px; min-height: 36px; }
   .rch { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
   .rch .tnact { height: 36px; font-size: 12px; gap: 4px; padding: 0 4px; white-space: nowrap; }
+  .rvq { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-items: stretch; }
+  .rvq.wb { grid-template-columns: minmax(0, 1fr) 30px; }
+  .rback { border: 1px dashed var(--line2); border-radius: 10px; background: transparent; color: var(--muted); cursor: pointer; display: flex; align-items: center; justify-content: center; padding: 0; }
+  .rback:hover { color: var(--text); border-color: var(--muted); }
+  .rback .ic { display: flex; }
   .rflip { animation: rflip .42s cubic-bezier(.2,.8,.2,1); transform-origin: 50% 50%; }
   @keyframes rflip { 0% { opacity: 0; transform: rotateX(-90deg); } 60% { opacity: 1; transform: rotateX(10deg); } 100% { transform: none; } }
   .pc.pcflip { animation: pcflip .55s cubic-bezier(.2,.8,.2,1); }
