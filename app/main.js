@@ -1048,7 +1048,7 @@
       toast(title + (S.uid ? ' removed from your shortlist and watchlist' : ' removed from your shortlist'));
     } else {
       if (t.pins.length >= 3) { toast('Your shortlist holds 3. Remove one, or pick one for tonight.'); return; }
-      t.pins.push(id); t.anim.pin = id; if (t.pins.length === 1) t.anim.bar = true; t.anim.chip = id;
+      t.pins.push(id); t.anim.pin = id; t.anim.chip = id;
       if (S.uid) { if (!inList(id)) { S.mine.watchlist.push(id); saveMine(null); if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); } toast(title + ' added to your watchlist' + (t.pins.length === 3 ? '. That’s 3: pick one for tonight.' : '')); }
       else toast(title + ' is on your shortlist. Sign in to keep it on your watchlist.');
     }
@@ -1058,32 +1058,36 @@
     var d = m.data;
     if (t.where === 'out') return bookBtn(m, 'btn small primary ' + cls) || h('a', { class: 'btn small ' + cls, href: movieUrl(m), text: 'Showtimes' });
     var url = safeUrl(d.platformUrl);
-    return url ? h('a', { class: 'btn small primary ' + cls, href: url, target: '_blank', rel: 'noopener', text: 'Watch' }) : h('a', { class: 'btn small ' + cls, href: movieUrl(m), text: 'Where to watch' });
+    return url ? h('a', { class: 'btn small primary ' + cls, href: url, target: '_blank', rel: 'noopener', text: 'Watch' }) : h('a', { class: 'btn small ' + cls, href: movieUrl(m), text: cls === 'tnmini' ? 'Watch' : 'Where to watch' });
   }
-  // The shortlist bar above the cards: every title added tonight. A name on a card makes that card glow; a name that
-  // isn't on screen (answers changed) brings it back as a card.
+  // The shortlist bar above the cards, always shown: three slots that fill as titles are added with +. Before the first +
+  // it says what the + does; the status sits under the label so the bar stays one row. A name on a card makes that card
+  // glow; a name that isn't on screen (answers changed) brings it back as a card.
   function tnBar(t, onChange) {
-    var pins = t.pins.filter(function (id) { return S.byId[id]; });
-    if (!pins.length) return null;
-    var full = pins.length >= 3;
-    var bar = h('div', { class: 'tnbar' + (t.anim.bar ? ' new' : ''), role: 'region', 'aria-label': 'Your shortlist' }, [
-      h('div', { class: 'tnbar-h' }, [h('span', { class: 'tnbar-k', text: 'YOUR SHORTLIST' }), h('span', { class: 'tnbar-n', text: pins.length + ' of 3' + (S.uid ? ' · also on your watchlist' : '') })]),
-      h('div', { class: 'tnbar-l' }, pins.map(function (id) {
-        var m = S.byId[id], pa = artLazy(m, 'poster'), on = t.slots.indexOf(id) !== -1;
-        return h('div', { class: 'tnchipx' + (t.anim.chip === id ? ' new' : '') }, [
-          h('span', { class: 'tnsw art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),
-          h('button', { type: 'button', class: 'tnname', text: m.data.title, 'aria-label': on ? 'Point out ' + m.data.title + ' in your picks' : 'Show ' + m.data.title + ' as a card', on: { click: function () {
-            if (on) { t.anim.flash = id; onChange(); return; }
-            var i = t.slots.indexOf(null); if (i === -1) i = t.slots.findIndex(function (x) { return t.pins.indexOf(x) === -1; });
-            if (i === -1) return;
-            t.slots[i] = id; t.n[i]++; if (t.rating === i) t.rating = null; onChange();
-          } } }),
-          tnWatch(m, t, 'tnmini')
-        ]);
-      })),
-      full ? h('span', { class: 'tnbar-full', text: 'Full. Pick one for tonight.' }) : null
+    t.pins = t.pins.filter(function (id) { return S.byId[id]; });
+    var pins = t.pins, n = pins.length;
+    var status = !n ? h('span', { class: 'tnbar-n' }, [h('span', { class: 'tnlong' }, ['Tap ', h('b', { class: 'tnplus', text: '+' }), ' on a pick to add it here']), h('span', { class: 'tnshort' }, ['Tap ', h('b', { class: 'tnplus', text: '+' }), ' on a pick'])])
+      : n >= 3 ? h('span', { class: 'tnbar-n full' }, ['3 of 3 · Pick one', h('span', { class: 'tnlong', text: ' for tonight' })])
+      : h('span', { class: 'tnbar-n' }, [n + ' of 3', S.uid ? h('span', { class: 'tnlong', text: ' · also on your watchlist' }) : null]);
+    var slots = [0, 1, 2].map(function (k) {
+      var id = pins[k];
+      if (!id) return h('div', { class: 'tneslot', 'aria-hidden': 'true' }, [h('span', { class: 'g', text: '+' }), h('span', { class: 'tnlong', text: k === n ? (n ? 'Add another' : 'Narrow it down to one') : '' })]);
+      var m = S.byId[id], pa = artLazy(m, 'poster'), on = t.slots.indexOf(id) !== -1;
+      return h('div', { class: 'tnchipx' + (t.anim.chip === id ? ' new' : '') }, [
+        h('span', { class: 'tnsw art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),
+        h('button', { type: 'button', class: 'tnname', text: m.data.title, 'aria-label': on ? 'Point out ' + m.data.title + ' in your picks' : 'Show ' + m.data.title + ' as a card', on: { click: function () {
+          if (on) { t.anim.flash = id; onChange(); return; }
+          var i = t.slots.indexOf(null); if (i === -1) i = t.slots.findIndex(function (x) { return t.pins.indexOf(x) === -1; });
+          if (i === -1) return;
+          t.slots[i] = id; t.n[i]++; if (t.rating === i) t.rating = null; onChange();
+        } } }),
+        tnWatch(m, t, 'tnmini')
+      ]);
+    });
+    return h('div', { class: 'tnbar', role: 'region', 'aria-label': 'Your shortlist' }, [
+      h('div', { class: 'tnbar-h' }, [h('span', { class: 'tnbar-k', text: 'YOUR SHORTLIST' }), status]),
+      h('div', { class: 'tnbar-l' }, slots)
     ]);
-    return bar;
   }
   function tnPicks(t, onChange, wide) {
     if (!t.slots) tnFill(t, true);
