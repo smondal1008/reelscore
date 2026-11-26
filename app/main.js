@@ -897,6 +897,7 @@
       var saved = {}; try { saved = JSON.parse(localStorage.getItem('rs_tonight') || '{}') || {}; } catch (e) {}
       S.tonight = { where: saved.where === 'out' ? 'out' : 'home', time: saved.time === 'short' ? 'short' : 'any',
         era: saved.era === 'recent' || saved.era === 'old' ? saved.era : 'any',
+        kind: saved.kind === 'movie' || saved.kind === 'tv' ? saved.kind : 'any',
         mood: TN_MOODS.some(function (x) { return x[0] === saved.mood; }) ? saved.mood : 'thrill',
         langs: Array.isArray(saved.langs) ? saved.langs : [], seen: [], step: 'ask', allLangs: false,
         // The 3 cards (title ids, null = no pick left), how often each slot has changed (drives the flip-in), the
@@ -905,7 +906,7 @@
     }
     return S.tonight;
   }
-  function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, era: t.era, mood: t.mood, langs: t.langs })); } catch (e) {} }
+  function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, era: t.era, kind: t.kind, mood: t.mood, langs: t.langs })); } catch (e) {} }
   // Taste profile from the watchlist and verdicts (same weights as "More like what you love").
   function tasteModel() {
     var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
@@ -957,6 +958,9 @@
     if (S.uid && S.mineLoaded) { S.mine.nope = (S.mine.nope || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
     else { try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_nope', JSON.stringify(a.slice(-500))); } catch (e) {} }
   }
+  // "Movies or TV shows?" only applies at home (cinemas show films). TV shows have no "How much time?": episodes are short.
+  function tnKind(t) { return t.where === 'out' ? 'any' : t.kind || 'any'; }
+  function tnTime(t) { return tnKind(t) === 'tv' ? 'any' : t.time; }
   function tnPool(t) {
     var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel(), nope = tnNope();
     var out = [];
@@ -968,7 +972,9 @@
       else {
         if (sec === 'In theatres' || np === 'theatres' || !d.platform) return;
         var mine = appsOf(d); if (apps.length && !mine.some(function (a) { return apps.indexOf(a) !== -1; })) return;
-        if (isTv(m) && t.time === 'short') return;
+        var kind = tnKind(t);
+        if ((kind === 'movie' && isTv(m)) || (kind === 'tv' && !isTv(m))) return;
+        if (isTv(m) && tnTime(t) === 'short') return;
       }
       if (t.langs.length && !langsOf(d).some(function (l) { return t.langs.indexOf(l) !== -1; })) return;
       var g = String(d.genre || '').toLowerCase(), cert = String(d.certificate || '').toUpperCase();
@@ -977,7 +983,7 @@
       if (t.mood === 'family') { if (cert === 'A' || /horror|erotic|adult|crime/.test(g)) return; if (!fit && cert === 'U' && /comedy|fantasy|adventure/.test(g)) fit = 1; }
       if (!fit) return;
       var moodW = fit * 1.2 + (gl[0] && mood[2].test(gl[0]) ? 1.5 : 0);
-      var rt = runtimeMin(d); if (t.time === 'short' && rt > 120) return;
+      var rt = runtimeMin(d); if (tnTime(t) === 'short' && rt > 120) return;
       // "How new?" (at home only; cinemas are new by nature). Recent = first released in the last 2 years, Older = before that.
       var era = t.where === 'out' ? 'any' : t.era, made = daysSince(d.releaseDate);
       if (era === 'recent' && made > TN_RECENT_DAYS) return;
@@ -987,7 +993,7 @@
       // Newer titles get a bigger lift, and anything over five years old is pushed down.
       // Asking for older titles turns the recency lift off, so the best-liked fits come first.
       var taste = tm.score(m), fresh = era === 'old' ? 0 : age <= 30 ? 2 : age <= 90 ? 1.5 : age <= 365 ? 1 : age <= 730 ? 0.5 : age <= 1825 ? 0 : -1.5;
-      var w = moodW + Math.max(-3, Math.min(2.5, taste)) + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && t.time === 'short' ? 0.3 : 0);
+      var w = moodW + Math.max(-3, Math.min(2.5, taste)) + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && tnTime(t) === 'short' ? 0.3 : 0);
       out.push({ m: m, w: w, taste: taste, pct: pct, age: age, rt: rt, cert: cert });
     });
     out.sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
@@ -999,7 +1005,7 @@
     if (o.pct !== null && o.pct >= 70) return o.pct + '% say it’s worth it';
     if (o.age <= 30) return t.where === 'out' ? 'New in cinemas' : 'New on ' + (appsOf(d)[0] || String(d.platform).split('/')[0].trim());
     if (t.mood === 'family' && o.cert === 'U') return 'U certificate';
-    if (t.time === 'short' && o.rt) return 'Under 2 hrs';
+    if (tnTime(t) === 'short' && o.rt) return 'Under 2 hrs';
     return 'Matches ' + TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1];
   }
   function tnCta(m, t) {
@@ -1010,7 +1016,8 @@
       : h('a', { class: 'btn small tncta', href: movieUrl(m), text: 'Where to watch' });
   }
   function tnSummary(t) {
-    return [t.where === 'out' ? 'Going out' : 'At home', t.time === 'short' ? 'Under 2 hrs' : 'Any length'].concat(t.where === 'out' || t.era === 'any' ? [] : [t.era === 'recent' ? 'Recent' : 'Older']).concat([TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1], t.langs.length ? t.langs.join(' or ') : 'Any language']).join(' · ');
+    var k = tnKind(t);
+    return [t.where === 'out' ? 'Going out' : 'At home'].concat(k === 'movie' ? ['Movies'] : k === 'tv' ? ['TV shows'] : []).concat(k === 'tv' ? [] : [t.time === 'short' ? 'Under 2 hrs' : 'Any length']).concat(t.where === 'out' || t.era === 'any' ? [] : [t.era === 'recent' ? 'Recent' : 'Older']).concat([TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1], t.langs.length ? t.langs.join(' or ') : 'Any language']).join(' · ');
   }
   // The questions. onChange redraws whatever holds them.
   function tnQuestions(t, onChange) {
@@ -1025,7 +1032,8 @@
     var langs = TN_LANGS.concat(t.allLangs ? TN_MORE_LANGS : []);
     var out = [
       group('Where are you watching?', [opt('where', 'home', 'At home', 'home'), opt('where', 'out', 'Going out', 'ticket')]),
-      group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
+      t.where === 'out' ? null : group('Movies or TV shows?', [opt('kind', 'movie', 'Movies', 'screen'), opt('kind', 'tv', 'TV shows', 'tv'), opt('kind', 'any', 'Any')]),
+      tnKind(t) === 'tv' ? null : group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
       t.where === 'out' ? null : group('How new?', TN_ERAS.map(function (x) { return opt('era', x[0], x[1]); })),
       group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1], MOOD_IC[x[0]]); })),
       group('Languages (pick any)', [h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(!t.langs.length), text: 'Any', on: { click: function () { set('langs', []); } } })]
@@ -1265,7 +1273,7 @@
     };
     var canMore = unpinned.length && tnNext(t).length;
     var empty = !any && !t.pins.length ? h('div', { class: 'tnempty' }, [
-      t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages or Any length' + (t.where === 'home' && t.era !== 'any' ? ', or Any under How new' : '') + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
+      t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages' + (tnKind(t) === 'tv' ? '' : ' or Any length') + (tnKind(t) !== 'any' ? ', or Any under Movies or TV shows' : '') + (t.where === 'home' && t.era !== 'any' ? ', or Any under How new' : '') + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
       t.seen.length ? h('button', { type: 'button', class: 'linkbtn', text: 'see the first picks again', on: { click: function () { t.seen = []; tnFill(t, false); onChange(); } } }) : null,
       t.seen.length ? '.' : null]) : null;
     return { list: h('div', { class: 'tngrid' }, kids), bar: bar, empty: empty, thin: null,
