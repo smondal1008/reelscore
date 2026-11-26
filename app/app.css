@@ -983,16 +983,64 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnappgrid { display: flex; flex-wrap: wrap; gap: 8px; }
   .tnpage { max-width: 720px; display: flex; flex-direction: column; gap: 18px; padding-bottom: 60px; }
   .tnpage .tngrid { grid-template-columns: 1fr; }
-  .tnpage .tnpick { flex-direction: row; }
-  .tnpage .tnart { width: 96px; aspect-ratio: 2 / 3; flex-shrink: 0; }
-  .tnpage .tnmedia { flex-shrink: 0; align-self: flex-start; }
-  .tnpage .tnplay, .tnpage .tnplay .pb { width: 40px; height: 40px; font-size: 15px; padding-left: 3px; }
-  .tnpage .tnplay { padding-left: 0; }
-  .tnpage .tnpick.playing { flex-wrap: wrap; }
-  .tnpage .tnmedia.playing { width: 100%; aspect-ratio: 16 / 9; }
-  .tnpage .tnart .ptitle { font-size: 13px; }
+  .tnpage .tnart .ptitle { font-size: 16px; }
   .tngo { height: 50px; font-size: 16px; }
   .tnfoot { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  /* Tonight: shortlist (+ on the art), Seen it / Not for me, and the shortlist bar above the cards */
+  .tngrid { perspective: 1100px; }
+  .tnpick { transition: border-color .2s ease, box-shadow .2s ease; }
+  .tnpick.on { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(245,165,36,.12); }
+  .tnpick.tnin0 { animation: tnflip0 .55s cubic-bezier(.2,.8,.2,1); }
+  .tnpick.tnin1 { animation: tnflip1 .55s cubic-bezier(.2,.8,.2,1); }
+  @keyframes tnflip0 { 0% { opacity: 0; transform: rotateY(-85deg) scale(.94); } 60% { opacity: 1; transform: rotateY(8deg) scale(1); } 100% { transform: none; } }
+  @keyframes tnflip1 { 0% { opacity: 0; transform: rotateY(-85deg) scale(.94); } 60% { opacity: 1; transform: rotateY(8deg) scale(1); } 100% { transform: none; } }
+  .tnpick.glow { animation: tnglow 1s ease; }
+  @keyframes tnglow { 0%, 100% { transform: none; } 20% { transform: scale(1.025); box-shadow: 0 0 0 3px var(--accent), 0 0 28px rgba(245,165,36,.45); } 45% { transform: scale(.995); } }
+  .tnnone { justify-content: center; }
+  .tnmediaw { position: relative; }
+  .tnmediaw .addl { top: 10px; right: 10px; }
+  .tnmedia.playing + .addl { display: none; }
+  .addl.tnpopin { animation: tnpop .4s ease; }
+  @keyframes tnpop { 0% { transform: scale(.4) rotate(-30deg); } 60% { transform: scale(1.25); } 100% { transform: scale(1); } }
+  .tnbody2 { flex: 1; display: flex; flex-direction: column; gap: 8px; }
+  .tnacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tnact { height: 40px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: border-color .12s ease, background .12s ease; }
+  .tnact .ic { display: flex; }
+  .tnact:hover { border-color: var(--muted); background: rgba(244,241,234,.04); }
+  .tnact.dim { border-style: dashed; color: var(--muted); }
+  @media (hover: hover) { .tnact:hover svg { animation: tnblink .45s ease; } }
+  @keyframes tnblink { 0%, 100% { transform: scaleY(1); } 40% { transform: scaleY(.15); } }
+  .tnrate { margin-top: auto; display: flex; flex-direction: column; gap: 10px; padding: 12px; border-radius: 12px; background: rgba(244,241,234,.05); transform-origin: 50% 0; }
+  .tnrate.new { animation: tnratein .38s cubic-bezier(.2,.8,.2,1); }
+  @keyframes tnratein { 0% { opacity: 0; transform: rotateX(-70deg); } 100% { opacity: 1; transform: none; } }
+  .tnrate-k { font-size: 11px; font-weight: 800; letter-spacing: .8px; color: var(--muted); text-transform: uppercase; }
+  .tnrate .qv.icons .qb { min-height: 44px; }
+  .tnrate-f { display: flex; justify-content: space-between; gap: 8px; font-size: 13px; }
+  .tnrate-f .linkbtn { color: var(--muted); text-decoration: underline; padding: 4px 0; }
+  .tnrate-f .linkbtn:hover { color: var(--text); }
+  .tnbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 10px 14px; border-radius: 16px; border: 1px solid rgba(245,165,36,.45); background: rgba(245,165,36,.07); }
+  .tnbar.new { animation: tnbarin .45s cubic-bezier(.2,.8,.2,1); }
+  @keyframes tnbarin { 0% { opacity: 0; transform: translateY(-10px); } 100% { opacity: 1; transform: none; } }
+  .tnbar-h { display: flex; flex-direction: column; gap: 2px; flex: none; }
+  .tnbar-k { font-size: 11px; font-weight: 800; letter-spacing: .8px; color: var(--accent); }
+  .tnbar-n { font-size: 12px; color: var(--muted); }
+  .tnbar-l { display: flex; flex-wrap: wrap; gap: 8px; flex: 1; min-width: 0; }
+  .tnbar-full { font-size: 13px; font-weight: 700; color: var(--accent); flex: none; }
+  .tnchipx { display: flex; align-items: center; gap: 8px; padding: 4px 4px 4px 6px; border-radius: 999px; background: var(--panel2); max-width: 100%; }
+  .tnchipx.new { animation: tnchipin .4s cubic-bezier(.2,.8,.2,1); }
+  @keyframes tnchipin { 0% { opacity: 0; transform: translateY(-14px) scale(.96); } 100% { opacity: 1; transform: none; } }
+  .tnsw { width: 24px; height: 34px; border-radius: 5px; flex: none; background-size: cover; background-position: center; }
+  .tnname { border: 0; background: none; color: var(--text); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; padding: 6px 2px; text-decoration: underline; text-decoration-color: rgba(244,241,234,.35); text-underline-offset: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; }
+  .tnname:hover { text-decoration-color: var(--text); }
+  .tnmini { height: 32px; padding: 0 12px; border-radius: 16px; font-size: 13px; text-decoration: none; flex: none; }
+  .tnhead .btn[disabled], .tnfoot .btn[disabled] { opacity: .45; cursor: default; }
+  .tnpage .tnbar { flex-direction: column; align-items: stretch; gap: 8px; }
+  .tnpage .tnbar-h { flex-direction: row; align-items: baseline; gap: 8px; }
+  .tnpage .tnbar-l { flex-direction: column; }
+  .tnpage .tnchipx { border-radius: 14px; }
+  .tnpage .tnname { flex: 1; text-align: left; max-width: none; }
+  .tnpage .tnmini { height: 40px; }
+  @media (prefers-reduced-motion: reduce) { .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnbar.new, .tnchipx.new, .tnact svg { animation: none !important; } }
   @media (max-width: 899px) {
     .tonight { margin: 16px 16px 0; padding: 20px; }
     .tnwide { display: none; }

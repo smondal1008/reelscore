@@ -245,7 +245,8 @@
     if (cur.v[mid] === val) delete cur.v[mid]; else cur.v[mid] = val;
     cur.at = new Date().toISOString();
     S.verdicts[S.uid] = cur;
-    if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else if (!patchTitleBits()) render();
+    if (S.route === 'tonight') { /* the Tonight page redraws itself */ }
+    else if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else if (!patchTitleBits()) render();
     writing.v = true;
     guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
   }
@@ -868,7 +869,10 @@
       var saved = {}; try { saved = JSON.parse(localStorage.getItem('rs_tonight') || '{}') || {}; } catch (e) {}
       S.tonight = { where: saved.where === 'out' ? 'out' : 'home', time: saved.time === 'short' ? 'short' : 'any',
         mood: TN_MOODS.some(function (x) { return x[0] === saved.mood; }) ? saved.mood : 'thrill',
-        langs: Array.isArray(saved.langs) ? saved.langs : [], seen: [], step: 'ask', allLangs: false };
+        langs: Array.isArray(saved.langs) ? saved.langs : [], seen: [], step: 'ask', allLangs: false,
+        // The 3 cards (title ids, null = no pick left), how often each slot has changed (drives the flip-in), the
+        // shortlist (titles added with + tonight, at most 3) and titles marked seen this session.
+        slots: null, n: [0, 0, 0], drawn: [0, 0, 0], pins: [], gone: [], rating: null, anim: {} };
     }
     return S.tonight;
   }
@@ -915,12 +919,21 @@
     tasteModel.ck = ck; tasteModel.m = model;
     return model;
   }
+  // "Not for me": titles a viewer never wants suggested. In the profile doc when signed in, else on this device.
+  function tnNope() {
+    var a = S.uid && S.mineLoaded ? (S.mine.nope || []) : []; try { a = a.concat(JSON.parse(localStorage.getItem('rs_nope') || '[]') || []); } catch (e) {}
+    return a;
+  }
+  function tnAddNope(id) {
+    if (S.uid && S.mineLoaded) { S.mine.nope = (S.mine.nope || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
+    else { try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_nope', JSON.stringify(a.slice(-500))); } catch (e) {} }
+  }
   function tnPool(t) {
-    var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel();
+    var apps = myApps(), mood = TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0], tm = tasteModel(), nope = tnNope();
     var out = [];
     S.movies.forEach(function (m) {
-      var d = m.data;
-      if (d.published === false || !released(m) || inList(m.id) || tm.vv[m.id] || t.seen.indexOf(m.id) !== -1) return;
+      var d = m.data, pinned = t.pins.indexOf(m.id) !== -1;
+      if (d.published === false || !released(m) || (inList(m.id) && !pinned) || tm.vv[m.id] || (!pinned && (t.seen.indexOf(m.id) !== -1 || t.gone.indexOf(m.id) !== -1 || nope.indexOf(m.id) !== -1))) return;
       var np = nowPlayingOf(d), sec = npSection(d);
       if (t.where === 'out') { if (sec !== 'In theatres' && np !== 'theatres') return; }
       else {
@@ -965,7 +978,7 @@
   }
   // The four questions. onChange redraws whatever holds them.
   function tnQuestions(t, onChange) {
-    var set = function (k, v) { t[k] = v; t.seen = []; tnSave(); onChange(); };
+    var set = function (k, v) { t[k] = v; t.seen = []; t.rating = null; tnSave(); tnFill(t, false); onChange(); };
     var group = function (label, kids) { return h('div', { class: 'tnq', role: 'group', 'aria-label': label }, [h('div', { class: 'tnql', text: label }), h('div', { class: 'tnopts' }, kids)]); };
     var opt = function (k, v, label) { return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(t[k] === v), text: label, on: { click: function () { set(k, v); } } }); };
     var langs = TN_LANGS.concat(t.allLangs ? TN_MORE_LANGS : []);
@@ -1008,29 +1021,147 @@
     }
     return box;
   }
+  // The 3 cards. Slots hold title ids; a shortlisted title that still fits the answers keeps its card, shortlisted titles
+  // that fit come back first, then the best of the pool. A slot whose title changes flips in (CSS), once.
+  function tnFill(t, first) {
+    var ids = tnPool(t).map(function (o) { return o.m.id; }), old = t.slots || [null, null, null];
+    var keep = old.map(function (id) { return id && t.pins.indexOf(id) !== -1 && ids.indexOf(id) !== -1 ? id : null; });
+    var q = t.pins.filter(function (id) { return ids.indexOf(id) !== -1 && keep.indexOf(id) === -1; })
+      .concat(ids.filter(function (id) { return t.pins.indexOf(id) === -1; }));
+    t.slots = keep.map(function (id, i) {
+      if (id) return id;
+      var next = q.shift() || null; if (!first && next !== old[i]) t.n[i]++;
+      return next;
+    });
+    if (first) t.drawn = t.n.slice();
+  }
+  function tnNext(t) {
+    var ids = tnPool(t).map(function (o) { return o.m.id; });
+    return ids.filter(function (id) { return t.slots.indexOf(id) === -1 && t.pins.indexOf(id) === -1; });
+  }
+  function tnSwap(t, i) { var next = tnNext(t)[0] || null; t.slots[i] = next; t.n[i]++; if (t.rating === i) t.rating = null; return next; }
+  function tnPin(t, m, onChange) {
+    var id = m.id, i = t.pins.indexOf(id), title = m.data.title;
+    if (i !== -1) {
+      t.pins.splice(i, 1);
+      if (S.uid && inList(id)) { S.mine.watchlist.splice(S.mine.watchlist.indexOf(id), 1); saveMine(null); if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); }
+      toast(title + (S.uid ? ' removed from your shortlist and watchlist' : ' removed from your shortlist'));
+    } else {
+      if (t.pins.length >= 3) { toast('Your shortlist holds 3. Remove one, or pick one for tonight.'); return; }
+      t.pins.push(id); t.anim.pin = id; if (t.pins.length === 1) t.anim.bar = true; t.anim.chip = id;
+      if (S.uid) { if (!inList(id)) { S.mine.watchlist.push(id); saveMine(null); if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); } toast(title + ' added to your watchlist' + (t.pins.length === 3 ? '. That’s 3: pick one for tonight.' : '')); }
+      else toast(title + ' is on your shortlist. Sign in to keep it on your watchlist.');
+    }
+    onChange();
+  }
+  function tnWatch(m, t, cls) {
+    var d = m.data;
+    if (t.where === 'out') return bookBtn(m, 'btn small primary ' + cls) || h('a', { class: 'btn small ' + cls, href: movieUrl(m), text: 'Showtimes' });
+    var url = safeUrl(d.platformUrl);
+    return url ? h('a', { class: 'btn small primary ' + cls, href: url, target: '_blank', rel: 'noopener', text: 'Watch' }) : h('a', { class: 'btn small ' + cls, href: movieUrl(m), text: 'Where to watch' });
+  }
+  // The shortlist bar above the cards: every title added tonight. A name on a card makes that card glow; a name that
+  // isn't on screen (answers changed) brings it back as a card.
+  function tnBar(t, onChange) {
+    var pins = t.pins.filter(function (id) { return S.byId[id]; });
+    if (!pins.length) return null;
+    var full = pins.length >= 3;
+    var bar = h('div', { class: 'tnbar' + (t.anim.bar ? ' new' : ''), role: 'region', 'aria-label': 'Your shortlist' }, [
+      h('div', { class: 'tnbar-h' }, [h('span', { class: 'tnbar-k', text: 'YOUR SHORTLIST' }), h('span', { class: 'tnbar-n', text: pins.length + ' of 3' + (S.uid ? ' · also on your watchlist' : '') })]),
+      h('div', { class: 'tnbar-l' }, pins.map(function (id) {
+        var m = S.byId[id], pa = artLazy(m, 'poster'), on = t.slots.indexOf(id) !== -1;
+        return h('div', { class: 'tnchipx' + (t.anim.chip === id ? ' new' : '') }, [
+          h('span', { class: 'tnsw art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),
+          h('button', { type: 'button', class: 'tnname', text: m.data.title, 'aria-label': on ? 'Point out ' + m.data.title + ' in your picks' : 'Show ' + m.data.title + ' as a card', on: { click: function () {
+            if (on) { t.anim.flash = id; onChange(); return; }
+            var i = t.slots.indexOf(null); if (i === -1) i = t.slots.findIndex(function (x) { return t.pins.indexOf(x) === -1; });
+            if (i === -1) return;
+            t.slots[i] = id; t.n[i]++; if (t.rating === i) t.rating = null; onChange();
+          } } }),
+          tnWatch(m, t, 'tnmini')
+        ]);
+      })),
+      full ? h('span', { class: 'tnbar-full', text: 'Full. Pick one for tonight.' }) : null
+    ]);
+    return bar;
+  }
   function tnPicks(t, onChange, wide) {
-    var pool = tnPool(t), picks = pool.slice(0, 3);
-    var kids = picks.map(function (o) {
-      var m = o.m, d = m.data, useBanner = wide && !!safeUrl(d.bannerUrl), pa = artLazy(m, useBanner ? 'banner' : 'poster', useBanner ? 640 : undefined);
+    if (!t.slots) tnFill(t, true);
+    var pool = tnPool(t), byId = {}; pool.forEach(function (o) { byId[o.m.id] = o; });
+    // A shortlisted title brought back from the bar may not fit tonight's answers: it still gets its card.
+    t.pins.forEach(function (id) { var m = S.byId[id]; if (m && !byId[id] && t.slots.indexOf(id) !== -1) byId[id] = { m: m, taste: 0, pct: null, age: 9999, rt: runtimeMin(m.data), cert: '', pinned: true }; });
+    // A card whose title no longer fits (rated or listed elsewhere) gets the next pick, without a flip.
+    t.slots = t.slots.map(function (id, i) {
+      if (!id || byId[id]) return id;
+      var next = tnNext(t).filter(function (x) { return t.slots.indexOf(x) === -1; })[0] || null; t.drawn[i] = t.n[i]; return next;
+    });
+    var any = t.slots.some(Boolean);
+    var kids = t.slots.map(function (id, i) {
+      var flip = t.n[i] !== t.drawn[i] ? ' tnin' + (t.n[i] % 2) : '';
+      if (!id) return h('article', { class: 'tnpick tnnone' + flip }, [h('div', { class: 'tnempty', text: 'That’s every pick for these answers. Try another mood or more languages.' })]);
+      var o = byId[id], m = o.m, d = m.data, useBanner = wide && !!safeUrl(d.bannerUrl), pa = artLazy(m, useBanner ? 'banner' : 'poster', useBanner ? 640 : undefined);
+      var pinned = t.pins.indexOf(id) !== -1, title = d.title;
       var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), isTv(m) ? (o.rt ? 'Series · ' + o.rt + 'm episodes' : 'Series') : o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
-      var art = h('a', { class: 'tnart art' + (wide && !useBanner ? ' tnposter' : ''), href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }, pa.bg ? [] : [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]);
-      return h('article', { class: 'tnpick' }, [
-        tnMedia(m, art),
-        h('div', { class: 'tnbody' }, [
-          h('a', { class: 'tnt', href: movieUrl(m), text: d.title }),
-          h('div', { class: 'tnm', text: meta }),
-          h('div', { class: 'tnwhy', text: tnReason(o, t) }),
-          tnCta(m, t)
-        ])
+      var art = h('a', { class: 'tnart art' + (wide && !useBanner ? ' tnposter' : ''), href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': title }, pa.bg ? [] : [h('span', { class: 'ptitle', 'aria-hidden': 'true', text: title })]);
+      var add = h('button', { type: 'button', class: 'addl tnadd' + (t.anim.pin === id ? ' tnpopin' : ''), 'aria-pressed': String(pinned), title: pinned ? 'On your shortlist' : 'Add to your shortlist',
+        'aria-label': pinned ? 'Remove ' + title + ' from your shortlist' : 'Add ' + title + ' to your shortlist', text: pinned ? '✓' : '+', on: { click: function () { tnPin(t, m, onChange); } } });
+      var body;
+      if (t.rating === i) {
+        var VT = VTIP[bigScreen(m) ? 'theatre' : 'ott'];
+        body = h('div', { class: 'tnrate' + (t.anim.rate === id ? ' new' : '') }, [
+          h('div', { class: 'tnrate-k', text: 'You’ve seen it. How was it?' }),
+          h('div', { class: 'qv icons' + (bigScreen(m) ? ' th' : ''), role: 'group', 'aria-label': 'Your verdict on ' + title }, vset(m).map(function (x) {
+            return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': 'false', 'aria-label': VT[x[0]], on: { click: function () {
+              if (!needUser()) return;
+              // Swap first: saving the verdict can redraw the page, and that draw should already show the new pick.
+              var next = tnSwap(t, i);
+              setVerdict(id, x[0]);
+              toast('Saved “' + VT[x[0]] + '” for ' + title + (next ? '. Here’s a new pick.' : '. That was the last pick for these answers.'));
+              if (t.drawn[i] !== t.n[i]) onChange();
+            } } }, [icon(vIconName(m, x[0]), 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: VT[x[0]] })]);
+          })),
+          h('div', { class: 'tnrate-f' }, [
+            h('button', { type: 'button', class: 'linkbtn', text: 'Don’t rate', on: { click: function () {
+              t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
+              var next = tnSwap(t, i); toast(title + ' marked as seen' + (next ? '. Here’s a new pick.' : '.')); onChange();
+            } } }),
+            h('button', { type: 'button', class: 'linkbtn', text: 'Haven’t seen it', on: { click: function () { t.rating = null; onChange(); } } })])
+        ]);
+      } else {
+        body = h('div', { class: 'tnbody2' }, [
+          h('div', { class: 'tnwhy', text: o.pinned ? 'From your shortlist' : tnReason(o, t) }),
+          tnCta(m, t),
+          h('div', { class: 'tnacts' }, [
+            h('button', { type: 'button', class: 'tnact', on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } }, [icon('eye', 17), h('span', { text: 'Seen it' })]),
+            h('button', { type: 'button', class: 'tnact dim', on: { click: function () {
+              tnAddNope(id); t.pins = t.pins.filter(function (x) { return x !== id; });
+              var next = tnSwap(t, i); toast('Got it. We won’t suggest ' + title + ' again' + (next ? '. Here’s a new pick.' : '.')); onChange();
+            } } }, [icon('eyeoff', 17), h('span', { text: 'Not for me' })])])
+        ]);
+      }
+      return h('article', { class: 'tnpick' + (pinned ? ' on' : '') + flip + (t.anim.flash === id ? ' glow' : ''), 'data-id': id }, [
+        h('div', { class: 'tnmediaw' }, [tnMedia(m, art), add]),
+        h('div', { class: 'tnbody' }, [h('a', { class: 'tnt', href: movieUrl(m), text: title }), h('div', { class: 'tnm', text: meta }), body])
       ]);
     });
-    var again = function () { t.seen = t.seen.concat(picks.map(function (o) { return o.m.id; })); onChange(); };
-    var empty = !picks.length ? h('div', { class: 'tnempty' }, [
+    t.drawn = t.n.slice(); var bar = tnBar(t, onChange); t.anim = {};
+    var unpinned = t.slots.map(function (id, i) { return i; }).filter(function (i) { return !t.slots[i] || t.pins.indexOf(t.slots[i]) === -1; });
+    var more = function () {
+      var open = unpinned.filter(function (i) { return t.slots[i]; });
+      open.forEach(function (i) { t.seen.push(t.slots[i]); });
+      var q = tnNext(t), n = 0;
+      unpinned.forEach(function (i) { var next = q.shift() || null; if (next || t.slots[i]) { if (next) n++; t.slots[i] = next; t.n[i]++; } });
+      if (t.rating !== null && unpinned.indexOf(t.rating) !== -1) t.rating = null;
+      toast(n ? n + (n === 1 ? ' new pick' : ' new picks') + (t.pins.length ? '. Your shortlist stayed put.' : '.') : 'No more picks for these answers.');
+      onChange();
+    };
+    var canMore = unpinned.length && tnNext(t).length;
+    var empty = !any && !t.pins.length ? h('div', { class: 'tnempty' }, [
       t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages or Any length' + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
-      t.seen.length ? h('button', { type: 'button', class: 'linkbtn', text: 'see the first picks again', on: { click: function () { t.seen = []; onChange(); } } }) : null,
+      t.seen.length ? h('button', { type: 'button', class: 'linkbtn', text: 'see the first picks again', on: { click: function () { t.seen = []; tnFill(t, false); onChange(); } } }) : null,
       t.seen.length ? '.' : null]) : null;
-    return { list: h('div', { class: 'tngrid' }, kids), empty: empty, thin: picks.length && picks.length < 3 ? h('div', { class: 'note', text: 'Only ' + picks.length + ' match right now. Loosen an answer for more.' }) : null,
-      again: picks.length ? h('button', { type: 'button', class: 'btn', text: 'None of these', on: { click: again } }) : null };
+    return { list: h('div', { class: 'tngrid' }, kids), bar: bar, empty: empty, thin: null,
+      again: any ? h('button', { type: 'button', class: 'btn', disabled: !canMore, text: 'Show 3 more', on: { click: more } }) : null };
   }
   function tnAppsLine() {
     var a = myApps();
@@ -1050,7 +1181,7 @@
           h('button', { type: 'button', class: 'btn ghost', text: 'Cancel', on: { click: close } })])];
     });
   }
-  function tnRedraw() { var el = $('tonight'); if (el && S.route === 'home') el.replaceWith(tonightSection()); else if (S.route === 'tonight') drawTonight(); }
+  function tnRedraw() { tnStopPlaying = null; var el = $('tonight'); if (el && S.route === 'home') el.replaceWith(tonightSection()); else if (S.route === 'tonight') drawTonight(); }
   // Home: on wide screens the questions and live picks sit side by side; on phones a card opens /tonight.
   function tonightSection() {
     var t = tnState(), redraw = function () { tnRedraw(); }, p = tnPicks(t, redraw, true);
@@ -1059,7 +1190,7 @@
         h('div', { class: 'tnleft' }, [h('div', { class: 'tnkick', text: 'TONIGHT' }), h('h2', { class: 'tnh', text: 'What should I watch?' })].concat(tnQuestions(t, redraw))),
         h('div', { class: 'tnright' }, [
           h('div', { class: 'tnhead' }, [h('h3', {}, ['Your 3 for tonight ', h('span', { class: 'sub', text: '· ' + tnSummary(t) })]), p.again]),
-          p.empty || p.list, p.thin, tnAppsLine()])
+          p.bar, p.empty || p.list, tnAppsLine()])
       ]),
       h('div', { class: 'tnnarrow' }, [
         h('div', { class: 'tnkick', text: 'TONIGHT' }), h('h2', { class: 'tnh', text: 'What should I watch?' }),
@@ -1076,12 +1207,13 @@
     if (t.step !== 'picks') {
       tnQuestions(t, drawTonight).forEach(function (q) { w.appendChild(q); });
       w.appendChild(tnAppsLine());
-      w.appendChild(h('button', { type: 'button', class: 'btn primary tngo', text: 'Show my 3 picks', on: { click: function () { t.step = 'picks'; t.seen = []; drawTonight(); window.scrollTo(0, 0); } } }));
+      w.appendChild(h('button', { type: 'button', class: 'btn primary tngo', text: 'Show my 3 picks', on: { click: function () { t.step = 'picks'; t.seen = []; tnFill(t, !t.slots); drawTonight(); window.scrollTo(0, 0); } } }));
       return;
     }
-    var p = tnPicks(t, drawTonight);
+    var p = tnPicks(t, drawTonight, true);
     w.appendChild(h('div', { class: 'note', style: 'margin-bottom:12px', text: tnSummary(t) }));
-    w.appendChild(p.empty || p.list); if (p.thin) w.appendChild(p.thin);
+    if (p.bar) w.appendChild(p.bar);
+    w.appendChild(p.empty || p.list);
     w.appendChild(h('div', { class: 'tnfoot' }, [p.again, h('button', { type: 'button', class: 'btn ghost', text: 'Change answers', on: { click: function () { t.step = 'ask'; drawTonight(); } } })]));
   }
   function rowSection(title, items, opts, link) {
@@ -2266,6 +2398,8 @@
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+    eyeoff: '<path d="M10.7 5.1A10.7 10.7 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M14.1 14.2a3 3 0 0 1-4.2-4.2"/><path d="M17.5 17.5A10.7 10.7 0 0 1 12 19c-7 0-10-7-10-7a13 13 0 0 1 4.7-5.2"/><path d="M2 2l20 20"/>',
     bell: '<path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10.3 20a2 2 0 003.4 0"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
@@ -4232,10 +4366,10 @@
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
-      var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || []]); };
+      var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
-      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice() };
+      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice() };
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; render();
     }, function () {});
