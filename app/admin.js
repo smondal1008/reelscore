@@ -776,61 +776,73 @@ window.ReelAdmin = function (env) {
   }
   // ---------- News: our own stories (Firestore "news"), shown at /news and /news/<slug> ----------
   // A draft is visible only here. Publish puts it on /news straight away; the next deploy writes its page for Google.
+  // The product blog is the same thing with kind "blog" (Admin > Blog, /blog/<slug> on the site).
+  var NK = { news: { label: 'News', one: 'story', ones: 'stories', base: '/news', sub: 'Our own stories', newBtn: '+ New story' },
+    blog: { label: 'Blog', one: 'post', ones: 'posts', base: '/blog', sub: 'Product blog', newBtn: '+ New post' } };
+  var newsKind = 'news';
+  function kindOf(d) { return d && d.kind === 'blog' ? 'blog' : 'news'; }
+  function kindDocs(k) { return newsDocs.filter(function (x) { return kindOf(x.data) === k; }); }
   var newsMode = false, newsWant = '', newsDocs = [], newsLoaded = false, newsErr = '', newsEd = null, newsDirty = false, newsPreview = false;
-  function newsCountEl() { var el = $('newsCount'); if (!el) return; var d = newsDocs.filter(function (x) { return x.data.status !== 'published'; }).length; el.textContent = newsLoaded && newsDocs.length ? (d ? d + ' draft' + (d === 1 ? '' : 's') : String(newsDocs.length)) : ''; }
+  function newsCountEl() {
+    ['news', 'blog'].forEach(function (k) {
+      var el = $(k + 'Count'); if (!el) return; var all = kindDocs(k), d = all.filter(function (x) { return x.data.status !== 'published'; }).length;
+      el.textContent = newsLoaded && all.length ? (d ? d + ' draft' + (d === 1 ? '' : 's') : String(all.length)) : '';
+    });
+  }
   function newsWhen(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
-  function newsSlugTaken(slug, exceptId) { return newsDocs.some(function (x) { return x.id !== exceptId && x.data.slug === slug; }); }
+  function newsSlugTaken(slug, exceptId) { return kindDocs(newsKind).some(function (x) { return x.id !== exceptId && x.data.slug === slug; }); }
   function newsOpen(id) {
     var doc = newsDocs.filter(function (x) { return x.id === id; })[0];
-    newsEd = doc ? { id: doc.id, d: JSON.parse(JSON.stringify(doc.data)), slugEdited: true } : { id: null, d: { title: '', slug: '', summary: '', body: '', coverUrl: '', coverId: '', coverAlt: '', titles: [], status: 'draft' }, slugEdited: false };
+    newsEd = doc ? { id: doc.id, d: JSON.parse(JSON.stringify(doc.data)), slugEdited: true } : { id: null, d: { kind: newsKind, title: '', slug: '', summary: '', body: '', coverUrl: '', coverId: '', coverAlt: '', titles: [], status: 'draft' }, slugEdited: false };
     newsDirty = false; newsPreview = false;
   }
   function renderNews() {
     var main = $('main'); main.innerHTML = '';
+    var K = NK[newsKind], mine = kindDocs(newsKind);
     if (newsWant) {
       if (!newsEd || (newsWant === 'new' ? newsEd.id : newsEd.id !== newsWant)) {
         if (newsWant !== 'new' && !newsLoaded) { main.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
-        if (newsWant !== 'new' && !newsDocs.some(function (x) { return x.id === newsWant; })) {
-          main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/news', text: '← All news' })]));
-          main.appendChild(h('div', { class: 'empty', text: 'No story at this address. It may have been deleted.' })); return;
+        if (newsWant !== 'new' && !mine.some(function (x) { return x.id === newsWant; })) {
+          main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/' + newsKind, text: '← All ' + K.ones })]));
+          main.appendChild(h('div', { class: 'empty', text: 'No ' + K.one + ' at this address. It may have been deleted.' })); return;
         }
         newsOpen(newsWant === 'new' ? null : newsWant);
       }
       renderNewsEditor(main); return;
     }
-    var pub = newsDocs.filter(function (x) { return x.data.status === 'published'; }).length;
+    var pub = mine.filter(function (x) { return x.data.status === 'published'; }).length;
     main.appendChild(h('section', { class: 'card' }, [
-      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Our own stories' }), h('h1', { text: 'News' })]),
-        h('a', { class: 'btn primary', href: '/admin/news/new', text: '+ New story', style: 'text-decoration:none' + (canWrite ? '' : ';pointer-events:none;opacity:.5') })]),
-      h('div', { class: 'note', text: newsErr ? newsErr : !newsLoaded ? 'Loading…' : newsDocs.length ? pub + ' published, ' + (newsDocs.length - pub) + ' draft' + (newsDocs.length - pub === 1 ? '' : 's') + '. Published stories show on /news at once; their pages reach Google after the next deploy.' : 'No stories yet. Write the first one.' })
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: K.sub }), h('h1', { text: K.label })]),
+        h('a', { class: 'btn primary', href: '/admin/' + newsKind + '/new', text: K.newBtn, style: 'text-decoration:none' + (canWrite ? '' : ';pointer-events:none;opacity:.5') })]),
+      h('div', { class: 'note', text: newsErr ? newsErr : !newsLoaded ? 'Loading…' : mine.length ? pub + ' published, ' + (mine.length - pub) + ' draft' + (mine.length - pub === 1 ? '' : 's') + '. Published ' + K.ones + ' show on ' + K.base + ' at once; their pages reach Google after the next deploy.' : 'No ' + K.ones + ' yet. Write the first one.' })
     ]));
-    newsDocs.slice().sort(function (a, b) { return String(b.data.publishedAt || b.data.updatedAt || '').localeCompare(String(a.data.publishedAt || a.data.updatedAt || '')); }).forEach(function (x) {
+    mine.slice().sort(function (a, b) { return String(b.data.publishedAt || b.data.updatedAt || '').localeCompare(String(a.data.publishedAt || a.data.updatedAt || '')); }).forEach(function (x) {
       var d = x.data, live = d.status === 'published';
       main.appendChild(h('section', { class: 'card', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap' }, [
         h('div', { style: 'flex:1 1 300px;min-width:0' }, [
-          h('a', { href: '/admin/news/' + x.id, style: 'font-weight:600;font-size:16px;color:inherit', text: d.title || '(No headline)' }),
-          h('div', { class: 'note', text: (live ? 'Published ' + newsWhen(d.publishedAt) : 'Draft · last saved ' + newsWhen(d.updatedAt)) + ' · /news/' + (d.slug || '…') + ((d.titles || []).length ? ' · ' + d.titles.length + ' title' + (d.titles.length === 1 ? '' : 's') : '') })
+          h('a', { href: '/admin/' + newsKind + '/' + x.id, style: 'font-weight:600;font-size:16px;color:inherit', text: d.title || '(No headline)' }),
+          h('div', { class: 'note', text: (live ? 'Published ' + newsWhen(d.publishedAt) : 'Draft · last saved ' + newsWhen(d.updatedAt)) + ' · ' + K.base + '/' + (d.slug || '…') + ((d.titles || []).length ? ' · ' + d.titles.length + ' title' + (d.titles.length === 1 ? '' : 's') : '') })
         ]),
         h('span', { class: 'ntag', style: 'padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:' + (live ? 'rgba(46,204,113,.18);color:#7BE0A4' : 'rgba(255,255,255,.08);color:var(--muted)'), text: live ? 'Published' : 'Draft' }),
-        live ? h('a', { class: 'btn', href: '/news/' + d.slug, target: '_blank', rel: 'noopener', text: 'View ↗', style: 'text-decoration:none' }) : null,
-        h('a', { class: 'btn', href: '/admin/news/' + x.id, text: 'Edit', style: 'text-decoration:none' })
+        live ? h('a', { class: 'btn', href: K.base + '/' + d.slug, target: '_blank', rel: 'noopener', text: 'View ↗', style: 'text-decoration:none' }) : null,
+        h('a', { class: 'btn', href: '/admin/' + newsKind + '/' + x.id, text: 'Edit', style: 'text-decoration:none' })
       ]));
     });
   }
   function renderNewsEditor(main) {
-    var E = newsEd, d = E.d, live = d.status === 'published', wasLive = !!(E.id && (newsDocs.filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data.publishedAt);
+    var K = NK[newsKind], E = newsEd, d = E.d, live = d.status === 'published', wasLive = !!(E.id && (newsDocs.filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data.publishedAt);
     var mark = function () { if (!newsDirty) { newsDirty = true; } stat.textContent = 'Unsaved changes'; };
-    var stat = h('span', { class: 'note', role: 'status', text: newsDirty ? 'Unsaved changes' : E.id ? (live ? 'Published' : 'Draft') + ' · saved' : 'New story · not saved yet' });
-    var titleIn = h('input', { class: 'in', id: 'nw_title', maxlength: '140', placeholder: 'e.g. Dhurandhar 2 gets a release date', disabled: !canWrite }); titleIn.value = d.title || '';
+    var stat = h('span', { class: 'note', role: 'status', text: newsDirty ? 'Unsaved changes' : E.id ? (live ? 'Published' : 'Draft') + ' · saved' : 'New ' + K.one + ' · not saved yet' });
+    var titleIn = h('input', { class: 'in', id: 'nw_title', maxlength: '140', placeholder: newsKind === 'blog' ? 'e.g. Pick your streaming apps for better Tonight picks' : 'e.g. Dhurandhar 2 gets a release date', disabled: !canWrite }); titleIn.value = d.title || '';
     var slugIn = h('input', { class: 'in', id: 'nw_slug', maxlength: '90', disabled: !canWrite || wasLive }); slugIn.value = d.slug || '';
-    var slugNote = h('div', { class: 'note', text: wasLive ? 'The address can’t change once a story has been published, so links to it keep working.' : 'Filled in from the headline. Letters, numbers and dashes only.' });
+    var slugNote = h('div', { class: 'note', text: wasLive ? 'The address can’t change once a ' + K.one + ' has been published, so links to it keep working.' : 'Filled in from the headline. Letters, numbers and dashes only.' });
     titleIn.addEventListener('input', function () { d.title = titleIn.value; if (!E.slugEdited && !wasLive) { d.slug = urlSlug(titleIn.value).slice(0, 80); slugIn.value = d.slug; } mark(); });
     slugIn.addEventListener('input', function () { E.slugEdited = true; d.slug = urlSlug(slugIn.value).slice(0, 90); mark(); });
     slugIn.addEventListener('blur', function () { slugIn.value = d.slug; });
     var sumIn = h('textarea', { class: 'in', id: 'nw_sum', rows: 2, maxlength: '220', placeholder: 'One or two sentences. Shown under the headline, in the news list and in Google.', disabled: !canWrite }); sumIn.value = d.summary || '';
     var sumCount = h('span', { class: 'note', text: (d.summary || '').length + ' / 220' });
     sumIn.addEventListener('input', function () { d.summary = sumIn.value; sumCount.textContent = sumIn.value.length + ' / 220'; mark(); });
-    var bodyIn = h('textarea', { class: 'in', id: 'nw_body', rows: 16, maxlength: '20000', placeholder: 'Write the story in your own words.', disabled: !canWrite, style: 'font-family:inherit;line-height:1.55' }); bodyIn.value = d.body || '';
+    var bodyIn = h('textarea', { class: 'in', id: 'nw_body', rows: 16, maxlength: '20000', placeholder: 'Write the ' + K.one + ' in your own words.', disabled: !canWrite, style: 'font-family:inherit;line-height:1.55' }); bodyIn.value = d.body || '';
     var prev = h('div', { class: 'card', style: 'line-height:1.7;font-size:16px', hidden: !newsPreview });
     var drawPrev = function () { prev.innerHTML = ''; (window.reelNewsBody ? window.reelNewsBody(d.body) : [h('p', { text: d.body || '' })]).forEach(function (n) { prev.appendChild(n); }); };
     if (newsPreview) drawPrev();
@@ -873,9 +885,9 @@ window.ReelAdmin = function (env) {
     var problem = function (publishing) {
       if (!String(d.title || '').trim()) return [titleIn, 'Write a headline.'];
       if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(d.slug || '')) return [slugIn, 'Give the story an address (letters, numbers and dashes).'];
-      if (newsSlugTaken(d.slug, E.id)) return [slugIn, 'Another story already uses /news/' + d.slug + '. Change the address.'];
+      if (newsSlugTaken(d.slug, E.id)) return [slugIn, 'Another ' + K.one + ' already uses ' + K.base + '/' + d.slug + '. Change the address.'];
       if (publishing && String(d.summary || '').trim().length < 40) return [sumIn, 'Write a summary of at least 40 characters before publishing.'];
-      if (publishing && String(d.body || '').trim().length < 200) return [bodyIn, 'The story needs at least 200 characters before publishing.'];
+      if (publishing && String(d.body || '').trim().length < 200) return [bodyIn, 'The ' + K.one + ' needs at least 200 characters before publishing.'];
       return null;
     };
     var save = function (status) {
@@ -883,15 +895,15 @@ window.ReelAdmin = function (env) {
       if (bad) { setStatus(bad[1]); bad[0].focus(); return; }
       var now = new Date().toISOString(), id = E.id || ('n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
       var old = (newsDocs.filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data;
-      var body = { title: d.title.trim().slice(0, 140), slug: d.slug, summary: String(d.summary || '').trim().slice(0, 220), body: String(d.body || '').trim().slice(0, 20000),
+      var body = { kind: newsKind, title: d.title.trim().slice(0, 140), slug: d.slug, summary: String(d.summary || '').trim().slice(0, 220), body: String(d.body || '').trim().slice(0, 20000),
         coverUrl: safeUrl(d.coverUrl), coverId: d.coverId || '', coverAlt: String(d.coverAlt || '').trim().slice(0, 160), titles: (d.titles || []).slice(0, 12),
         status: status, createdAt: old.createdAt || now, updatedAt: now };
       if (old.publishedAt) body.publishedAt = old.publishedAt; else if (publishing) body.publishedAt = now;
       setStatus('Saving…');
       db.doc('news/' + id).set(body).then(function () {
         E.id = id; E.d = JSON.parse(JSON.stringify(body)); newsDirty = false;
-        setStatus(publishing ? (old.status === 'published' ? 'Saved. The change shows on /news now.' : 'Published. It’s on /news now; its page reaches Google after the next deploy.') : status === 'draft' && old.status === 'published' ? 'Unpublished. It’s back to a draft.' : 'Draft saved.');
-        if (location.pathname !== '/admin/news/' + id) history.replaceState(null, '', '/admin/news/' + id);
+        setStatus(publishing ? (old.status === 'published' ? 'Saved. The change shows on ' + K.base + ' now.' : 'Published. It’s on ' + K.base + ' now; its page reaches Google after the next deploy.') : status === 'draft' && old.status === 'published' ? 'Unpublished. It’s back to a draft.' : 'Draft saved.');
+        if (location.pathname !== '/admin/' + newsKind + '/' + id) history.replaceState(null, '', '/admin/' + newsKind + '/' + id);
         newsWant = id; renderNews();
       }).catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
     };
@@ -899,24 +911,24 @@ window.ReelAdmin = function (env) {
       live ? null : h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Save draft', on: { click: function () { save('draft'); } } }),
       h('button', { type: 'button', class: 'btn primary', disabled: !canWrite, text: live ? 'Save changes' : 'Publish', on: { click: function () { save('published'); } } }),
       live ? h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Unpublish', on: { click: function () {
-        askConfirm('Unpublish this story?', 'It leaves /news and the title pages at once. Its address stays reserved, so you can publish it again later.', 'Unpublish', false).then(function (yes) { if (yes) save('draft'); });
+        askConfirm('Unpublish this ' + K.one + '?', 'It leaves ' + K.base + (newsKind === 'news' ? ' and the title pages' : '') + ' at once. Its address stays reserved, so you can publish it again later.', 'Unpublish', false).then(function (yes) { if (yes) save('draft'); });
       } } }) : null,
       E.id ? h('button', { type: 'button', class: 'btn ghost', disabled: !canWrite, text: 'Delete', on: { click: function () {
-        askConfirm('Delete this story?', '“' + (d.title || 'Untitled') + '” will be removed for good. This can’t be undone.', 'Delete', true).then(function (yes) {
+        askConfirm('Delete this ' + K.one + '?', '“' + (d.title || 'Untitled') + '” will be removed for good. This can’t be undone.', 'Delete', true).then(function (yes) {
           if (!yes) return;
-          db.doc('news/' + E.id).delete().then(function () { newsEd = null; newsDirty = false; setStatus('Story deleted.'); history.pushState(null, '', '/admin/news'); newsWant = ''; renderNews(); })
+          db.doc('news/' + E.id).delete().then(function () { newsEd = null; newsDirty = false; setStatus(newsKind === 'blog' ? 'Post deleted.' : 'Story deleted.'); history.pushState(null, '', '/admin/' + newsKind); newsWant = ''; renderNews(); })
             .catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });
         });
       } } }) : null,
       stat
     ];
-    main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/news', text: '← All news' }), live && E.id ? h('a', { href: '/news/' + d.slug, target: '_blank', rel: 'noopener', text: 'View on the site ↗' }) : h('span', { class: 'sub', text: E.id ? 'Draft · only admins can see it' : 'New story' })]));
+    main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/' + newsKind, text: '← All ' + K.ones }), live && E.id ? h('a', { href: K.base + '/' + d.slug, target: '_blank', rel: 'noopener', text: 'View on the site ↗' }) : h('span', { class: 'sub', text: E.id ? 'Draft · only admins can see it' : 'New ' + K.one })]));
     main.appendChild(h('section', { class: 'card' }, [
-      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: live ? 'Published story' : 'Draft' }), h('h1', { text: d.title || 'New story' })])]),
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: live ? 'Published ' + K.one : 'Draft' }), h('h1', { text: d.title || 'New ' + K.one })])]),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_title', text: 'Headline' }), titleIn]),
-      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_slug', text: 'Address: /news/…' }), slugIn, slugNote]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_slug', text: 'Address: ' + K.base + '/…' }), slugIn, slugNote]),
       h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_sum', text: 'Summary' }), sumIn, sumCount]),
-      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_body', text: 'Story' }), bodyIn,
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_body', text: newsKind === 'blog' ? 'Post' : 'Story' }), bodyIn,
         h('div', { class: 'note', text: 'Leave a blank line between paragraphs. ## starts a heading, - starts a list item, > a quote. **bold**. Links: [words](https://…) or [words](/movie/…).' }),
         h('div', { style: 'margin-top:8px' }, [prevBtn])]),
       prev,
@@ -924,8 +936,8 @@ window.ReelAdmin = function (env) {
         h('div', { style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap' }, [coverBox, h('div', {}, [h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [upBtn, rmBtn]),
           h('div', { class: 'note', style: 'margin-top:6px;max-width:360px', text: safeUrl(d.coverUrl) ? 'Only pictures you have the rights to use: a studio or platform press still, or one you took.' : 'No picture uploaded: the first title’s banner is used. Upload one only if you have the rights to use it.' })])]),
         altIn]),
-      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_find', text: 'Titles in this story' }), tIn, hits, chips,
-        h('div', { class: 'note', text: 'They show under the story, and the story shows in the News section of their pages.' })]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_find', text: newsKind === 'blog' ? 'Titles mentioned (optional)' : 'Titles in this story' }), tIn, hits, chips,
+        h('div', { class: 'note', text: newsKind === 'blog' ? 'They show under the post.' : 'They show under the story, and the story shows in the News section of their pages.' })]),
       h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px' }, acts)
     ]));
   }
@@ -1737,7 +1749,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1760,7 +1772,7 @@ window.ReelAdmin = function (env) {
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
     else if (parts[0] === 'messages') { page = 'messages'; msgMode = true; }
-    else if (parts[0] === 'news') { page = 'news'; newsMode = true; newsWant = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (newsWant !== (newsEd && (newsEd.id || 'new'))) { newsEd = null; newsDirty = false; } }
+    else if (parts[0] === 'news' || parts[0] === 'blog') { if (newsKind !== parts[0]) { newsEd = null; newsDirty = false; } newsKind = parts[0]; page = parts[0]; newsMode = true; newsWant = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (newsWant !== (newsEd && (newsEd.id || 'new'))) { newsEd = null; newsDirty = false; } }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
@@ -1771,10 +1783,10 @@ window.ReelAdmin = function (env) {
     if (page === 'title' && wantSlug === 'new') { var t = $('f_title'); if (t) t.focus(); }
   }
   function canLeave(nextPath) {
-    if (page === 'news' && newsDirty && nextPath !== location.pathname) {
+    if ((page === 'news' || page === 'blog') && newsDirty && nextPath !== location.pathname) {
       if (leaveAsking) return false;
       var to = nextPath || (location.pathname + location.search); leaveAsking = true;
-      askConfirm('Leave without saving?', 'You have unsaved changes to this story.', 'Discard changes', true).then(function (yes) {
+      askConfirm('Leave without saving?', 'You have unsaved changes to this ' + NK[newsKind].one + '.', 'Discard changes', true).then(function (yes) {
         leaveAsking = false; if (!yes) return;
         newsDirty = false; newsEd = null; history.pushState(null, '', to); window.dispatchEvent(new PopStateEvent('popstate'));
       });

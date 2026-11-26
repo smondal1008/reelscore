@@ -122,6 +122,14 @@
       "destination": "/"
     },
     {
+      "source": "/blog",
+      "destination": "/"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/"
+    },
+    {
       "source": "/admin",
       "destination": "/"
     },

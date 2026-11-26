@@ -1084,41 +1084,53 @@ async function main() {
   writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', canonical: '/people', ogPath: '/people', route: 'people', body: peopleBody,
     jsonld: [crumbLd(['Home', '/'], ['People', '/people']), listLd('Indian actors and filmmakers', hubPeople.map(k => '/person/' + k))] });
 
-  // ----- News: /news and one page per published story -----
+  // ----- News (/news) and the product blog (/blog): one page per published story or post, and a hub for each -----
+  // Both live in Firestore "news"; blog posts have kind "blog".
   const newsSorted = newsPosts.slice().sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+  const postKind = p => p.kind === 'blog' ? 'blog' : 'news';
   {
+    const KINDS = {
+      news: { base: '/news', label: 'News', what: 'story', more: 'More news', ld: 'NewsArticle', by: 'By Reelscore', hubTitle: 'Indian Movie & OTT News | Reelscore',
+        hubDesc: 'Release dates, OTT premieres and news on Bollywood and regional Indian films and series, written by the Reelscore team.',
+        lead: 'Release dates, streaming premieres and what’s new in Indian cinema and series, written by the Reelscore team.', none: 'No stories yet. Check back soon.' },
+      blog: { base: '/blog', label: 'Blog', what: 'post', more: 'More from the blog', ld: 'BlogPosting', by: 'By the Reelscore team', hubTitle: 'Reelscore Blog: Product News & Updates',
+        hubDesc: 'What’s new on Reelscore, how verdicts and scores work, and what the team is building next.',
+        lead: 'What’s new on Reelscore, how it works and what we’re building next, from the Reelscore team.', none: 'No posts yet. Check back soon.' }
+    };
     const byId = new Map(movies.map(m => [m.id, m]));
     const titlesOf = p => (Array.isArray(p.titles) ? p.titles : []).map(id => byId.get(id)).filter(Boolean);
     const coverOf = (p, w) => { const u = safeUrl(p.coverUrl); if (u) return cld(u, w); const m = titlesOf(p)[0]; const b = m && (safeUrl(m.data.bannerUrl) || safeUrl(m.data.posterUrl)); return b ? cld(b, w) : ''; };
     const day = iso => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10) : '';
-    const li = p => '<li><a href="/news/' + esc(p.slug) + '">' + esc(p.title) + '</a>' + (day(p.publishedAt) ? '<span class="note"> · ' + fmtDate(day(p.publishedAt)) + '</span>' : '') + (p.summary ? '<br><span class="note">' + esc(p.summary) + '</span>' : '') + '</li>';
-    for (const p of newsSorted) {
-      const url = '/news/' + p.slug, cover = coverOf(p, 1280), ts = titlesOf(p), more = newsSorted.filter(x => x !== p).slice(0, 4);
-      const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/news">News</a></nav>' +
-        '<h1>' + esc(p.title) + '</h1>' + (p.summary ? '<p class="nwdek">' + esc(p.summary) + '</p>' : '') +
-        '<p class="note">By Reelscore' + (day(p.publishedAt) ? ' · <time datetime="' + day(p.publishedAt) + '">' + fmtDate(day(p.publishedAt)) + '</time>' : '') + '</p>' +
-        (cover ? '<img class="nwcover" src="' + esc(cover) + '" alt="' + esc(p.coverAlt || '') + '" width="1280" height="720" fetchpriority="high">' : '') +
-        '<div class="nwbody">' + newsHtml(p.body) + '</div>' +
-        (ts.length ? '<h2>' + (ts.length === 1 ? 'In this story' : 'Titles in this story') + '</h2><ul>' + ts.map(m => '<li><a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a>' + (year(m.data) ? ' (' + year(m.data) + ')' : '') + '</li>').join('') + '</ul>' : '') +
-        (more.length ? '<h2>More news</h2><ul class="nwlist">' + more.map(li).join('') + '</ul>' : '');
-      const description = clip(p.summary || String(p.body || '').replace(/[#*>\[\]()-]/g, ' '), 158);
-      const node = { '@context': 'https://schema.org', '@type': 'NewsArticle', headline: clip(p.title, 110), description, url: SITE + url, mainEntityOfPage: SITE + url,
-        datePublished: p.publishedAt || undefined, dateModified: p.updatedAt || p.publishedAt || undefined, image: cover ? [cover] : undefined,
-        author: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' }, publisher: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: { '@type': 'ImageObject', url: SITE + '/icon-512.png' } },
-        about: ts.length ? ts.map(m => ({ '@type': isTv(m.data) ? 'TVSeries' : 'Movie', name: m.data.title, url: SITE + movieUrl(m) })) : undefined };
-      write(url.slice(1) + '.html', page(shell, { title: clip(p.title, 48) + ' | Reelscore', description, canonical: url, ogType: 'article', image: cover || null, wide: true, route: 'news', body,
-        jsonld: [node, crumbLd(['Home', '/'], ['News', '/news'], [clip(p.title, 60), url])] }));
-      sitemap.push({ loc: url, lastmod: day(p.updatedAt) || day(p.publishedAt), pri: '0.7' });
+    for (const [kind, K] of Object.entries(KINDS)) {
+      const posts = newsSorted.filter(p => postKind(p) === kind);
+      const li = p => '<li><a href="' + K.base + '/' + esc(p.slug) + '">' + esc(p.title) + '</a>' + (day(p.publishedAt) ? '<span class="note"> · ' + fmtDate(day(p.publishedAt)) + '</span>' : '') + (p.summary ? '<br><span class="note">' + esc(p.summary) + '</span>' : '') + '</li>';
+      for (const p of posts) {
+        const url = K.base + '/' + p.slug, cover = coverOf(p, 1280), ts = titlesOf(p), more = posts.filter(x => x !== p).slice(0, 4);
+        const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="' + K.base + '">' + K.label + '</a></nav>' +
+          '<h1>' + esc(p.title) + '</h1>' + (p.summary ? '<p class="nwdek">' + esc(p.summary) + '</p>' : '') +
+          '<p class="note">' + K.by + (day(p.publishedAt) ? ' · <time datetime="' + day(p.publishedAt) + '">' + fmtDate(day(p.publishedAt)) + '</time>' : '') + '</p>' +
+          (cover ? '<img class="nwcover" src="' + esc(cover) + '" alt="' + esc(p.coverAlt || '') + '" width="1280" height="720" fetchpriority="high">' : '') +
+          '<div class="nwbody">' + newsHtml(p.body) + '</div>' +
+          (ts.length ? '<h2>' + (ts.length === 1 ? 'In this ' : 'Titles in this ') + K.what + '</h2><ul>' + ts.map(m => '<li><a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a>' + (year(m.data) ? ' (' + year(m.data) + ')' : '') + '</li>').join('') + '</ul>' : '') +
+          (more.length ? '<h2>' + K.more + '</h2><ul class="nwlist">' + more.map(li).join('') + '</ul>' : '');
+        const description = clip(p.summary || String(p.body || '').replace(/[#*>\[\]()-]/g, ' '), 158);
+        const node = { '@context': 'https://schema.org', '@type': K.ld, headline: clip(p.title, 110), description, url: SITE + url, mainEntityOfPage: SITE + url,
+          datePublished: p.publishedAt || undefined, dateModified: p.updatedAt || p.publishedAt || undefined, image: cover ? [cover] : undefined,
+          author: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' }, publisher: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: { '@type': 'ImageObject', url: SITE + '/icon-512.png' } },
+          about: ts.length ? ts.map(m => ({ '@type': isTv(m.data) ? 'TVSeries' : 'Movie', name: m.data.title, url: SITE + movieUrl(m) })) : undefined };
+        write(url.slice(1) + '.html', page(shell, { title: clip(p.title, 48) + ' | Reelscore', description, canonical: url, ogType: 'article', image: cover || null, wide: true, route: 'news', body,
+          jsonld: [node, crumbLd(['Home', '/'], [K.label, K.base], [clip(p.title, 60), url])] }));
+        sitemap.push({ loc: url, lastmod: day(p.updatedAt) || day(p.publishedAt), pri: kind === 'news' ? '0.7' : '0.5' });
+      }
+      const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + K.label + '</nav><h1>' + K.label + '</h1>' +
+        '<p>' + K.lead + '</p>' + (posts.length ? '<ul class="nwlist">' + posts.map(li).join('') + '</ul>' : '<p class="note">' + K.none + '</p>');
+      writeHub(K.base.slice(1) + '.html', { title: K.hubTitle, description: K.hubDesc, canonical: K.base, ogPath: K.base, route: 'news', body,
+        robots: posts.length ? undefined : 'noindex,follow',
+        jsonld: [crumbLd(['Home', '/'], [K.label, K.base])].concat(posts.length ? [listLd('Reelscore ' + K.label.toLowerCase(), posts.map(p => K.base + '/' + p.slug))] : []) });
+      if (posts.length) sitemap.push({ loc: K.base, pri: kind === 'news' ? '0.6' : '0.4' });
+      console.log(`[seo] ${kind}: ${posts.length} published`);
     }
-    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › News</nav><h1>News</h1>' +
-      '<p>Release dates, streaming premieres and what’s new in Indian cinema and series, written by the Reelscore team.</p>' +
-      (newsSorted.length ? '<ul class="nwlist">' + newsSorted.map(li).join('') + '</ul>' : '<p class="note">No stories yet. Check back soon.</p>');
-    writeHub('news.html', { title: 'Indian Movie & OTT News | Reelscore', description: 'Release dates, OTT premieres and news on Bollywood and regional Indian films and series, written by the Reelscore team.', canonical: '/news', ogPath: '/news', route: 'news', body,
-      robots: newsSorted.length ? undefined : 'noindex,follow',
-      jsonld: [crumbLd(['Home', '/'], ['News', '/news'])].concat(newsSorted.length ? [listLd('Reelscore news', newsSorted.map(p => '/news/' + p.slug))] : []) });
-    if (newsSorted.length) sitemap.push({ loc: '/news', pri: '0.6' });
     write('news-data.json', JSON.stringify(newsSorted));
-    console.log(`[seo] news: ${newsSorted.length} stories`);
   }
 
   // ----- About / how scores work -----
@@ -1294,7 +1306,7 @@ async function main() {
   const stats = { lang: {}, year: {} };
   movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(), y = String(m.data.releaseDate || '').slice(0, 4);
     if (/^[A-Za-z]+$/.test(l)) stats.lang[l] = (stats.lang[l] || 0) + 1; if (/^\d{4}$/.test(y)) stats.year[y] = (stats.year[y] || 0) + 1; });
-  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';' + HERO_JS + 'window.RS_BTNS=' + JSON.stringify(data.buttons) + ';window.RS_NEWS=' + JSON.stringify(newsSorted.slice(0, 300).map(p => ({ slug: p.slug, title: p.title, publishedAt: p.publishedAt || '', coverUrl: p.coverUrl || '', coverAlt: p.coverAlt || '', titles: Array.isArray(p.titles) ? p.titles : [] }))).replace(/</g, '\\u003c') + ';\n';
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';' + HERO_JS + 'window.RS_BTNS=' + JSON.stringify(data.buttons) + ';window.RS_NEWS=' + JSON.stringify(newsSorted.slice(0, 300).map(p => ({ kind: postKind(p), slug: p.slug, title: p.title, publishedAt: p.publishedAt || '', coverUrl: p.coverUrl || '', coverAlt: p.coverAlt || '', titles: Array.isArray(p.titles) ? p.titles : [] }))).replace(/</g, '\\u003c') + ';\n';
   const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);
