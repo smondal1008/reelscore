@@ -879,10 +879,12 @@
   function runtimeMin(d) { var r = String(d.runtime || ''), hh = r.match(/(\d+)\s*h/i), mm = r.match(/(\d+)\s*m/i); var t = (hh ? +hh[1] * 60 : 0) + (mm ? +mm[1] : 0); if (!t && /^\d+$/.test(r)) t = +r; return t || 0; }
   function daysSince(iso) { if (!iso || iso.length < 10) return 9999; return Math.floor((Date.parse(today()) - Date.parse(iso.slice(0, 10))) / 864e5); }
   // State: answers persist on this device; titles passed over with "None of these" are only dropped for the session.
+  var TN_RECENT_DAYS = 730, TN_ERAS = [['recent', 'Recent'], ['old', 'Older'], ['any', 'Any']];
   function tnState() {
     if (!S.tonight) {
       var saved = {}; try { saved = JSON.parse(localStorage.getItem('rs_tonight') || '{}') || {}; } catch (e) {}
       S.tonight = { where: saved.where === 'out' ? 'out' : 'home', time: saved.time === 'short' ? 'short' : 'any',
+        era: saved.era === 'recent' || saved.era === 'old' ? saved.era : 'any',
         mood: TN_MOODS.some(function (x) { return x[0] === saved.mood; }) ? saved.mood : 'thrill',
         langs: Array.isArray(saved.langs) ? saved.langs : [], seen: [], step: 'ask', allLangs: false,
         // The 3 cards (title ids, null = no pick left), how often each slot has changed (drives the flip-in), the
@@ -891,7 +893,7 @@
     }
     return S.tonight;
   }
-  function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, mood: t.mood, langs: t.langs })); } catch (e) {} }
+  function tnSave() { var t = S.tonight; try { localStorage.setItem('rs_tonight', JSON.stringify({ where: t.where, time: t.time, era: t.era, mood: t.mood, langs: t.langs })); } catch (e) {} }
   // Taste profile from the watchlist and verdicts (same weights as "More like what you love").
   function tasteModel() {
     var vv = S.uid && S.verdicts[S.uid] ? S.verdicts[S.uid].v || {} : {};
@@ -964,10 +966,15 @@
       if (!fit) return;
       var moodW = fit * 1.2 + (gl[0] && mood[2].test(gl[0]) ? 1.5 : 0);
       var rt = runtimeMin(d); if (t.time === 'short' && rt > 120) return;
+      // "How new?" (at home only; cinemas are new by nature). Recent = first released in the last 2 years, Older = before that.
+      var era = t.where === 'out' ? 'any' : t.era, made = daysSince(d.releaseDate);
+      if (era === 'recent' && made > TN_RECENT_DAYS) return;
+      if (era === 'old' && (made <= TN_RECENT_DAYS || made === 9999)) return;
       var sc = score(m.id), pct = shownPct(sc), age = daysSince(t.where === 'out' ? d.releaseDate : (d.ottReleaseDate || d.releaseDate));
       // Taste is capped so a viewer's saved and rated titles (often older films) can't outweigh how new a title is.
       // Newer titles get a bigger lift, and anything over five years old is pushed down.
-      var taste = tm.score(m), fresh = age <= 30 ? 2 : age <= 90 ? 1.5 : age <= 365 ? 1 : age <= 730 ? 0.5 : age <= 1825 ? 0 : -1.5;
+      // Asking for older titles turns the recency lift off, so the best-liked fits come first.
+      var taste = tm.score(m), fresh = era === 'old' ? 0 : age <= 30 ? 2 : age <= 90 ? 1.5 : age <= 365 ? 1 : age <= 730 ? 0.5 : age <= 1825 ? 0 : -1.5;
       var w = moodW + Math.max(-3, Math.min(2.5, taste)) + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && t.time === 'short' ? 0.3 : 0);
       out.push({ m: m, w: w, taste: taste, pct: pct, age: age, rt: rt, cert: cert });
     });
@@ -991,9 +998,9 @@
       : h('a', { class: 'btn small tncta', href: movieUrl(m), text: 'Where to watch' });
   }
   function tnSummary(t) {
-    return [t.where === 'out' ? 'Going out' : 'At home', t.time === 'short' ? 'Under 2 hrs' : 'Any length', TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1], t.langs.length ? t.langs.join(' or ') : 'Any language'].join(' · ');
+    return [t.where === 'out' ? 'Going out' : 'At home', t.time === 'short' ? 'Under 2 hrs' : 'Any length'].concat(t.where === 'out' || t.era === 'any' ? [] : [t.era === 'recent' ? 'Recent' : 'Older']).concat([TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0][1], t.langs.length ? t.langs.join(' or ') : 'Any language']).join(' · ');
   }
-  // The four questions. onChange redraws whatever holds them.
+  // The questions. onChange redraws whatever holds them.
   function tnQuestions(t, onChange) {
     var set = function (k, v) { t[k] = v; t.seen = []; t.rating = null; tnSave(); tnFill(t, false); onChange(); };
     var group = function (label, kids) { return h('div', { class: 'tnq', role: 'group', 'aria-label': label }, [h('div', { class: 'tnql', text: label }), h('div', { class: 'tnopts' }, kids)]); };
@@ -1007,13 +1014,14 @@
     var out = [
       group('Where are you watching?', [opt('where', 'home', 'At home', 'home'), opt('where', 'out', 'Going out', 'ticket')]),
       group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
+      t.where === 'out' ? null : group('How new?', TN_ERAS.map(function (x) { return opt('era', x[0], x[1]); })),
       group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1], MOOD_IC[x[0]]); })),
       group('Languages (pick any)', [h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(!t.langs.length), text: 'Any', on: { click: function () { set('langs', []); } } })]
         .concat(langs.map(function (l) { var on = t.langs.indexOf(l) !== -1; return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(on), text: l, on: { click: function () { set('langs', on ? t.langs.filter(function (y) { return y !== l; }) : t.langs.concat([l])); } } }); }))
         .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
     ];
     S.tnChipGo = null;
-    return out;
+    return out.filter(Boolean);
   }
   // Tonight card art with a ▶ on it (no label) when the title has a YouTube trailer. Tapping plays it in the art's place, with sound;
   // the player loads only then, so the cards stay light. ✕ or Esc puts the art back. One trailer plays at a time.
@@ -1245,7 +1253,7 @@
     };
     var canMore = unpinned.length && tnNext(t).length;
     var empty = !any && !t.pins.length ? h('div', { class: 'tnempty' }, [
-      t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages or Any length' + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
+      t.seen.length ? 'That’s everything for these answers. Try another mood or more languages, or ' : 'Nothing matches these answers right now. Try another mood, more languages or Any length' + (t.where === 'home' && t.era !== 'any' ? ', or Any under How new' : '') + (myApps().length && t.where === 'home' ? ', or check your apps' : '') + '.',
       t.seen.length ? h('button', { type: 'button', class: 'linkbtn', text: 'see the first picks again', on: { click: function () { t.seen = []; tnFill(t, false); onChange(); } } }) : null,
       t.seen.length ? '.' : null]) : null;
     return { list: h('div', { class: 'tngrid' }, kids), bar: bar, empty: empty, thin: null,
