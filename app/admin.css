@@ -44,6 +44,7 @@
   .tnav-n { color: var(--dim); font-size: 12px; padding: 0 6px; white-space: nowrap; font-variant-numeric: tabular-nums; }
   .totop { position: fixed; right: 24px; bottom: 24px; z-index: 30; width: 44px; height: 44px; border-radius: 50%; border: 1px solid var(--line2); background: var(--panel2); color: var(--text); font-size: 20px; line-height: 1; cursor: pointer;
     box-shadow: 0 6px 20px rgba(0,0,0,.45); opacity: 0; transform: translateY(10px); pointer-events: none; transition: opacity .2s, transform .2s, border-color .15s; }
+  .note.autoset { display: block; margin-top: 6px; color: var(--ok); }
   .totop.on { opacity: 1; transform: none; pointer-events: auto; }
   #editPage:has(~ #savebar:not([hidden])) .totop { bottom: 96px; } /* sit above the save bar */
   .totop:hover { border-color: var(--accent); color: var(--accent); }

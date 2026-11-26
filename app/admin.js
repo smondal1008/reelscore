@@ -1631,7 +1631,7 @@ window.ReelAdmin = function (env) {
   }
   var leaveAsking = false;
   function select(id) {
-    currentId = id; pendingSwitch = null; remoteChanged = false; confirmDelete = false;
+    currentId = id; linkAuto = null; pendingSwitch = null; remoteChanged = false; confirmDelete = false;
     var m = movies.find(function (x) { return x.id === id; });
     draft = m ? clone(m.data) : null;
     setDirty(false);
@@ -1728,6 +1728,48 @@ window.ReelAdmin = function (env) {
     'Star Maa', 'Gemini TV', 'Zee Telugu', 'ETV Telugu', 'Colors Kannada', 'Zee Kannada', 'Star Suvarna', 'Udaya TV', 'Star Pravah', 'Zee Marathi',
     'Colors Marathi', 'Sony Marathi', 'Star Jalsha', 'Zee Bangla', 'Colors Bangla', 'Colors Gujarati', 'PTC Punjabi', 'Nickelodeon', 'Disney Channel',
     'Pogo', 'Cartoon Network', 'MTV', 'Discovery', 'Animal Planet', 'History TV18', 'TLC', 'Investigation Discovery', 'Epic TV'];
+  // Streaming platform from a streaming link's web address (www. and app. prefixes ignored; sub-domains match their parent).
+  var PLAT_HOSTS = [
+    [/(^|\.)amazon\.[a-z.]+$/, function (u) { return /minitv/i.test(u.pathname) ? 'Amazon miniTV' : 'Prime Video'; }],
+    ['netflix.com', 'Netflix'], ['primevideo.com', 'Prime Video'], ['mxplayer.in', 'Amazon MX Player'],
+    ['hotstar.com', 'JioHotstar'], ['jiohotstar.com', 'JioHotstar'], ['jiocinema.com', 'JioHotstar'],
+    ['zee5.com', 'ZEE5'], ['sonyliv.com', 'SonyLIV'], ['sunnxt.com', 'Sun NXT'], ['aha.video', 'aha'], ['hoichoi.tv', 'Hoichoi'],
+    ['altt.co.in', 'ALTT'], ['altbalaji.com', 'ALTT'], ['tv.apple.com', 'Apple TV'], ['youtube.com', 'YouTube'], ['youtu.be', 'YouTube'],
+    ['lionsgateplay.com', 'Lionsgate Play'], ['discoveryplus.in', 'discovery+'], ['discoveryplus.com', 'discovery+'], ['erosnow.com', 'Eros Now'],
+    ['shemaroome.com', 'ShemarooMe'], ['hungama.com', 'Hungama Play'], ['ultrajhakaas.com', 'Ultra Jhakaas'], ['planetmarathiott.com', 'Planet Marathi'],
+    ['manoramamax.com', 'ManoramaMAX'], ['simplysouth.tv', 'Simply South'], ['chaupal.tv', 'Chaupal'], ['addatimes.com', 'Addatimes'], ['klikk.tv', 'Klikk'],
+    ['tentkotta.com', 'Tentkotta'], ['nammaflix.com', 'Namma Flix'], ['sainaplay.com', 'Saina Play'], ['neestream.com', 'Neestream'],
+    ['crunchyroll.com', 'Crunchyroll'], ['mubi.com', 'MUBI'], ['airtelxstream.in', 'Airtel Xstream Play'], ['tataplaybinge.com', 'Tata Play Binge'],
+    ['binge.tataplay.com', 'Tata Play Binge'], ['waves.pb.gov.in', 'Waves'], ['stage.in', 'Stage'], ['epicon.in', 'Epic ON'], ['docubay.com', 'DocuBay'],
+    ['dangalplay.com', 'Dangal Play'], ['tvfplay.com', 'TVFPlay'], ['viu.com', 'Viu'], ['ullu.app', 'Ullu'], ['gemplex.tv', 'Gemplex'],
+    ['bioscopelive.com', 'Bioscope'], ['chorki.com', 'Chorki'], ['yupptv.com', 'YuppTV'], ['moviesandtv.myvi.in', 'Vi Movies & TV'],
+    [/(^|\.)bookmyshow\.com$/, function (u) { return /stream/i.test(u.pathname) ? 'BookMyShow Stream' : ''; }]
+  ];
+  function platformFromUrl(url) {
+    var u; try { u = new URL(String(url || '').trim()); } catch (e) { return ''; }
+    var host = u.hostname.toLowerCase().replace(/^(www|app|m)\./, '');
+    for (var i = 0; i < PLAT_HOSTS.length; i++) {
+      var k = PLAT_HOSTS[i][0], v = PLAT_HOSTS[i][1];
+      if (typeof k === 'string' ? host === k || host.slice(-k.length - 1) === '.' + k : k.test(host)) return typeof v === 'function' ? v(u) : v;
+    }
+    return '';
+  }
+  // Adding a streaming link fills in the rest: the platform from the link's address, and for films Now playing
+  // becomes Now on OTT (which moves it to On OTT or Older releases). Not when the OTT Release Date is still ahead,
+  // and Direct to OTT is left as it is. Returns what changed, for the note under the link.
+  var linkAuto = null;
+  function applyStreamingLink() {
+    var url = safeUrl(String(draft.platformUrl || '').trim()), did = [];
+    if (!url) return did;
+    var plat = platformFromUrl(url), cur = String(draft.platform || '');
+    var same = plat && cur.split('/').some(function (x) { x = x.trim().toLowerCase(); return x === plat.toLowerCase() || x.indexOf('now ' + plat.toLowerCase()) !== -1; });
+    if (plat && !same) { draft.platform = plat; did.push('platform set to ' + plat); }
+    var tv = draft.section === 'TV shows', ahead = draft.ottReleaseDate && draft.ottReleaseDate > npToday();
+    if (!tv && !ahead && draft.nowPlaying !== 'ott' && draft.nowPlaying !== 'direct') {
+      draft.nowPlaying = 'ott'; draft.section = npSection(draft); did.unshift('Now playing set to Now on OTT');
+    }
+    return did;
+  }
   function platformField(label, withTv, note) {
     var cur = draft.platform || '', used = {};
     movies.forEach(function (m) { var p = (m.data.platform || '').trim(); if (p) used[p] = 1; });
@@ -2607,6 +2649,12 @@ window.ReelAdmin = function (env) {
     holder.appendChild(toTopBtn);
     window.addEventListener('scroll', toTopSync, { passive: true });
   }
+  // Redraw the editor but keep the cursor where it was (a change event redraws while you tab to the next box).
+  function renderKeepFocus() {
+    var a = document.activeElement, id = a && a.id, y = window.scrollY;
+    renderEditor(); window.scrollTo(0, y);
+    if (id) { var b = $(id); if (b && b !== document.activeElement) b.focus({ preventScroll: true }); }
+  }
   function renderEditor() {
     if (page === 'titles') { renderList(); return; }
     addToTop(); toTopSync();
@@ -2732,8 +2780,21 @@ window.ReelAdmin = function (env) {
         return f; })(),
       nowPlayingField(tvEd),
       draft.section === 'On OTT' ? platformField('Streaming platform', false) : draft.section === 'Older releases' ? platformField('Now streaming on', false, 'Leave as “Not known” if you are not sure.') : tvEd ? platformField('Channel or platform', true) : null,
-      field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
-        note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' }),
+      (function () {
+        var f = field('Streaming platform URL', 'platformUrl', { type: 'url', placeholder: 'https://www.netflix.com/title/…',
+          note: 'Shown as a “Watch on …” button on the title page. Leave blank to hide it. Starts with https://' + (tvEd ? ' Adding one fills in the platform.' : ' Adding one fills in Now playing and the platform.') });
+        var inp = f.querySelector('input');
+        if (linkAuto && linkAuto.id === currentId) f.appendChild(h('span', { class: 'note autoset', text: linkAuto.text }));
+        // After the event, so the box you tabbed to keeps the cursor through the redraw.
+        inp.addEventListener('change', function () { setTimeout(onLink, 0); });
+        function onLink() {
+          var did = applyStreamingLink();
+          if (!did.length) { if (safeUrl(inp.value.trim()) && !platformFromUrl(inp.value)) { linkAuto = { id: currentId, text: 'Couldn’t tell the platform from this link. Pick it by hand.' }; renderKeepFocus(); } return; }
+          var t = did.join(' and '); linkAuto = { id: currentId, text: '✓ ' + t.charAt(0).toUpperCase() + t.slice(1) + ', from this link.' };
+          touch(); renderKeepFocus();
+        }
+        return f;
+      })(),
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
       field('OTT Release Date', 'ottReleaseDate', { type: 'date', note: 'When it starts streaming. Leave blank if not announced.' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
