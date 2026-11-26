@@ -1072,7 +1072,7 @@
     var slots = [0, 1, 2].map(function (k) {
       var id = pins[k];
       if (!id) return h('div', { class: 'tneslot', 'aria-hidden': 'true' }, [h('span', { class: 'g', text: '+' }), h('span', { class: 'tnlong', text: k === n ? (n ? 'Add another' : 'Narrow it down to one') : '' })]);
-      var m = S.byId[id], pa = artLazy(m, 'poster'), on = t.slots.indexOf(id) !== -1;
+      var m = S.byId[id], pa = artLazy(m, 'poster'), on = (t.slots || []).indexOf(id) !== -1;
       return h('div', { class: 'tnchipx' + (t.anim.chip === id ? ' new' : '') }, [
         h('span', { class: 'tnsw art', style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true' }),
         h('button', { type: 'button', class: 'tnname', text: m.data.title, 'aria-label': on ? 'Point out ' + m.data.title + ' in your picks' : 'Show ' + m.data.title + ' as a card', on: { click: function () {
@@ -1089,7 +1089,16 @@
       h('div', { class: 'tnbar-l' }, slots)
     ]);
   }
+  // Picks wait until we know who you are and have your apps, watchlist, verdicts and "Not for me" list. Drawn
+  // before that, the first 3 were swapped a moment later when that data arrived.
+  function tnReady() { return !!S.tnForce || (!!S.authDone && (!S.uid || (S.mineLoaded && !!S.verdictsIn))); }
+  function tnSkeleton() {
+    return h('div', { class: 'tngrid', 'aria-busy': 'true', 'aria-label': 'Getting your 3 picks' }, [0, 1, 2].map(function () {
+      return h('article', { class: 'tnpick tnskel', 'aria-hidden': 'true' }, [h('div', { class: 'tnart sk' }), h('div', { class: 'sk l1' }), h('div', { class: 'sk l2' }), h('div', { class: 'sk l3' }), h('div', { class: 'sk b1' }), h('div', { class: 'sk b2' })]);
+    }));
+  }
   function tnPicks(t, onChange, wide) {
+    if (!tnReady()) return { list: tnSkeleton(), bar: tnBar(t, onChange), empty: null, thin: null, again: h('button', { type: 'button', class: 'btn', disabled: true, text: 'Show 3 more' }) };
     if (!t.slots) tnFill(t, true);
     var pool = tnPool(t), byId = {}; pool.forEach(function (o) { byId[o.m.id] = o; });
     // A shortlisted title brought back from the bar may not fit tonight's answers: it still gets its card.
@@ -4339,6 +4348,8 @@
   }
   // The catalogue comes from the CDN and doesn't wait for Firebase.
   loadCatalogue();
+  // If the account data never arrives, Tonight still shows picks after a few seconds.
+  setTimeout(function () { if (!tnReady()) { S.tnForce = true; render(); } }, 5000);
   var cl = window.claude;
   if (!cl || typeof cl.use !== 'function') { clearTimeout(timer); S.loadMsg = 'Couldn’t start. Check firebase-config.js.'; render(true); return; }
   cl.use('user').then(function (u) {
@@ -4350,6 +4361,8 @@
       setupMeMenu(me);
     });
   }).catch(function () {}).then(function () {
+    // Signed out: nothing more to wait for before Tonight picks (signed in waits for the profile and verdicts below).
+    S.authDone = true; if (!S.uid && S.loaded) render();
     return cl.use('assets').then(function (a) { S.assets = a; }).catch(function () {});
   }).then(function () { return cl.use('db'); }).then(function (db) {
     // Admins: unpublished titles, which the public catalogue leaves out, so their pages can be previewed.
