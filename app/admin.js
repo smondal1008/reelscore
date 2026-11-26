@@ -1,7 +1,7 @@
 
 window.ReelAdmin = function (env) {
   var SECTIONS = ['In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Films not in Google', 'TV not in Google', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing characters', 'Missing synopsis', 'No OTT link'];
+  var FILTERS = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows', 'Films not in Google', 'TV not in Google', 'Missing info', 'Missing photos', 'Missing posters', 'Missing trailers', 'Missing songs', 'Missing interviews', 'Missing cast', 'Missing characters', 'Missing synopsis', 'Missing OTT name', 'No OTT link'];
   var VIDEO_KINDS = ['Trailer', 'Teaser', 'Promo', 'Song', 'Soundtrack', 'Episode', 'Clip'];
   var EXTRA_KINDS = ['Announcement', 'Trailer breakdown', 'Post-credit scene breakdown', 'Post-credit scenes compilation'];
   var POSTER_KINDS = ['Main', 'Character', 'Regional', 'IMAX & formats', 'Teaser'];
@@ -1416,7 +1416,7 @@ window.ReelAdmin = function (env) {
 
   // ---------- list ----------
   var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section', star: 'Star power' };
-  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Films not in Google': 'films-not-in-google', 'TV not in Google': 'tv-not-in-google', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'No OTT link': 'no-ott-link' };
+  var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Films not in Google': 'films-not-in-google', 'TV not in Google': 'tv-not-in-google', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'Missing OTT name': 'missing-ott-name', 'No OTT link': 'no-ott-link' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   // Star power: how many lead roles a title's two leads have. A lead role is a published title where the person is one of
   // the first 2 billed actors (crew, hosts, judges, narrators, guests, cameos and voices don't count). A title's score
@@ -1502,7 +1502,7 @@ window.ReelAdmin = function (env) {
     if (location.pathname + location.search !== url) history.replaceState(null, '', url);
   }
   // Section chips pick one section (tap again for All); Missing chips stack, and a title must be missing every picked one.
-  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing interviews': 'interviews', 'Missing cast': 'cast', 'Missing characters': 'characters', 'Missing synopsis': 'synopsis', 'No OTT link': 'ott-link' };
+  var MISS_SLUG = { 'Missing info': 'info', 'Missing photos': 'photos', 'Missing posters': 'posters', 'Missing trailers': 'trailers', 'Missing songs': 'songs', 'Missing interviews': 'interviews', 'Missing cast': 'cast', 'Missing characters': 'characters', 'Missing synopsis': 'synopsis', 'Missing OTT name': 'ott-name', 'No OTT link': 'ott-link' };
   function isMiss(f) { return !!MISS_SLUG[f]; }
   // With Missing info picked, the field chips (fieldF) narrow it to titles missing every picked field.
   function chipOk(d, id, sec, miss, fields) {
@@ -1602,7 +1602,9 @@ window.ReelAdmin = function (env) {
     return a.some(function (c) { return !String(c.character || '').trim(); });
   }
   function missingCast(d) { return !(d.cast || []).some(function (c) { return String(c.name || '').trim() && !/(director|producer|music|writer|screenplay|composer|cinematograph|editor|lyric|singer)/i.test(c.role || ''); }); }
-  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing characters' ? missingChars(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : f === 'Films not in Google' ? d.section !== 'TV shows' && seoTier(d, id) !== 'good' : f === 'TV not in Google' ? d.section === 'TV shows' && seoTier(d, id) !== 'good' : d.section === f); }
+  // "Now streaming on" (the platform field) is empty. Films still in theatres or not yet out can't have one, so they're left out.
+  function missingOttName(d) { return !String(d.platform || '').trim() && d.section !== 'Coming soon' && d.section !== 'In theatres'; }
+  function matchSection(d, f, id) { return f === 'All' || (f === 'Missing info' ? missing(d, id).length > 0 : f === 'Missing photos' ? missingPhotos(d) : f === 'Missing posters' ? !safeUrl(d.posterUrl) : f === 'Missing trailers' ? missingTrailer(d) : f === 'Missing songs' ? missingSongs(d) : f === 'Missing interviews' ? !(d.interviews || []).some(function (v) { return (v.url || '').trim(); }) : f === 'Missing cast' ? missingCast(d) : f === 'Missing characters' ? missingChars(d) : f === 'Missing synopsis' ? missingSynopsis(d, id) : f === 'Missing OTT name' ? missingOttName(d) : f === 'No OTT link' ? !safeUrl(d.platformUrl) : f === 'Films not in Google' ? d.section !== 'TV shows' && seoTier(d, id) !== 'good' : f === 'TV not in Google' ? d.section === 'TV shows' && seoTier(d, id) !== 'good' : d.section === f); }
   // Movies or TV shows (any list filter can be combined with it).
   var TYPE_OPTS = { movies: 'Movies', tv: 'TV shows' };
   function typeOk(d, t) { return !t || (t === 'tv' ? d.section === 'TV shows' : d.section !== 'TV shows'); }
@@ -3059,7 +3061,15 @@ window.ReelAdmin = function (env) {
         note: 'One line, in our own words, shown on the Home, Movies and TV Shows banners. Empty: the banner uses the first sentence of the synopsis.' }),
       field('Synopsis', 'synopsis', { type: 'textarea', wide: true, placeholder: 'One or two sentences, no spoilers. Shown on the title page.' }),
       field('Countdown name', 'cdName', { max: 30, placeholder: 'e.g. Doomsday Clock', note: 'Optional. Names the release countdown on the title page, for a big release. Empty: the usual countdown.' }),
-      field('Countdown colour', 'cdColor', { placeholder: '#7BD88F', note: 'Optional, as #RRGGBB. Colours the named countdown.' })
+      field('Countdown colour', 'cdColor', { placeholder: '#7BD88F', note: 'Optional, as #RRGGBB. Colours the named countdown.' }),
+      (function () {
+        // Popular: films with 20+ verdicts count anyway; this marks others by hand. Streaming films then get
+        // "Review, Cast & Where to Watch" in their page title.
+        var cb = h('input', { type: 'checkbox', id: 'f_popular', checked: draft.popular === true, disabled: !canWrite, style: 'width:20px;height:20px;accent-color:var(--accent);cursor:pointer' });
+        cb.addEventListener('change', function () { draft.popular = cb.checked; touch(); });
+        return h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_popular' }, ['Popular']), cb,
+          h('span', { class: 'note', text: 'Tick for a film people search for a lot. With 20+ verdicts a film counts as popular anyway. Popular streaming films get “Where to Watch” in their Google title.' })]);
+      })()
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Details' }), g2]));
     // Box office (films only): figures in ₹ crore, with the date and where they come from.

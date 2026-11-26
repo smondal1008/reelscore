@@ -118,6 +118,45 @@ function videoTitleTag(d, v, tv) {
   const a = v.seg === 'song' ? v.title + ' – ' + d.title + yy + ' Song | Reelscore' : d.title + yy + ' – ' + v.title + ' | Reelscore';
   return a.length <= 60 ? a : a.replace(/ \| Reelscore$/, '');
 }
+// Words after a title's name in its page title, picked by what the page actually has (seo/README.md and the
+// "Reelscore SEO reference" doc). Kept in step with app/main.js titleTail. o: { tv, upcoming, theatres, platform,
+// verdicts, songs, popular, boxOffice, ottDate, tickets }.
+function titleTail(base, o) {
+  const say = ws => base + ' ' + (ws.length === 1 ? ws[0] : ws.slice(0, -1).join(', ') + ' & ' + ws[ws.length - 1]);
+  let cands = [];
+  const drops = (full, order) => { const out = [full]; let c = full; order.forEach(w => { if (c.indexOf(w) !== -1 && c.length > 1) { c = c.filter(x => x !== w); out.push(c); } }); return out; };
+  if (o.tv) cands = o.platform ? drops(['Review', 'Cast', 'Where to Watch'], ['Cast', 'Where to Watch']) : drops(['Review', 'Cast'], ['Cast']);
+  else if (o.upcoming) cands = drops(o.songs ? ['Release Date', 'Songs', 'Trailer'] : ['Release Date', 'Cast', 'Trailer'], ['Trailer', 'Songs', 'Cast']);
+  else if (o.theatres) {
+    // In theatres: add words in this order while the title stays within 60 characters.
+    const order = ['Verdict', o.verdicts >= 3, 'Box Office', o.boxOffice, 'OTT Release Date', o.ottDate, 'Songs', o.songs, 'Tickets', o.tickets, 'Cast', true];
+    const ws = ['Review'];
+    for (let i = 0; i < order.length; i += 2) if (order[i + 1] && say(ws.concat(order[i])).length <= 60) ws.push(order[i]);
+    cands = [ws];
+  } else {
+    const full = !o.platform ? ['Review', 'Cast', o.songs ? 'Songs' : 'Story']
+      : o.popular ? ['Review', o.songs ? 'Songs' : 'Cast', 'Where to Watch']
+      : o.verdicts >= 3 ? ['Review', 'Verdict'].concat(o.songs ? ['Songs'] : [], ['OTT'])
+      : ['Review', 'Cast'].concat(o.songs ? ['Songs'] : [], ['OTT']);
+    cands = drops(full, ['Cast', 'Songs', 'Story', 'Verdict', 'Where to Watch', 'OTT']);
+  }
+  for (const n of [60, 65]) for (const c of cands) { const t = say(c); if (t.length <= n) return t; }
+  return (base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base.length <= 65 ? base : clip(base, 65);
+}
+// Box office figures (Admin › Box office), in ₹ crore; null when none are filled in. Same as app/main.js boData.
+function boOf(d) {
+  const n = v => { const x = parseFloat(String(v == null ? '' : v).replace(/[,₹\s]|cr(ore)?s?\.?$/ig, '')); return isFinite(x) && x > 0 ? x : null; };
+  const o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
+  return o.gross || o.nett || o.world || o.day ? o : null;
+}
+// Ticket partners with at least one working link: [{ platform, url }] (first city's link for each).
+function ticketsOf(d) {
+  const first = urls => { const u = Object.values(urls || {}).map(x => safeUrl(String(x || '').trim())).find(Boolean); return u || ''; };
+  const main = Object.assign({}, d.bookingUrls || {}); if (d.bookingUrl && !main.Bengaluru) main.Bengaluru = d.bookingUrl;
+  return [{ platform: String(d.bookingPlatform || '').trim(), url: first(main) }]
+    .concat((Array.isArray(d.moreBooking) ? d.moreBooking : []).filter(Boolean).map(x => ({ platform: String(x.platform || '').trim(), url: first(x.urls) })))
+    .filter(x => x.url);
+}
 function isoDuration(rt) {
   const s = String(rt || '').toLowerCase(); let h = 0, m = 0, x;
   if ((x = s.match(/(\d+)\s*h/))) h = +x[1];
@@ -616,12 +655,11 @@ async function main() {
     const lang = String(d.languages || '').split(/[,;]/)[0].trim();
     if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
     const p = parts.filter(Boolean), base = d.title + (p.length ? ' (' + p.join(', ') + ')' : '');
-    // Words people search with: "<title> (2026) Review, Verdict, Cast & OTT"; shorter forms when the name is long.
-    const upcoming = d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon';
-    const tails = isTv(d) ? [' Review, Cast & Where to Watch', ' Review & Where to Watch', ' Review & Cast']
-      : upcoming ? [' Release Date, Cast & Trailer', ' Release Date & Cast', ' Release Date'] : [' Review, Verdict, Cast & OTT', ' Review, Verdict & Cast', ' Review & Verdict'];
-    const fit = tails.map(t => base + t).find(t => t.length <= 65);
-    return fit || ((base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base.length <= 65 ? base : clip(base, 65));
+    const tot = score(m.id).tot;
+    return titleTail(base, { tv: isTv(d), upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', theatres: d.section === 'In theatres',
+      platform: !!String(d.platform || '').trim(), verdicts: tot, popular: d.popular === true || tot >= 20,
+      songs: ytVideos(d).some(v => v.cat === 'songs' && v.yt), boxOffice: !!boOf(d), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= TODAY,
+      tickets: !(data.buttons && data.buttons.title && data.buttons.title.book === false) && ticketsOf(d).length > 0 });
   }
   function personTitleTag(name) {
     const a = name + ' – Movies, TV Shows & Filmography | Reelscore', b = name + ' – Filmography | Reelscore';
@@ -686,9 +724,20 @@ async function main() {
     body += '<h1>' + esc(d.title) + '</h1>' + (d.subtitle ? '<div class="pr-sub">' + esc(d.subtitle) + '</div>' : '');
     body += metaLine ? '<div class="pr-meta">' + metaLine + '</div>' : '';
     if (sc.tot >= 3) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
+    // OTT release date and ticket links, in the page's HTML so search engines see what the title promises.
+    if (!tv && d.ottReleaseDate && d.ottReleaseDate >= TODAY) body += '<div class="pr-meta">OTT release: ' + esc(fmtDate(d.ottReleaseDate)) + (String(d.platform || '').trim() ? ' on ' + esc(d.platform) : '') + '</div>';
+    const tix = !tv && d.section === 'In theatres' && !(data.buttons && data.buttons.title && data.buttons.title.book === false) ? ticketsOf(d) : [];
+    if (tix.length) body += '<div class="pr-meta">Tickets: ' + tix.map(x => '<a href="' + esc(x.url) + '" rel="nofollow noopener" target="_blank">' + esc(x.platform || 'Book tickets') + '</a>').join(', ') + '</div>';
     if (directors.length) body += '<div class="pr-meta">Directed by ' + directors.map(personLink).join(', ') + '</div>';
     body += '</div></div>';
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
+    const bo = tv ? null : boOf(d);
+    if (bo) {
+      const cr = x => '₹' + (Math.round(x * 100) / 100).toLocaleString('en-IN') + ' crore';
+      const fig = [['India nett', bo.nett], ['India gross', bo.gross], ['Worldwide gross', bo.world], ['Latest day, India nett', bo.day]].filter(x => x[1]).map(x => x[0] + ': ' + cr(x[1]));
+      const src = bo.source ? ' Source: ' + (bo.url ? '<a href="' + esc(bo.url) + '" rel="nofollow noopener" target="_blank">' + esc(bo.source) + '</a>' : esc(bo.source)) + '.' : '';
+      body += '<h2>Box office</h2><p>' + esc(fig.join(' · ')) + (bo.updated ? ' (as of ' + esc(fmtDate(bo.updated)) + ')' : '') + '.' + src + '</p>';
+    }
     body += '<h2>About ' + esc(d.title) + '</h2><p>' + esc(ABOUT.title({ title: d.title, tv, date: d.releaseDate || '', year: y,
       upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', released: !!d.releaseDate && d.releaseDate <= TODAY,
       languages: d.languages, genre: d.genre, runtime: d.runtime, certificate: d.certificate, seasons: d.seasons, episodes: d.episodes, endYear: d.endYear,
@@ -755,7 +804,7 @@ async function main() {
       const vurl = url + v.path, song = v.seg === 'song', kindName = song ? 'Song' : v.kind;
       pageWhy.set(vurl, thinTitle ? 'Its title page is kept out of Google' : 'Its title page is in Google');
       const vname = song ? v.title : d.title + ' – ' + v.title, vtitle = videoTitleTag(d, v, tv);
-      const vdesc = clip((song ? v.title + ', a song from ' : (v.title.toLowerCase() === v.kind.toLowerCase() ? v.kind : v.title + ', ' + v.kind.toLowerCase()) + ' of ') + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + (/^[aeiou]/i.test(lang) ? 'an ' : 'a ') + lang + (tv ? ' series' : ' film') : '') + '. Watch it on Reelscore' + (sc.tot >= 3 ? ', where ' + sc.pct + '% of ' + sc.tot + ' viewers rate it positively' : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 158);
+      const vdesc = clip((song ? v.title + ', a song from ' : (v.title.toLowerCase().indexOf(v.kind.toLowerCase()) !== -1 ? v.title : v.title + ', ' + v.kind.toLowerCase()) + ' of ') + d.title + (y && !tv ? ' (' + y + ')' : '') + (lang ? ', ' + (/^[aeiou]/i.test(lang) ? 'an ' : 'a ') + lang + (tv ? ' series' : ' film') : '') + '. Watch it on Reelscore' + (sc.tot >= 3 ? ', where ' + sc.pct + '% of ' + sc.tot + ' viewers rate it positively' : '') + '.' + (d.synopsis ? ' ' + d.synopsis : ''), 158);
       const others = vpaths.filter(o => o !== v);
       let vb = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="' + section[1] + '">' + section[0] + '</a> › <a href="' + url + '">' + esc(d.title) + '</a> › ' + esc(kindName) + '</nav>';
       vb += '<iframe class="pr-embed" src="https://www.youtube-nocookie.com/embed/' + v.yt + '?rel=0" title="' + esc(vname) + '" width="640" height="360" loading="lazy" allow="encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>';
@@ -1118,7 +1167,7 @@ async function main() {
           datePublished: p.publishedAt || undefined, dateModified: p.updatedAt || p.publishedAt || undefined, image: cover ? [cover] : undefined,
           author: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' }, publisher: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: { '@type': 'ImageObject', url: SITE + '/icon-512.png' } },
           about: ts.length ? ts.map(m => ({ '@type': isTv(m.data) ? 'TVSeries' : 'Movie', name: m.data.title, url: SITE + movieUrl(m) })) : undefined };
-        write(url.slice(1) + '.html', page(shell, { title: clip(p.title, 48) + ' | Reelscore', description, canonical: url, ogType: 'article', image: cover || null, wide: true, route: 'news', body,
+        write(url.slice(1) + '.html', page(shell, { title: (p.title + ' | Reelscore').length <= 60 ? p.title + ' | Reelscore' : clip(p.title, 65), description, canonical: url, ogType: 'article', image: cover || null, wide: true, route: 'news', body,
           jsonld: [node, crumbLd(['Home', '/'], [K.label, K.base], [clip(p.title, 60), url])] }));
         sitemap.push({ loc: url, lastmod: day(p.updatedAt) || day(p.publishedAt), pri: kind === 'news' ? '0.7' : '0.5' });
       }

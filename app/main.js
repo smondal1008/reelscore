@@ -359,11 +359,32 @@
     var d = m.data, parts = [isTv(m) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (d.releaseDate || '').slice(0, 4)];
     if (dupTitles.map[titleKey(m)] > 1 && langOf(d)) parts.push(langOf(d));
     parts = parts.filter(Boolean);
-    var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : '');
-    // Same as scripts/build.mjs: "<title> (2026) Review, Verdict, Cast & OTT", shorter forms for long names.
-    var tails = isTv(m) ? [' Review, Cast & Where to Watch', ' Review & Where to Watch', ' Review & Cast']
-      : isUpcoming(m) ? [' Release Date, Cast & Trailer', ' Release Date & Cast', ' Release Date'] : [' Review, Verdict, Cast & OTT', ' Review, Verdict & Cast', ' Review & Verdict'];
-    for (var i = 0; i < tails.length; i++) if ((base + tails[i]).length <= 65) return base + tails[i];
+    var base = d.title + (parts.length ? ' (' + parts.join(', ') + ')' : ''), tot = score(m.id).tot;
+    return titleTail(base, { tv: isTv(m), upcoming: isUpcoming(m), theatres: d.section === 'In theatres', platform: !!String(d.platform || '').trim(),
+      verdicts: tot, popular: d.popular === true || tot >= 20,
+      songs: (d.videos || []).some(function (v) { return vidCat(v.kind) === 'songs' && !!ytId(safeUrl(v.url)); }),
+      boxOffice: !!boData(m), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= today(), tickets: btnOn('title', 'book') && hasBooking(d) });
+  }
+  // Same as scripts/build.mjs titleTail: the words after a title's name, picked by what its page actually has.
+  function titleTail(base, o) {
+    var say = function (ws) { return base + ' ' + (ws.length === 1 ? ws[0] : ws.slice(0, -1).join(', ') + ' & ' + ws[ws.length - 1]); };
+    var drops = function (full, order) { var out = [full], c = full; order.forEach(function (w) { if (c.indexOf(w) !== -1 && c.length > 1) { c = c.filter(function (x) { return x !== w; }); out.push(c); } }); return out; };
+    var cands = [], i, j;
+    if (o.tv) cands = o.platform ? drops(['Review', 'Cast', 'Where to Watch'], ['Cast', 'Where to Watch']) : drops(['Review', 'Cast'], ['Cast']);
+    else if (o.upcoming) cands = drops(o.songs ? ['Release Date', 'Songs', 'Trailer'] : ['Release Date', 'Cast', 'Trailer'], ['Trailer', 'Songs', 'Cast']);
+    else if (o.theatres) {
+      var order = ['Verdict', o.verdicts >= 3, 'Box Office', o.boxOffice, 'OTT Release Date', o.ottDate, 'Songs', o.songs, 'Tickets', o.tickets, 'Cast', true], ws = ['Review'];
+      for (i = 0; i < order.length; i += 2) if (order[i + 1] && say(ws.concat(order[i])).length <= 60) ws.push(order[i]);
+      cands = [ws];
+    } else {
+      var full = !o.platform ? ['Review', 'Cast', o.songs ? 'Songs' : 'Story']
+        : o.popular ? ['Review', o.songs ? 'Songs' : 'Cast', 'Where to Watch']
+        : o.verdicts >= 3 ? ['Review', 'Verdict'].concat(o.songs ? ['Songs'] : [], ['OTT'])
+        : ['Review', 'Cast'].concat(o.songs ? ['Songs'] : [], ['OTT']);
+      cands = drops(full, ['Cast', 'Songs', 'Story', 'Verdict', 'Where to Watch', 'OTT']);
+    }
+    var lims = [60, 65];
+    for (j = 0; j < lims.length; j++) for (i = 0; i < cands.length; i++) { var t = say(cands[i]); if (t.length <= lims[j]) return t; }
     return (base + ' | Reelscore').length <= 60 ? base + ' | Reelscore' : base;
   }
   function personTitleTag(name) {
@@ -1874,7 +1895,7 @@
         document.title = 'Not found | Reelscore'; setNoindex(true); setCanonical(null);
         w.appendChild(h('div', { class: 'empty' }, ['We couldn’t find this ' + K.what + '. ', h('a', { href: K.base, text: K.all })])); w.appendChild(footer()); return;
       }
-      setNoindex(false); setCanonical(newsUrl(p)); document.title = p.title + ' | Reelscore ' + K.label;
+      setNoindex(false); setCanonical(newsUrl(p)); document.title = (p.title + ' | Reelscore').length <= 60 ? p.title + ' | Reelscore' : p.title.length <= 65 ? p.title : p.title.slice(0, 64).replace(/\s+\S*$/, '') + '…'; // same as scripts/build.mjs
       var cover = newsCover(p, 1280), linked = newsTitles(p), more = list.filter(function (x) { return x.slug !== p.slug; }).slice(0, 4);
       w.appendChild(h('article', { class: 'nwart' }, [
         h('h1', { class: 'nwh', text: p.title }),
@@ -1903,6 +1924,9 @@
   // pages). After in-app navigation the same rule is worked out here, the meta tag is kept in step, and body.noads hides
   // any ad already on screen. Any ad script added later must call window.reelAdsAllowed() first.
   var ADS_OFF_ROUTES = { video: 1, vids: 1, about: 1, privacy: 1, contact: 1, list: 1, tonight: 1, admin: 1, notfound: 1 };
+  // The title a pre-built page arrived with (its canonical points at this address). Title pages keep it on first load,
+  // so the app doesn't swap it for one worked out before verdicts have loaded.
+  var builtHead = (function () { var c = document.querySelector('link[rel="canonical"]'), p = location.pathname.replace(/\/+$/, ''); try { return c && new URL(c.href).pathname.replace(/\/+$/, '') === p ? { path: p, title: document.title } : {}; } catch (e) { return {}; } })();
   var adsFirst = { path: location.pathname, off: !!document.querySelector('meta[name="rs-ads"][content="off"]') };
   function titleHasSubstance(m) {
     var d = m.data, syn = String(d.synopsis || '').trim().length;
@@ -2373,7 +2397,7 @@
     var m = findMovie(S.param);
     if (keep && (!m || keep._mid !== m.id)) { if (keep.parentNode) keep.parentNode.removeChild(keep); keep = null; S.vKeep = null; S.vIdle = null; }
     if (!m || (S.vplay && S.vplay.mid !== m.id)) { S.vplay = null; if (S.vKeep && S.vKeep.parentNode) S.vKeep.parentNode.removeChild(S.vKeep); S.vKeep = null; keep = null; }
-    if (m) { canonicalizeTitleUrl(m); document.title = movieTitleTag(m); setCanonical(movieUrl(m)); }
+    if (m) { canonicalizeTitleUrl(m); document.title = builtHead && builtHead.title && location.pathname.replace(/\/+$/, '') === builtHead.path ? builtHead.title : movieTitleTag(m); setCanonical(movieUrl(m)); }
     setNoindex(!m && S.loaded);
     v.classList.remove('tpage');
     if (!S.loaded || !m) { v.style.minHeight = ''; S.titleDrawnId = null; }
