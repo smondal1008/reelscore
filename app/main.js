@@ -1718,8 +1718,8 @@
       box.textContent = '';
       var seen = (S.rateSeen && S.rateSeen[m.id]) || isSeen(m.id) || myVerdict(m.id), face;
       if (seen) {
-        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title, title: 'Haven\u2019t seen it',
-          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15)]);
+        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title,
+          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Haven\u2019t seen it' })]);
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
