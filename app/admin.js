@@ -774,6 +774,161 @@ window.ReelAdmin = function (env) {
       ]));
     });
   }
+  // ---------- News: our own stories (Firestore "news"), shown at /news and /news/<slug> ----------
+  // A draft is visible only here. Publish puts it on /news straight away; the next deploy writes its page for Google.
+  var newsMode = false, newsWant = '', newsDocs = [], newsLoaded = false, newsErr = '', newsEd = null, newsDirty = false, newsPreview = false;
+  function newsCountEl() { var el = $('newsCount'); if (!el) return; var d = newsDocs.filter(function (x) { return x.data.status !== 'published'; }).length; el.textContent = newsLoaded && newsDocs.length ? (d ? d + ' draft' + (d === 1 ? '' : 's') : String(newsDocs.length)) : ''; }
+  function newsWhen(iso) { var d = new Date(iso); return isNaN(d) ? '' : d.toLocaleString('en-IN', { day: 'numeric', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }); }
+  function newsSlugTaken(slug, exceptId) { return newsDocs.some(function (x) { return x.id !== exceptId && x.data.slug === slug; }); }
+  function newsOpen(id) {
+    var doc = newsDocs.filter(function (x) { return x.id === id; })[0];
+    newsEd = doc ? { id: doc.id, d: JSON.parse(JSON.stringify(doc.data)), slugEdited: true } : { id: null, d: { title: '', slug: '', summary: '', body: '', coverUrl: '', coverId: '', coverAlt: '', titles: [], status: 'draft' }, slugEdited: false };
+    newsDirty = false; newsPreview = false;
+  }
+  function renderNews() {
+    var main = $('main'); main.innerHTML = '';
+    if (newsWant) {
+      if (!newsEd || (newsWant === 'new' ? newsEd.id : newsEd.id !== newsWant)) {
+        if (newsWant !== 'new' && !newsLoaded) { main.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+        if (newsWant !== 'new' && !newsDocs.some(function (x) { return x.id === newsWant; })) {
+          main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/news', text: '← All news' })]));
+          main.appendChild(h('div', { class: 'empty', text: 'No story at this address. It may have been deleted.' })); return;
+        }
+        newsOpen(newsWant === 'new' ? null : newsWant);
+      }
+      renderNewsEditor(main); return;
+    }
+    var pub = newsDocs.filter(function (x) { return x.data.status === 'published'; }).length;
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Our own stories' }), h('h1', { text: 'News' })]),
+        h('a', { class: 'btn primary', href: '/admin/news/new', text: '+ New story', style: 'text-decoration:none' + (canWrite ? '' : ';pointer-events:none;opacity:.5') })]),
+      h('div', { class: 'note', text: newsErr ? newsErr : !newsLoaded ? 'Loading…' : newsDocs.length ? pub + ' published, ' + (newsDocs.length - pub) + ' draft' + (newsDocs.length - pub === 1 ? '' : 's') + '. Published stories show on /news at once; their pages reach Google after the next deploy.' : 'No stories yet. Write the first one.' })
+    ]));
+    newsDocs.slice().sort(function (a, b) { return String(b.data.publishedAt || b.data.updatedAt || '').localeCompare(String(a.data.publishedAt || a.data.updatedAt || '')); }).forEach(function (x) {
+      var d = x.data, live = d.status === 'published';
+      main.appendChild(h('section', { class: 'card', style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap' }, [
+        h('div', { style: 'flex:1 1 300px;min-width:0' }, [
+          h('a', { href: '/admin/news/' + x.id, style: 'font-weight:600;font-size:16px;color:inherit', text: d.title || '(No headline)' }),
+          h('div', { class: 'note', text: (live ? 'Published ' + newsWhen(d.publishedAt) : 'Draft · last saved ' + newsWhen(d.updatedAt)) + ' · /news/' + (d.slug || '…') + ((d.titles || []).length ? ' · ' + d.titles.length + ' title' + (d.titles.length === 1 ? '' : 's') : '') })
+        ]),
+        h('span', { class: 'ntag', style: 'padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700;background:' + (live ? 'rgba(46,204,113,.18);color:#7BE0A4' : 'rgba(255,255,255,.08);color:var(--muted)'), text: live ? 'Published' : 'Draft' }),
+        live ? h('a', { class: 'btn', href: '/news/' + d.slug, target: '_blank', rel: 'noopener', text: 'View ↗', style: 'text-decoration:none' }) : null,
+        h('a', { class: 'btn', href: '/admin/news/' + x.id, text: 'Edit', style: 'text-decoration:none' })
+      ]));
+    });
+  }
+  function renderNewsEditor(main) {
+    var E = newsEd, d = E.d, live = d.status === 'published', wasLive = !!(E.id && (newsDocs.filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data.publishedAt);
+    var mark = function () { if (!newsDirty) { newsDirty = true; } stat.textContent = 'Unsaved changes'; };
+    var stat = h('span', { class: 'note', role: 'status', text: newsDirty ? 'Unsaved changes' : E.id ? (live ? 'Published' : 'Draft') + ' · saved' : 'New story · not saved yet' });
+    var titleIn = h('input', { class: 'in', id: 'nw_title', maxlength: '140', placeholder: 'e.g. Dhurandhar 2 gets a release date', disabled: !canWrite }); titleIn.value = d.title || '';
+    var slugIn = h('input', { class: 'in', id: 'nw_slug', maxlength: '90', disabled: !canWrite || wasLive }); slugIn.value = d.slug || '';
+    var slugNote = h('div', { class: 'note', text: wasLive ? 'The address can’t change once a story has been published, so links to it keep working.' : 'Filled in from the headline. Letters, numbers and dashes only.' });
+    titleIn.addEventListener('input', function () { d.title = titleIn.value; if (!E.slugEdited && !wasLive) { d.slug = urlSlug(titleIn.value).slice(0, 80); slugIn.value = d.slug; } mark(); });
+    slugIn.addEventListener('input', function () { E.slugEdited = true; d.slug = urlSlug(slugIn.value).slice(0, 90); mark(); });
+    slugIn.addEventListener('blur', function () { slugIn.value = d.slug; });
+    var sumIn = h('textarea', { class: 'in', id: 'nw_sum', rows: 2, maxlength: '220', placeholder: 'One or two sentences. Shown under the headline, in the news list and in Google.', disabled: !canWrite }); sumIn.value = d.summary || '';
+    var sumCount = h('span', { class: 'note', text: (d.summary || '').length + ' / 220' });
+    sumIn.addEventListener('input', function () { d.summary = sumIn.value; sumCount.textContent = sumIn.value.length + ' / 220'; mark(); });
+    var bodyIn = h('textarea', { class: 'in', id: 'nw_body', rows: 16, maxlength: '20000', placeholder: 'Write the story in your own words.', disabled: !canWrite, style: 'font-family:inherit;line-height:1.55' }); bodyIn.value = d.body || '';
+    var prev = h('div', { class: 'card', style: 'line-height:1.7;font-size:16px', hidden: !newsPreview });
+    var drawPrev = function () { prev.innerHTML = ''; (window.reelNewsBody ? window.reelNewsBody(d.body) : [h('p', { text: d.body || '' })]).forEach(function (n) { prev.appendChild(n); }); };
+    if (newsPreview) drawPrev();
+    bodyIn.addEventListener('input', function () { d.body = bodyIn.value; if (newsPreview) drawPrev(); mark(); });
+    var prevBtn = h('button', { type: 'button', class: 'btn', text: newsPreview ? 'Hide preview' : 'Preview', 'aria-pressed': String(newsPreview), on: { click: function () { newsPreview = !newsPreview; prev.hidden = !newsPreview; prevBtn.textContent = newsPreview ? 'Hide preview' : 'Preview'; prevBtn.setAttribute('aria-pressed', String(newsPreview)); if (newsPreview) drawPrev(); } } });
+    // Cover picture: your own upload, or (when there is none) the first title's banner.
+    var first = movies.filter(function (m) { return (d.titles || []).indexOf(m.id) !== -1; })[0];
+    var coverSrc = safeUrl(d.coverUrl) || (first && (safeUrl(first.data.bannerUrl) || safeUrl(first.data.posterUrl))) || '';
+    var coverBox = h('div', { style: 'width:240px;aspect-ratio:16/9;border-radius:10px;background:var(--panel2) center/cover no-repeat;' + bgUrl(coverSrc) });
+    var upBtn = h('button', { type: 'button', class: 'btn', disabled: !canUpload, text: safeUrl(d.coverUrl) ? 'Change picture' : 'Upload picture', on: { click: function () {
+      var fi = h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp', class: 'sr' }); document.body.appendChild(fi);
+      fi.addEventListener('change', function () {
+        var f = fi.files[0]; fi.remove(); if (!f) return;
+        if (!/^image\/(png|jpeg|webp)$/.test(f.type)) { setStatus('Use a PNG, JPEG or WebP image.'); return; }
+        if (f.size > 10 * 1024 * 1024) { setStatus('That image is over 10 MB.'); return; }
+        upBtn.disabled = true; setStatus('Uploading picture…');
+        assets.upload(f).then(function (r) { d.coverUrl = r.url; d.coverId = r.id; newsDirty = true; setStatus('Picture added. Save to keep it.'); renderNews(); })
+          .catch(function (e) { upBtn.disabled = false; setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
+      });
+      fi.click();
+    } } });
+    var rmBtn = safeUrl(d.coverUrl) ? h('button', { type: 'button', class: 'btn ghost', text: 'Remove picture', disabled: !canWrite, on: { click: function () { d.coverUrl = ''; d.coverId = ''; newsDirty = true; renderNews(); } } }) : null;
+    var altIn = h('input', { class: 'in', id: 'nw_alt', maxlength: '160', placeholder: 'What the picture shows, for screen readers', disabled: !canWrite }); altIn.value = d.coverAlt || '';
+    altIn.addEventListener('input', function () { d.coverAlt = altIn.value; mark(); });
+    // Titles the story is about: they show under the story, and the story shows on their pages.
+    var chips = h('div', { style: 'display:flex;flex-wrap:wrap;gap:8px;margin-top:8px' }, (d.titles || []).map(function (id) {
+      var m = movies.filter(function (x) { return x.id === id; })[0], nm = m ? m.data.title + (m.data.releaseDate ? ' (' + m.data.releaseDate.slice(0, 4) + ')' : '') : id;
+      return h('span', { class: 'chip', style: 'display:inline-flex;align-items:center;gap:6px' }, [nm, h('button', { type: 'button', class: 'x', 'aria-label': 'Remove ' + nm, text: '×', disabled: !canWrite, on: { click: function () { d.titles = d.titles.filter(function (x) { return x !== id; }); newsDirty = true; renderNews(); } } })]);
+    }));
+    var tIn = h('input', { class: 'in', id: 'nw_find', placeholder: 'Type a film or show name…', autocomplete: 'off', disabled: !canWrite });
+    var hits = h('div', { style: 'display:flex;flex-wrap:wrap;gap:6px;margin-top:6px' });
+    tIn.addEventListener('input', function () {
+      hits.innerHTML = ''; var q = tIn.value.trim().toLowerCase(); if (q.length < 2) return;
+      movies.filter(function (m) { return (d.titles || []).indexOf(m.id) === -1 && String(m.data.title || '').toLowerCase().indexOf(q) !== -1; })
+        .sort(function (a, b) { var as = String(a.data.title).toLowerCase().indexOf(q) === 0 ? 0 : 1, bs = String(b.data.title).toLowerCase().indexOf(q) === 0 ? 0 : 1; return as - bs || String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')); })
+        .slice(0, 8).forEach(function (m) {
+          hits.appendChild(h('button', { type: 'button', class: 'btn small', text: '+ ' + m.data.title + (m.data.releaseDate ? ' (' + m.data.releaseDate.slice(0, 4) + ')' : '') + (m.data.section === 'TV shows' ? ' · TV' : ''), on: { click: function () { d.titles = (d.titles || []).concat([m.id]).slice(0, 12); newsDirty = true; renderNews(); var x = $('nw_find'); if (x) x.focus(); } } }));
+        });
+    });
+    var problem = function (publishing) {
+      if (!String(d.title || '').trim()) return [titleIn, 'Write a headline.'];
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(d.slug || '')) return [slugIn, 'Give the story an address (letters, numbers and dashes).'];
+      if (newsSlugTaken(d.slug, E.id)) return [slugIn, 'Another story already uses /news/' + d.slug + '. Change the address.'];
+      if (publishing && String(d.summary || '').trim().length < 40) return [sumIn, 'Write a summary of at least 40 characters before publishing.'];
+      if (publishing && String(d.body || '').trim().length < 200) return [bodyIn, 'The story needs at least 200 characters before publishing.'];
+      return null;
+    };
+    var save = function (status) {
+      var publishing = status === 'published', bad = problem(publishing);
+      if (bad) { setStatus(bad[1]); bad[0].focus(); return; }
+      var now = new Date().toISOString(), id = E.id || ('n' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+      var old = (newsDocs.filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data;
+      var body = { title: d.title.trim().slice(0, 140), slug: d.slug, summary: String(d.summary || '').trim().slice(0, 220), body: String(d.body || '').trim().slice(0, 20000),
+        coverUrl: safeUrl(d.coverUrl), coverId: d.coverId || '', coverAlt: String(d.coverAlt || '').trim().slice(0, 160), titles: (d.titles || []).slice(0, 12),
+        status: status, createdAt: old.createdAt || now, updatedAt: now };
+      if (old.publishedAt) body.publishedAt = old.publishedAt; else if (publishing) body.publishedAt = now;
+      setStatus('Saving…');
+      db.doc('news/' + id).set(body).then(function () {
+        E.id = id; E.d = JSON.parse(JSON.stringify(body)); newsDirty = false;
+        setStatus(publishing ? (old.status === 'published' ? 'Saved. The change shows on /news now.' : 'Published. It’s on /news now; its page reaches Google after the next deploy.') : status === 'draft' && old.status === 'published' ? 'Unpublished. It’s back to a draft.' : 'Draft saved.');
+        if (location.pathname !== '/admin/news/' + id) history.replaceState(null, '', '/admin/news/' + id);
+        newsWant = id; renderNews();
+      }).catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+    };
+    var acts = [
+      live ? null : h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Save draft', on: { click: function () { save('draft'); } } }),
+      h('button', { type: 'button', class: 'btn primary', disabled: !canWrite, text: live ? 'Save changes' : 'Publish', on: { click: function () { save('published'); } } }),
+      live ? h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Unpublish', on: { click: function () {
+        askConfirm('Unpublish this story?', 'It leaves /news and the title pages at once. Its address stays reserved, so you can publish it again later.', 'Unpublish', false).then(function (yes) { if (yes) save('draft'); });
+      } } }) : null,
+      E.id ? h('button', { type: 'button', class: 'btn ghost', disabled: !canWrite, text: 'Delete', on: { click: function () {
+        askConfirm('Delete this story?', '“' + (d.title || 'Untitled') + '” will be removed for good. This can’t be undone.', 'Delete', true).then(function (yes) {
+          if (!yes) return;
+          db.doc('news/' + E.id).delete().then(function () { newsEd = null; newsDirty = false; setStatus('Story deleted.'); history.pushState(null, '', '/admin/news'); newsWant = ''; renderNews(); })
+            .catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });
+        });
+      } } }) : null,
+      stat
+    ];
+    main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/news', text: '← All news' }), live && E.id ? h('a', { href: '/news/' + d.slug, target: '_blank', rel: 'noopener', text: 'View on the site ↗' }) : h('span', { class: 'sub', text: E.id ? 'Draft · only admins can see it' : 'New story' })]));
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: live ? 'Published story' : 'Draft' }), h('h1', { text: d.title || 'New story' })])]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_title', text: 'Headline' }), titleIn]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_slug', text: 'Address: /news/…' }), slugIn, slugNote]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_sum', text: 'Summary' }), sumIn, sumCount]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_body', text: 'Story' }), bodyIn,
+        h('div', { class: 'note', text: 'Leave a blank line between paragraphs. ## starts a heading, - starts a list item, > a quote. **bold**. Links: [words](https://…) or [words](/movie/…).' }),
+        h('div', { style: 'margin-top:8px' }, [prevBtn])]),
+      prev,
+      h('div', { class: 'field' }, [h('label', { class: 'l', text: 'Picture' }),
+        h('div', { style: 'display:flex;gap:14px;align-items:center;flex-wrap:wrap' }, [coverBox, h('div', {}, [h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [upBtn, rmBtn]),
+          h('div', { class: 'note', style: 'margin-top:6px;max-width:360px', text: safeUrl(d.coverUrl) ? 'Only pictures you have the rights to use: a studio or platform press still, or one you took.' : 'No picture uploaded: the first title’s banner is used. Upload one only if you have the rights to use it.' })])]),
+        altIn]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'nw_find', text: 'Titles in this story' }), tIn, hits, chips,
+        h('div', { class: 'note', text: 'They show under the story, and the story shows in the News section of their pages.' })]),
+      h('div', { style: 'display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:8px' }, acts)
+    ]));
+  }
   // ---------- Buttons: Book tickets / Watch now on or off, page by page (settings/buttons) ----------
   var btnMode = false, btnCfg = {}, btnLoaded = false, btnWriting = false;
   var BTN_PLACES = [
@@ -1582,7 +1737,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1596,7 +1751,7 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; pbMode = null; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; wantSlug = null;
+    featuredMode = false; pbMode = null; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
     if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
@@ -1605,6 +1760,7 @@ window.ReelAdmin = function (env) {
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
     else if (parts[0] === 'messages') { page = 'messages'; msgMode = true; }
+    else if (parts[0] === 'news') { page = 'news'; newsMode = true; newsWant = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (newsWant !== (newsEd && (newsEd.id || 'new'))) { newsEd = null; newsDirty = false; } }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
     else { page = 'titles'; readListState(); }
     if (page !== 'title') { if (currentId === '__new__' || !dirty) { currentId = null; draft = null; setDirty(false); } }
@@ -1615,6 +1771,15 @@ window.ReelAdmin = function (env) {
     if (page === 'title' && wantSlug === 'new') { var t = $('f_title'); if (t) t.focus(); }
   }
   function canLeave(nextPath) {
+    if (page === 'news' && newsDirty && nextPath !== location.pathname) {
+      if (leaveAsking) return false;
+      var to = nextPath || (location.pathname + location.search); leaveAsking = true;
+      askConfirm('Leave without saving?', 'You have unsaved changes to this story.', 'Discard changes', true).then(function (yes) {
+        leaveAsking = false; if (!yes) return;
+        newsDirty = false; newsEd = null; history.pushState(null, '', to); window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      return false;
+    }
     if (!dirty || page !== 'title') return true;
     if (nextPath && nextPath === location.pathname) return true;
     var target = nextPath || (location.pathname + location.search);
@@ -2686,6 +2851,7 @@ window.ReelAdmin = function (env) {
     if (rowsMode) { renderRows(); return; }
     if (btnMode) { renderButtons(); return; }
     if (msgMode) { renderMessages(); return; }
+    if (newsMode) { renderNews(); return; }
     var main = $('main'); main.innerHTML = '';
     if (!draft) {
       main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/titles', text: '← All titles' })]));
@@ -3081,6 +3247,10 @@ window.ReelAdmin = function (env) {
     msgs = snap.docs.map(function (x) { return { id: x.id, data: x.data() || {} }; }); msgLoaded = true; msgErr = '';
     renderMsgCount(); if (msgMode) renderMessages();
   }, function () { msgLoaded = true; msgErr = 'Messages can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; if (msgMode) renderMessages(); });
+  db.collection('news').onSnapshot(function (snap) {
+    newsDocs = snap.docs.map(function (x) { return { id: x.id, data: x.data() || {} }; }); newsLoaded = true; newsErr = '';
+    newsCountEl(); if (newsMode && !newsDirty) renderNews();
+  }, function () { newsLoaded = true; newsErr = 'Stories can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; newsCountEl(); if (newsMode) renderNews(); });
   db.doc('settings/buttons').onSnapshot(function (snap) {
     if (btnWriting) return;
     btnCfg = snap.exists ? snap.data() : {}; btnLoaded = true; renderBtnCount();

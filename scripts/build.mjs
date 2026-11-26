@@ -183,7 +183,14 @@ function firestoreClient() {
       reads += out.length || 1;
       return out;
     },
-    async get(p) { const j = await call(base + '/' + p); reads++; return j ? toDoc(j) : null; }
+    async get(p) { const j = await call(base + '/' + p); reads++; return j ? toDoc(j) : null; },
+    async where(name, field, value) {
+      const j = await call(base + ':runQuery', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ structuredQuery: {
+        from: [{ collectionId: name }], where: { fieldFilter: { field: { fieldPath: field }, op: 'EQUAL', value: { stringValue: value } } } } }) });
+      const out = (j || []).filter(x => x.document).map(x => toDoc(x.document));
+      reads += out.length || 1;
+      return out;
+    }
   };
 }
 
@@ -424,11 +431,47 @@ function page(shell, { title, description, canonical, ogPath, ogType, image, wid
   return html.replace(slot, '<div class="view" id="view-' + route + '">' + (heroHtml || '') + '<div class="pr" data-prerendered>' + body + '</div></div>' + seedTag);
 }
 
+// ---------- News stories (Firestore "news", status "published"; written in Admin > News) ----------
+// Read in full at every build (a small collection). If the database can't be reached, the live site's news-data.json
+// (written below) stands in, so published stories never drop off the site.
+async function loadNewsPosts() {
+  if (process.env.NEWS_FIXTURE) return JSON.parse(fs.readFileSync(process.env.NEWS_FIXTURE, 'utf8'));
+  if (process.env.FIXTURE) return [];
+  try {
+    const rows = await firestoreClient().where('news', 'status', 'published');
+    return rows.map(x => ({ ...x.data, id: x.id })).filter(p => p.slug && p.title && /^[a-z0-9-]+$/.test(p.slug));
+  } catch (e) {
+    console.warn('[seo] news unavailable (' + e.message + '); reusing the live news-data.json');
+    try { const r = await fetch(SITE + '/news-data.json'); return r.ok ? await r.json() : []; } catch (e2) { return []; }
+  }
+}
+// Story text to HTML. Same rules as app/main.js newsBody: blank line = new paragraph; "## " / "### " headings; "- " list;
+// "> " quote; **bold**; [words](https://… or /…) links.
+function newsInlineHtml(s) {
+  let out = '', last = 0, m; const re = /\*\*([^*]+)\*\*|\[([^\]]+)\]\(((?:https:\/\/|\/)[^\s)]+)\)/g;
+  while ((m = re.exec(s))) {
+    out += esc(s.slice(last, m.index));
+    out += m[1] ? '<strong>' + esc(m[1]) + '</strong>' : '<a href="' + esc(m[3]) + '"' + (/^https:/.test(m[3]) ? ' rel="noopener"' : '') + '>' + esc(m[2]) + '</a>';
+    last = re.lastIndex;
+  }
+  return out + esc(s.slice(last));
+}
+function newsHtml(text) {
+  return String(text || '').replace(/\r/g, '').split(/\n\s*\n/).map(b => b.trim()).filter(Boolean).map(b => {
+    const lines = b.split('\n'), hm = lines.length === 1 && b.match(/^(#{2,3})\s+(.+)$/);
+    if (hm) { const t = hm[1].length === 2 ? 'h2' : 'h3'; return '<' + t + '>' + newsInlineHtml(hm[2]) + '</' + t + '>'; }
+    if (lines.every(l => /^\s*[-*]\s+/.test(l))) return '<ul>' + lines.map(l => '<li>' + newsInlineHtml(l.replace(/^\s*[-*]\s+/, '')) + '</li>').join('') + '</ul>';
+    if (lines.every(l => /^>/.test(l))) return '<blockquote>' + newsInlineHtml(lines.map(l => l.replace(/^>\s?/, '')).join(' ')) + '</blockquote>';
+    return '<p>' + lines.map(newsInlineHtml).join('<br>') + '</p>';
+  }).join('');
+}
+
 // ---------- main ----------
 async function main() {
   const t0 = Date.now();
   const data = await loadData();
   PREV_DATES = await previousPageDates();
+  const newsPosts = await loadNewsPosts();
   console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${data.source})`);
 
   // Editorial synopses from content/synopses.json fill titles whose database synopsis is empty.
@@ -1041,6 +1084,43 @@ async function main() {
   writeHub('people.html', { title: 'Indian Actors & Filmmakers | Reelscore', description: 'Filmographies of ' + hubPeople.length + ' Indian actors, directors and crew, with every movie and show they worked on.', canonical: '/people', ogPath: '/people', route: 'people', body: peopleBody,
     jsonld: [crumbLd(['Home', '/'], ['People', '/people']), listLd('Indian actors and filmmakers', hubPeople.map(k => '/person/' + k))] });
 
+  // ----- News: /news and one page per published story -----
+  const newsSorted = newsPosts.slice().sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+  {
+    const byId = new Map(movies.map(m => [m.id, m]));
+    const titlesOf = p => (Array.isArray(p.titles) ? p.titles : []).map(id => byId.get(id)).filter(Boolean);
+    const coverOf = (p, w) => { const u = safeUrl(p.coverUrl); if (u) return cld(u, w); const m = titlesOf(p)[0]; const b = m && (safeUrl(m.data.bannerUrl) || safeUrl(m.data.posterUrl)); return b ? cld(b, w) : ''; };
+    const day = iso => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10) : '';
+    const li = p => '<li><a href="/news/' + esc(p.slug) + '">' + esc(p.title) + '</a>' + (day(p.publishedAt) ? '<span class="note"> · ' + fmtDate(day(p.publishedAt)) + '</span>' : '') + (p.summary ? '<br><span class="note">' + esc(p.summary) + '</span>' : '') + '</li>';
+    for (const p of newsSorted) {
+      const url = '/news/' + p.slug, cover = coverOf(p, 1280), ts = titlesOf(p), more = newsSorted.filter(x => x !== p).slice(0, 4);
+      const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/news">News</a></nav>' +
+        '<h1>' + esc(p.title) + '</h1>' + (p.summary ? '<p class="nwdek">' + esc(p.summary) + '</p>' : '') +
+        '<p class="note">By Reelscore' + (day(p.publishedAt) ? ' · <time datetime="' + day(p.publishedAt) + '">' + fmtDate(day(p.publishedAt)) + '</time>' : '') + '</p>' +
+        (cover ? '<img class="nwcover" src="' + esc(cover) + '" alt="' + esc(p.coverAlt || '') + '" width="1280" height="720" fetchpriority="high">' : '') +
+        '<div class="nwbody">' + newsHtml(p.body) + '</div>' +
+        (ts.length ? '<h2>' + (ts.length === 1 ? 'In this story' : 'Titles in this story') + '</h2><ul>' + ts.map(m => '<li><a href="' + movieUrl(m) + '">' + esc(m.data.title) + '</a>' + (year(m.data) ? ' (' + year(m.data) + ')' : '') + '</li>').join('') + '</ul>' : '') +
+        (more.length ? '<h2>More news</h2><ul class="nwlist">' + more.map(li).join('') + '</ul>' : '');
+      const description = clip(p.summary || String(p.body || '').replace(/[#*>\[\]()-]/g, ' '), 158);
+      const node = { '@context': 'https://schema.org', '@type': 'NewsArticle', headline: clip(p.title, 110), description, url: SITE + url, mainEntityOfPage: SITE + url,
+        datePublished: p.publishedAt || undefined, dateModified: p.updatedAt || p.publishedAt || undefined, image: cover ? [cover] : undefined,
+        author: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/' }, publisher: { '@type': 'Organization', name: 'Reelscore', url: SITE + '/', logo: { '@type': 'ImageObject', url: SITE + '/icon-512.png' } },
+        about: ts.length ? ts.map(m => ({ '@type': isTv(m.data) ? 'TVSeries' : 'Movie', name: m.data.title, url: SITE + movieUrl(m) })) : undefined };
+      write(url.slice(1) + '.html', page(shell, { title: clip(p.title, 48) + ' | Reelscore', description, canonical: url, ogType: 'article', image: cover || null, wide: true, route: 'news', body,
+        jsonld: [node, crumbLd(['Home', '/'], ['News', '/news'], [clip(p.title, 60), url])] }));
+      sitemap.push({ loc: url, lastmod: day(p.updatedAt) || day(p.publishedAt), pri: '0.7' });
+    }
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › News</nav><h1>News</h1>' +
+      '<p>Release dates, streaming premieres and what’s new in Indian cinema and series, written by the Reelscore team.</p>' +
+      (newsSorted.length ? '<ul class="nwlist">' + newsSorted.map(li).join('') + '</ul>' : '<p class="note">No stories yet. Check back soon.</p>');
+    writeHub('news.html', { title: 'Indian Movie & OTT News | Reelscore', description: 'Release dates, OTT premieres and news on Bollywood and regional Indian films and series, written by the Reelscore team.', canonical: '/news', ogPath: '/news', route: 'news', body,
+      robots: newsSorted.length ? undefined : 'noindex,follow',
+      jsonld: [crumbLd(['Home', '/'], ['News', '/news'])].concat(newsSorted.length ? [listLd('Reelscore news', newsSorted.map(p => '/news/' + p.slug))] : []) });
+    if (newsSorted.length) sitemap.push({ loc: '/news', pri: '0.6' });
+    write('news-data.json', JSON.stringify(newsSorted));
+    console.log(`[seo] news: ${newsSorted.length} stories`);
+  }
+
   // ----- About / how scores work -----
   {
     const t = VERD.theatre, o = VERD.ott;
@@ -1214,7 +1294,7 @@ async function main() {
   const stats = { lang: {}, year: {} };
   movies.forEach(m => { if (isTv(m.data)) return; const l = String(m.data.languages || '').split(/[,;]/)[0].trim(), y = String(m.data.releaseDate || '').slice(0, 4);
     if (/^[A-Za-z]+$/.test(l)) stats.lang[l] = (stats.lang[l] || 0) + 1; if (/^\d{4}$/.test(y)) stats.year[y] = (stats.year[y] || 0) + 1; });
-  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';' + HERO_JS + 'window.RS_BTNS=' + JSON.stringify(data.buttons) + ';\n';
+  const catJs = 'window.RS_CAT=' + JSON.stringify(hashed['/catalogue.json']) + ';window.RS_CAT_CORE=' + JSON.stringify(hashed['/catalogue-core.json']) + ';window.RS_CAT_OLD=' + JSON.stringify(hashed['/catalogue-older.json']) + ';window.RS_STATS=' + JSON.stringify(stats) + ';window.RS_ROWS=' + JSON.stringify(data.rows) + ';window.RS_FEATURED=' + JSON.stringify(data.featured || []) + ';' + HERO_JS + 'window.RS_BTNS=' + JSON.stringify(data.buttons) + ';window.RS_NEWS=' + JSON.stringify(newsSorted.slice(0, 300).map(p => ({ slug: p.slug, title: p.title, publishedAt: p.publishedAt || '', coverUrl: p.coverUrl || '', coverAlt: p.coverAlt || '', titles: Array.isArray(p.titles) ? p.titles : [] }))).replace(/</g, '\\u003c') + ';\n';
   const catPtr = '/assets/cat-' + crypto.createHash('sha256').update(catJs).digest('hex').slice(0, 10) + '.js';
   fs.mkdirSync(path.join(OUT, 'assets'), { recursive: true }); fs.writeFileSync(path.join(OUT, catPtr), catJs);
   const htmlFiles = []; (function walk(dir) { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { const f = path.join(dir, e.name); if (e.isDirectory()) { if (e.name !== 'assets') walk(f); } else if (e.name.endsWith('.html') && e.name !== 'setup.html') htmlFiles.push(f); } })(OUT);

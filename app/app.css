@@ -123,7 +123,7 @@
   .results a:hover, .results a:focus { background: var(--panel2); outline: none; }
   .avatar { width: 40px; height: 40px; border-radius: 50%; border: 2px solid var(--accent); object-fit: cover; background: var(--panel2); }
   .view { display: none; }
-  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-movies #view-movies, body.r-tvshows #view-tvshows, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-video #view-video, body.r-notfound #view-home, body.r-about #view-about, body.r-privacy #view-privacy, body.r-contact #view-contact, body.r-admin #view-admin { display: block; }
+  body.r-home #view-home, body.r-title #view-title, body.r-list #view-list, body.r-browse #view-browse, body.r-movies #view-movies, body.r-tvshows #view-tvshows, body.r-person #view-person, body.r-people #view-people, body.r-genre #view-genre, body.r-year #view-year, body.r-vids #view-vids, body.r-video #view-video, body.r-notfound #view-home, body.r-about #view-about, body.r-news #view-news, body.r-privacy #view-privacy, body.r-contact #view-contact, body.r-admin #view-admin { display: block; }
   body:not(.r-admin) #savebar { display: none !important; }
   .nav { background: linear-gradient(to bottom, #1a0f10, var(--bg)); border-bottom: 0; padding-top: 18px; padding-bottom: 18px; }
   .nav a.lnk { padding: 10px 18px; border-radius: 22px; border-bottom: 0; color: #D9D5DF; }
@@ -1291,3 +1291,29 @@ body.r-about .pr > ul > li, body.r-privacy .pr > ul > li { margin: 0 0 8px; line
 @media (max-width: 899px), (hover: none) { .tov-mn { display: none; } }
 @media (max-width: 760px) { .tov-auto span:last-child { display: none; } .tov-auto { padding: 0 8px; } }
 @media (prefers-reduced-motion: reduce) { .tov.tov-mini { animation: none; } }
+
+/* ---------- News (/news, /news/<slug>) ---------- */
+.nwpage { padding-top: 28px; padding-bottom: 40px; }
+.nwpage .gcrumbs { margin-bottom: 12px; }
+.nwart { max-width: 760px; }
+.nwart .nwh { font-family: Anton, "Anton Fallback", Impact, sans-serif; font-weight: 400; font-size: 44px; letter-spacing: .5px; line-height: 1.1; margin: 0 0 12px; }
+.nwdek { font-size: 18px; line-height: 1.5; color: #D9D5DF; margin: 0 0 10px; }
+.nwmeta { margin: 0 0 18px; }
+.nwcover { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 12px; margin: 0 0 22px; background: var(--panel2); }
+.nwbody { font-size: 17px; line-height: 1.7; }
+.nwbody p { margin: 0 0 16px; }
+.nwbody h2 { font-size: 22px; margin: 28px 0 10px; }
+.nwbody h3 { font-size: 18px; margin: 22px 0 8px; }
+.nwbody ul { margin: 0 0 16px; padding-left: 22px; }
+.nwbody li { margin: 0 0 6px; }
+.nwbody blockquote { margin: 0 0 16px; padding: 4px 0 4px 16px; border-left: 3px solid var(--accent); color: #D9D5DF; font-style: italic; }
+.nwbody a { color: var(--accent); }
+.nwpage .sect, .nwmore { margin-top: 34px; }
+.nwmore h2 { font-size: 20px; margin: 0 0 12px; }
+@media (max-width: 640px) { .nwart .nwh { font-size: 34px; } .nwdek { font-size: 16px; } .nwbody { font-size: 16px; } }
+.pr .nwbody ul, .pr .nwlist { columns: auto; }
+.pr .nwbody ul { list-style: disc; padding-left: 22px; }
+.pr .nwlist li { padding: 10px 0; border-bottom: 1px solid var(--line); }
+body.r-news .pr .crumbs { display: block; }
+/* With News in the menu, tighten the menu pills on laptop widths so the header stays on one line. */
+@media (min-width: 900px) and (max-width: 1439px) { .nav .links { column-gap: 8px; } .nav a.lnk { padding: 10px 14px; } }

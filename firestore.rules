@@ -11,6 +11,12 @@ service cloud.firestore {
     match /people/{id}   { allow read: if true; allow write: if isAdmin(); }
     match /settings/{id} { allow read: if true; allow write: if isAdmin(); }
 
+    // News stories: anyone can read published ones; drafts are for admins only. Only admins write.
+    match /news/{id} {
+      allow read: if resource.data.status == 'published' || isAdmin();
+      allow write: if isAdmin();
+    }
+
     // One verdicts doc and one reviews doc per person. Public to read, only the owner writes.
     match /verdicts/{uid} {
       allow read: if true;
