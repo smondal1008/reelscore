@@ -1069,12 +1069,76 @@ a.lead:hover .ln { text-decoration: underline; }
   .tnpage .tnbar-h { width: auto; flex-direction: row; align-items: baseline; gap: 8px; }
   .tnpage .tnlong { display: none; }
   .tnpage .tnshort { display: inline; }
+  /* Tonight: small popcorn scene in the empty shortlist bar while the picks get ready (--o: how far in it already is) */
+  .tnbar-l { position: relative; }
+  .tnbar-l.tnpopping > .tneslot, .tnbar-l.tnpopping > .tnchipx { visibility: hidden; }
+  .tnbar-l.tnslotsin > * { animation: tnslin .3s ease both; }
+  @keyframes tnslin { 0% { opacity: 0; } 100% { opacity: 1; } }
+  .tnpop { position: absolute; inset: 0; z-index: 1; box-sizing: border-box; display: flex; align-items: center; gap: 14px; padding: 0 6px 0 10px; border: 1px dashed rgba(245,165,36,.4); border-radius: 999px; background: #1B1814; overflow: hidden; }
+  .tnpopart { flex: none; display: block; width: 200px; height: 40px; }
+  .tnpopart svg { display: block; width: 100%; height: 100%; }
+  .tnpoptx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+  .tnpopcap { position: relative; height: 18px; }
+  .tnpopcap span { position: absolute; left: 0; right: 0; top: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; font-weight: 700; color: var(--text); opacity: 0; animation: 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  .tnpopcap .c1 { animation-name: tpc1; } .tnpopcap .c2 { animation-name: tpc2; } .tnpopcap .c3 { animation-name: tpc3; } .tnpopcap .c4 { animation-name: tpc4; color: var(--accent); }
+  @keyframes tpc1 { 0%, 24% { opacity: 1; } 27%, 100% { opacity: 0; } }
+  @keyframes tpc2 { 0%, 25% { opacity: 0; } 28%, 50% { opacity: 1; } 53%, 100% { opacity: 0; } }
+  @keyframes tpc3 { 0%, 51% { opacity: 0; } 54%, 81% { opacity: 1; } 84%, 100% { opacity: 0; } }
+  @keyframes tpc4 { 0%, 82% { opacity: 0; } 86%, 100% { opacity: 1; } }
+  .tnpopbar { width: 160px; max-width: 100%; height: 3px; border-radius: 2px; background: var(--line); overflow: hidden; }
+  .tnpopbar i { display: block; height: 100%; width: 100%; background: var(--accent); transform-origin: 0 50%; animation: tpprog 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpprog { 0% { transform: scaleX(0); } 100% { transform: scaleX(1); } }
+  .tnpopskip { flex: none; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line2); background: transparent; color: var(--muted); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
+  .tnpopskip:hover { color: var(--text); border-color: var(--muted); }
+  .tpbag { animation: tpbag 1.75s cubic-bezier(.4,0,.2,1) calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpbag { 0% { opacity: 0; transform: translate(34px,24px) rotate(0deg); } 14% { opacity: 1; transform: translate(34px,36px) rotate(0deg); } 36% { opacity: 1; transform: translate(34px,36px) rotate(0deg); } 54% { opacity: 1; transform: translate(64px,16px) rotate(115deg); } 80% { opacity: 1; transform: translate(64px,16px) rotate(115deg); } 100% { opacity: 0; transform: translate(50px,4px) rotate(140deg); } }
+  .tpstrip { animation: tpstrip .32s ease-out calc(var(--o, 0s) + 0.38s) both; }
+  @keyframes tpstrip { 0% { opacity: 1; transform: translate(0px,0px) rotate(0deg); } 100% { opacity: 0; transform: translate(9px,-15px) rotate(38deg); } }
+  .tpk { opacity: 0; animation: tpk .34s cubic-bezier(.5,0,.8,.6) both; }
+  @keyframes tpk { 0% { opacity: 0; transform: translate(0px,-18px); } 20% { opacity: 1; } 100% { opacity: 1; transform: translate(var(--x),-1px); } }
+  .tpk.k1 { animation-delay: calc(var(--o, 0s) + 0.98s); }
+  .tpk.k2 { animation-delay: calc(var(--o, 0s) + 1.05s); }
+  .tpk.k3 { animation-delay: calc(var(--o, 0s) + 1.12s); }
+  .tpk.k4 { animation-delay: calc(var(--o, 0s) + 1.19s); }
+  .tpk.k5 { animation-delay: calc(var(--o, 0s) + 1.26s); }
+  .tpk.k6 { animation-delay: calc(var(--o, 0s) + 1.33s); }
+  .tpbowl { animation: tpbowl 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpbowl { 0% { opacity: 0; transform: translate(80px,42px) scale(1); } 6% { opacity: 1; transform: translate(80px,42px) scale(1); } 42% { opacity: 1; transform: translate(80px,42px) scale(1); } 52% { opacity: 1; transform: translate(177px,40px) scale(.8); } 60% { transform: translate(179px,40px) scale(.8); } 66% { transform: translate(175px,40px) scale(.8); } 72% { transform: translate(179px,40px) scale(.8); } 78% { transform: translate(175px,40px) scale(.8); } 84% { transform: translate(177px,40px) scale(.8); } 88% { transform: translate(177px,40px) scale(.8); } 97%, 100% { opacity: 1; transform: translate(258px,42px) scale(1.05); } }
+  .tpp { transform-box: fill-box; transform-origin: center; animation: tpp .28s cubic-bezier(.3,1.6,.5,1) both; }
+  @keyframes tpp { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+  .tpp.p1 { animation-delay: calc(var(--o, 0s) + 2.15s); }
+  .tpp.p2 { animation-delay: calc(var(--o, 0s) + 2.3s); }
+  .tpp.p3 { animation-delay: calc(var(--o, 0s) + 2.45s); }
+  .tpp.p4 { animation-delay: calc(var(--o, 0s) + 2.6s); }
+  .tpp.p5 { animation-delay: calc(var(--o, 0s) + 2.75s); }
+  .tpp.p6 { animation-delay: calc(var(--o, 0s) + 2.9s); }
+  .tpdoor { transform-box: view-box; transform-origin: 152px 35px; animation: tpdoor 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpdoor { 0%, 53% { transform: scaleX(.06); } 58%, 83% { transform: scaleX(1); } 88%, 100% { transform: scaleX(.06); } }
+  .tpglow { opacity: 0; animation: tpglow 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpglow { 0%, 58% { opacity: 0; } 62% { opacity: .3; } 67% { opacity: .16; } 72% { opacity: .32; } 77% { opacity: .16; } 82% { opacity: .32; } 86%, 100% { opacity: 0; } }
+  .tpled { animation: tpled 3.6s linear calc(var(--o, 0s) + 0s) both; }
+  @keyframes tpled { 0%, 57% { opacity: .15; } 58%, 83% { opacity: 1; } 86% { opacity: .2; } 90% { opacity: 1; } 94% { opacity: .2; } 98%, 100% { opacity: 1; } }
+  .tpjb { opacity: 0; transform-box: fill-box; transform-origin: center; animation: tpjb .6s cubic-bezier(.3,.7,.6,1) calc(var(--o, 0s) + 3.42s) both; }
+  .tpjb.j2 { animation-delay: calc(var(--o, 0s) + 3.5s); } .tpjb.j3 { animation-delay: calc(var(--o, 0s) + 3.47s); } .tpjb.j4 { animation-delay: calc(var(--o, 0s) + 3.55s); }
+  @keyframes tpjb { 0% { opacity: 0; transform: translate(0px,0px) scale(.3); } 25% { opacity: 1; transform: translate(calc(var(--x) * .5),-14px) scale(1); } 100% { opacity: 0; transform: translate(var(--x),6px) scale(1); } }
+  .tpsteam { opacity: 0; animation: tpsteam 1s ease-out calc(var(--o, 0s) + 3.4s) both; }
+  .tpsteam.s2 { animation-delay: calc(var(--o, 0s) + 3.55s); }
+  @keyframes tpsteam { 0% { opacity: 0; transform: translate(0px,0px); } 40% { opacity: .6; } 100% { opacity: 0; transform: translate(0px,-8px); } }
+  .tnpage .tnpop { border-radius: 12px; gap: 8px; padding: 0 6px; }
+  .tnpage .tnpopart { width: 150px; height: 30px; }
+  .tnpage .tnpopcap span { font-size: 12px; }
+  .tnpage .tnpopbar { width: 90px; }
+  .tnpage .tnpopskip { height: 28px; padding: 0 9px; font-size: 11px; }
+  /* the 3 cards after the popcorn: one after another */
+  .tngrid > .tnpick.tnin0, .tngrid > .tnpick.tnin1 { animation-fill-mode: backwards; }
+  .tngrid > .tnpick:nth-child(2).tnin0, .tngrid > .tnpick:nth-child(2).tnin1 { animation-delay: .12s; }
+  .tngrid > .tnpick:nth-child(3).tnin0, .tngrid > .tnpick:nth-child(3).tnin1 { animation-delay: .24s; }
   .tnpage .tnbar-l { gap: 6px; }
   .tnpage .tnchipx, .tnpage .tneslot { height: 52px; border-radius: 12px; padding: 4px 6px; gap: 6px; }
   .tnpage .tneslot { justify-content: center; }
   .tnpage .tnmini { display: none; }
   .tnpage .tnname { font-size: 12px; padding: 2px; white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
-  @media (prefers-reduced-motion: reduce) { .tnskel .sk { animation: none; } .rflip, .pc.pcflip { animation: none !important; } .tnpick:hover, .tnpick:focus-within, .tnpick:hover .tnart { transform: none !important; } .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
+  @media (prefers-reduced-motion: reduce) { .tnpop { display: none; } .tnskel .sk { animation: none; } .rflip, .pc.pcflip { animation: none !important; } .tnpick:hover, .tnpick:focus-within, .tnpick:hover .tnart { transform: none !important; } .tnpick.tnin0, .tnpick.tnin1, .tnpick.glow, .addl.tnpopin, .tnrate.new, .tnchipx.new, .tnact svg { animation: none !important; } }
   @media (max-width: 899px) {
     .tonight { margin: 16px 16px 0; padding: 20px; }
     .tnwide { display: none; }

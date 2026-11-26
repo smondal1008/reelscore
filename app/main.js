@@ -1024,6 +1024,7 @@
   // The 3 cards. Slots hold title ids; a shortlisted title that still fits the answers keeps its card, shortlisted titles
   // that fit come back first, then the best of the pool. A slot whose title changes flips in (CSS), once.
   function tnFill(t, first) {
+    if (!tnReady()) { t.slots = null; return; }
     var ids = tnPool(t).map(function (o) { return o.m.id; }), old = t.slots || [null, null, null];
     var keep = old.map(function (id) { return id && t.pins.indexOf(id) !== -1 && ids.indexOf(id) !== -1 ? id : null; });
     var q = t.pins.filter(function (id) { return ids.indexOf(id) !== -1 && keep.indexOf(id) === -1; })
@@ -1084,10 +1085,57 @@
         tnWatch(m, t, 'tnmini')
       ]);
     });
-    return h('div', { class: 'tnbar', role: 'region', 'aria-label': 'Your shortlist' }, [
+    var area = h('div', { class: 'tnbar-l' + (S.tnSlotsIn ? ' tnslotsin' : '') }, slots); S.tnSlotsIn = false;
+    var bar = h('div', { class: 'tnbar', role: 'region', 'aria-label': 'Your shortlist' }, [
       h('div', { class: 'tnbar-h' }, [h('span', { class: 'tnbar-k', text: 'YOUR SHORTLIST' }), status]),
-      h('div', { class: 'tnbar-l' }, slots)
+      area
     ]);
+    if (tnPopWanted(t)) {
+      if (S.tnPop && S.tnPop.t0) { area.classList.add('tnpopping'); area.appendChild(tnPopScene(t, Date.now() - S.tnPop.t0)); }
+      else tnPopWhenSeen(t, area);
+    }
+    return bar;
+  }
+  // Small popcorn scene in the empty shortlist bar while the picks get ready: once per visit, the first time the bar is
+  // on screen. The cards wait until it ends and the account data is in, then flip in. Not with reduce motion, or when
+  // the shortlist already has titles.
+  var TNPOP_MS = 3650, TNPOP_SVG = "<svg class=\"tpsv\" viewBox=\"0 0 300 60\" aria-hidden=\"true\"><rect x=\"0\" y=\"54\" width=\"300\" height=\"2\" rx=\"1\" fill=\"#3A3545\"></rect><rect x=\"150\" y=\"16\" width=\"70\" height=\"38\" rx=\"5\" fill=\"#1C1A23\" stroke=\"#4A4458\" stroke-width=\"1.2\"></rect><rect x=\"154\" y=\"20\" width=\"46\" height=\"30\" rx=\"3\" fill=\"#0F0D14\"></rect><rect class=\"tpglow\" x=\"154\" y=\"20\" width=\"46\" height=\"30\" rx=\"3\" fill=\"#F5A524\"></rect><rect x=\"205\" y=\"21\" width=\"11\" height=\"6\" rx=\"1.5\" fill=\"#0B0A0F\"></rect><rect class=\"tpled\" x=\"206.5\" y=\"22.5\" width=\"8\" height=\"3\" rx=\"1\" fill=\"#F5A524\"></rect><circle cx=\"210.5\" cy=\"34\" r=\"2.6\" fill=\"none\" stroke=\"#4A4458\" stroke-width=\"1.2\"></circle><circle cx=\"210.5\" cy=\"43\" r=\"2.6\" fill=\"none\" stroke=\"#4A4458\" stroke-width=\"1.2\"></circle><g class=\"tpbowl\"><ellipse cx=\"0\" cy=\"0\" rx=\"14\" ry=\"2\" fill=\"#8E2E22\"></ellipse><ellipse class=\"tpk k1\" style=\"--x:-7px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><ellipse class=\"tpk k2\" style=\"--x:-2px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><ellipse class=\"tpk k3\" style=\"--x:3px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><ellipse class=\"tpk k4\" style=\"--x:7px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><ellipse class=\"tpk k5\" style=\"--x:-4px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><ellipse class=\"tpk k6\" style=\"--x:5px\" cx=\"0\" cy=\"0\" rx=\"1.2\" ry=\"1.5\" fill=\"#F5C542\"></ellipse><g transform=\"translate(-8 -2)\"><g class=\"tpp p1\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><g transform=\"translate(8 -2)\"><g class=\"tpp p2\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><g transform=\"translate(0 -3)\"><g class=\"tpp p3\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><g transform=\"translate(-4 -8)\"><g class=\"tpp p4\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><g transform=\"translate(5 -8)\"><g class=\"tpp p5\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><g transform=\"translate(0 -12)\"><g class=\"tpp p6\"><circle r=\"3\" fill=\"#FBF3DC\"></circle><circle cx=\"2.4\" cy=\"-1.6\" r=\"2.2\" fill=\"#FFF8E6\"></circle><circle cx=\"-2.2\" cy=\"-1.6\" r=\"2\" fill=\"#F4EAD0\"></circle></g></g><path d=\"M-14 0 Q-13.5 12 0 12 Q13.5 12 14 0 Z\" fill=\"#C2412F\"></path><path d=\"M-13.4 3.4 Q0 6 13.4 3.4\" fill=\"none\" stroke=\"#F4F1EA\" stroke-width=\"1.8\"></path></g><g class=\"tpdoor\"><rect x=\"152\" y=\"18\" width=\"50\" height=\"34\" rx=\"3.5\" fill=\"rgba(60,54,74,.42)\" stroke=\"#5A5266\" stroke-width=\"1.2\"></rect><rect x=\"197\" y=\"27\" width=\"2.4\" height=\"16\" rx=\"1.2\" fill=\"#5A5266\"></rect></g><g transform=\"translate(258 36)\"><g class=\"tpjb j1\" style=\"--x:-11px\"><circle r=\"2.6\" fill=\"#FBF3DC\"></circle></g><g class=\"tpjb j2\" style=\"--x:10px\"><circle r=\"2.6\" fill=\"#FFF8E6\"></circle></g><g class=\"tpjb j3\" style=\"--x:-4px\"><circle r=\"2.2\" fill=\"#F4EAD0\"></circle></g><g class=\"tpjb j4\" style=\"--x:5px\"><circle r=\"2.2\" fill=\"#FBF3DC\"></circle></g></g><path class=\"tpsteam\" d=\"M254 28 q-2 -4 0 -8 q2 -4 0 -8\" fill=\"none\" stroke=\"#8E8899\" stroke-width=\"1.4\" stroke-linecap=\"round\"></path><path class=\"tpsteam s2\" d=\"M262 29 q-2 -4 0 -8 q2 -4 0 -8\" fill=\"none\" stroke=\"#8E8899\" stroke-width=\"1.4\" stroke-linecap=\"round\"></path><g class=\"tpbag\"><path d=\"M-10 -13 L-8 -11 L-6 -13 L-4 -11 L-2 -13 L0 -11 L2 -13 L4 -11 L6 -13 L8 -11 L10 -12.5 L10 17 Q10 18 9 18 L-9 18 Q-10 18 -10 17 Z\" fill=\"#F4F1EA\"></path><rect x=\"-7\" y=\"-10\" width=\"3\" height=\"28\" fill=\"#D64545\"></rect><rect x=\"-1.5\" y=\"-10\" width=\"3\" height=\"28\" fill=\"#D64545\"></rect><rect x=\"4\" y=\"-10\" width=\"3\" height=\"28\" fill=\"#D64545\"></rect><rect x=\"-7\" y=\"1\" width=\"14\" height=\"7\" rx=\"2\" fill=\"#0B0A0F\"></rect><g class=\"tpstrip\"><path d=\"M-10 -18 L10 -18 L10 -12.5 L8 -11 L6 -13 L4 -11 L2 -13 L0 -11 L-2 -13 L-4 -11 L-6 -13 L-8 -11 L-10 -13 Z\" fill=\"#F4F1EA\"></path><rect x=\"-7\" y=\"-18\" width=\"3\" height=\"5\" fill=\"#D64545\"></rect><rect x=\"-1.5\" y=\"-18\" width=\"3\" height=\"5\" fill=\"#D64545\"></rect><rect x=\"4\" y=\"-18\" width=\"3\" height=\"5\" fill=\"#D64545\"></rect></g></g></svg>";
+  function tnPopWanted(t) {
+    if (S.tnPop === 'done' || t.pins.length) return false;
+    try { if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return false; } catch (e) {}
+    return typeof IntersectionObserver === 'function';
+  }
+  function tnPopWhenSeen(t, area) {
+    var io = new IntersectionObserver(function (es) {
+      if (!es.some(function (e) { return e.isIntersecting; })) return;
+      io.disconnect();
+      if (!area.isConnected || !tnPopWanted(t) || (S.tnPop && S.tnPop.t0)) return;
+      S.tnPop = { t0: Date.now() };
+      area.classList.add('tnpopping'); area.appendChild(tnPopScene(t, 0));
+      clearTimeout(S.tnPopTimer); S.tnPopTimer = setTimeout(tnPopEnd, TNPOP_MS);
+    }, { threshold: 0.6 });
+    io.observe(area);
+  }
+  function tnPopEnd() {
+    if (S.tnPop === 'done') return;
+    clearTimeout(S.tnPopTimer); S.tnPop = 'done'; S.tnRevealFlip = true; S.tnSlotsIn = true;
+    tnRedraw();
+  }
+  function tnPopScene(t, elapsed) {
+    var mood = (TN_MOODS.filter(function (x) { return x[0] === t.mood; })[0] || [0, 'your mood'])[1];
+    var langs = !t.langs.length ? 'any language' : t.langs.length > 2 ? t.langs.slice(0, 2).join(', ') + ' and more' : t.langs.join(' and ');
+    var w = h('div', { class: 'tnpop', role: 'status', 'aria-label': 'Getting your 3 picks ready', style: '--o:' + (-Math.min(elapsed, TNPOP_MS) / 1000).toFixed(2) + 's' });
+    var art = h('span', { class: 'tnpopart', 'aria-hidden': 'true' }); art.innerHTML = TNPOP_SVG;
+    w.appendChild(art);
+    w.appendChild(h('div', { class: 'tnpoptx' }, [
+      h('div', { class: 'tnpopcap' }, [
+        h('span', { class: 'c1', text: t.where === 'out' ? 'Checking what\u2019s in theatres\u2026' : 'Checking your apps\u2026' }),
+        h('span', { class: 'c2', text: 'Matching ' + mood + ' in ' + langs + '\u2026' }),
+        h('span', { class: 'c3', text: 'Sorting by what you love\u2026' }),
+        h('span', { class: 'c4', text: 'Your 3 are ready' })]),
+      h('div', { class: 'tnpopbar' }, [h('i')])]));
+    w.appendChild(h('button', { type: 'button', class: 'tnpopskip', text: 'Skip', on: { click: tnPopEnd } }));
+    return w;
   }
   // Picks wait until we know who you are and have your apps, watchlist, verdicts and "Not for me" list. Drawn
   // before that, the first 3 were swapped a moment later when that data arrived.
@@ -1098,8 +1146,10 @@
     }));
   }
   function tnPicks(t, onChange, wide) {
-    if (!tnReady()) return { list: tnSkeleton(), bar: tnBar(t, onChange), empty: null, thin: null, again: h('button', { type: 'button', class: 'btn', disabled: true, text: 'Show 3 more' }) };
+    if (!tnReady() || tnPopWanted(t)) return { list: tnSkeleton(), bar: tnBar(t, onChange), empty: null, thin: null, again: h('button', { type: 'button', class: 'btn', disabled: true, text: 'Show 3 more' }) };
     if (!t.slots) tnFill(t, true);
+    // Right after the popcorn: the 3 cards flip in, one after another.
+    if (S.tnRevealFlip) { S.tnRevealFlip = false; t.drawn = t.n.map(function (x) { return x - 1; }); }
     var pool = tnPool(t), byId = {}; pool.forEach(function (o) { byId[o.m.id] = o; });
     // A shortlisted title brought back from the bar may not fit tonight's answers: it still gets its card.
     t.pins.forEach(function (id) { var m = S.byId[id]; if (m && !byId[id] && t.slots.indexOf(id) !== -1) byId[id] = { m: m, taste: 0, pct: null, age: 9999, rt: runtimeMin(m.data), cert: '', pinned: true }; });
