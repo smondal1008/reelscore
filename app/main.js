@@ -1217,7 +1217,9 @@
       if (!id) return h('article', { class: 'tnpick tnnone' + flip }, [h('div', { class: 'tnempty', text: 'That’s every pick for these answers. Try another mood or more languages.' })]);
       var o = byId[id], m = o.m, d = m.data, useBanner = wide && !!safeUrl(d.bannerUrl), pa = artLazy(m, useBanner ? 'banner' : 'poster', useBanner ? 640 : undefined);
       var pinned = t.pins.indexOf(id) !== -1, title = d.title;
-      var meta = [langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), isTv(m) ? (o.rt ? 'Series · ' + o.rt + 'm episodes' : 'Series') : o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' && !safeUrl(d.platformUrl) ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
+      // With languages picked, show the language(s) you picked that this title is in, not its original language.
+      var tl = t.langs.length ? langsOf(d).filter(function (l) { return t.langs.indexOf(l) !== -1; }) : [];
+      var meta = [tl.length ? tl.join(' / ') : langsOf(d)[0], String(d.genre || '').split(/,/).slice(0, 2).join(','), isTv(m) ? (o.rt ? 'Series · ' + o.rt + 'm episodes' : 'Series') : o.rt ? Math.floor(o.rt / 60) + 'h ' + (o.rt % 60) + 'm' : '', t.where === 'home' && !safeUrl(d.platformUrl) ? (appsOf(d)[0] || d.platform) : ''].filter(Boolean).join(' · ');
       var art = h('a', { class: 'tnart art' + (wide && !useBanner ? ' tnposter' : ''), href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': title });
       var add = h('button', { type: 'button', class: 'addl tnadd' + (t.anim.pin === id ? ' tnpopin' : ''), 'aria-pressed': String(pinned), title: pinned ? 'On your shortlist' : 'Add to your shortlist',
         'aria-label': pinned ? 'Remove ' + title + ' from your shortlist' : 'Add ' + title + ' to your shortlist', text: pinned ? '✓' : '+', on: { click: function () { tnPin(t, m, onChange); } } });
