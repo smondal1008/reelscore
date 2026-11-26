@@ -980,10 +980,14 @@
   function tnQuestions(t, onChange) {
     var set = function (k, v) { t[k] = v; t.seen = []; t.rating = null; tnSave(); tnFill(t, false); onChange(); };
     var group = function (label, kids) { return h('div', { class: 'tnq', role: 'group', 'aria-label': label }, [h('div', { class: 'tnql', text: label }), h('div', { class: 'tnopts' }, kids)]); };
-    var opt = function (k, v, label, ic) { return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(t[k] === v), on: { click: function () { set(k, v); } } }, ic ? [icon(ic, 16), h('span', { text: label })] : [label]); };
+    // An icon plays its small animation on hover, and once on the chip you just picked (the section redraws on a pick).
+    var opt = function (k, v, label, ic) {
+      var go = S.tnChipGo === k + ':' + v;
+      return h('button', { type: 'button', class: 'chip tnchip' + (ic ? ' tni-' + ic : '') + (go ? ' go' : ''), 'aria-pressed': String(t[k] === v), on: { click: function () { S.tnChipGo = k + ':' + v; set(k, v); } } }, ic ? [icon(ic, 16), h('span', { text: label })] : [label]);
+    };
     var MOOD_IC = { thrill: 'zap', laugh: 'smile', feel: 'heart', think: 'bulb', family: 'users', scare: 'ghost' };
     var langs = TN_LANGS.concat(t.allLangs ? TN_MORE_LANGS : []);
-    return [
+    var out = [
       group('Where are you watching?', [opt('where', 'home', 'At home', 'home'), opt('where', 'out', 'Going out', 'ticket')]),
       group('How much time?', [opt('time', 'short', 'Under 2 hrs'), opt('time', 'any', 'Any length')]),
       group('What mood?', TN_MOODS.map(function (x) { return opt('mood', x[0], x[1], MOOD_IC[x[0]]); })),
@@ -991,6 +995,8 @@
         .concat(langs.map(function (l) { var on = t.langs.indexOf(l) !== -1; return h('button', { type: 'button', class: 'chip tnchip', 'aria-pressed': String(on), text: l, on: { click: function () { set('langs', on ? t.langs.filter(function (y) { return y !== l; }) : t.langs.concat([l])); } } }); }))
         .concat(t.allLangs ? [] : [h('button', { type: 'button', class: 'chip tnchip gap', text: 'More languages', on: { click: function () { t.allLangs = true; onChange(); } } })]))
     ];
+    S.tnChipGo = null;
+    return out;
   }
   // Tonight card art with a ▶ on it (no label) when the title has a YouTube trailer. Tapping plays it in the art's place, with sound;
   // the player loads only then, so the cards stay light. ✕ or Esc puts the art back. One trailer plays at a time.
