@@ -965,8 +965,10 @@
       var moodW = fit * 1.2 + (gl[0] && mood[2].test(gl[0]) ? 1.5 : 0);
       var rt = runtimeMin(d); if (t.time === 'short' && rt > 120) return;
       var sc = score(m.id), pct = shownPct(sc), age = daysSince(t.where === 'out' ? d.releaseDate : (d.ottReleaseDate || d.releaseDate));
-      var taste = tm.score(m), fresh = age <= 30 ? 1.5 : age <= 90 ? 0.8 : age <= 365 ? 0.3 : 0;
-      var w = moodW + taste + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && t.time === 'short' ? 0.3 : 0);
+      // Taste is capped so a viewer's saved and rated titles (often older films) can't outweigh how new a title is.
+      // Newer titles get a bigger lift, and anything over five years old is pushed down.
+      var taste = tm.score(m), fresh = age <= 30 ? 2 : age <= 90 ? 1.5 : age <= 365 ? 1 : age <= 730 ? 0.5 : age <= 1825 ? 0 : -1.5;
+      var w = moodW + Math.max(-3, Math.min(2.5, taste)) + (pct !== null ? pct / 40 + Math.min(1, sc.tot / 20) : 0) + fresh + (safeUrl(d.posterUrl) ? 0.3 : 0) + (t.mood === 'family' && cert === 'U' ? 1 : 0) + (rt && t.time === 'short' ? 0.3 : 0);
       out.push({ m: m, w: w, taste: taste, pct: pct, age: age, rt: rt, cert: cert });
     });
     out.sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
