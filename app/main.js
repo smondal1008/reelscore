@@ -526,7 +526,7 @@
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if (path === '/tonight') { S.route = 'tonight'; S.param = null; }
-    else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48 }; }
+    else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48, q: '' }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
       S.route = 'genre'; S.param = mm[1].toLowerCase();
@@ -2193,16 +2193,36 @@
     if (!S.loaded) { head.appendChild(h('p', { class: 'note', style: 'margin:0', text: 'Loading…' })); return; }
     var all = P.picks(true), langs = {};
     all.forEach(function (p) { var l = langOf(p.m.data); if (l) langs[l] = 1; });
-    var list = all.filter(function (p) { return !S.vids.lang || langOf(p.m.data) === S.vids.lang; });
-    head.appendChild(h('p', { class: 'note', style: 'margin:0', text: list.length + ' ' + P.what + ', newest first' + (S.navLang ? ' · ' + S.navLang + ' only' : '') }));
+    // Search: by song or video name, the film, singers and the film's cast and director; every word has to match.
+    var fold = function (t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+    var hay = function (p) { var d = p.m.data; return fold([p.x.title, p.x.kind, p.x.artists, d.title, d.director, (d.cast || []).slice(0, 8).map(function (c) { return c.name; }).join(' ')].join(' ')); };
+    var filtered = function () {
+      var words = fold(S.vids.q).split(/\s+/).filter(Boolean);
+      return all.filter(function (p) { return (!S.vids.lang || langOf(p.m.data) === S.vids.lang) && (!words.length || (function (t) { return words.every(function (wd) { return t.indexOf(wd) !== -1; }); })(hay(p))); });
+    };
+    var list = filtered(), countEl = h('p', { class: 'note', style: 'margin:0' }), res = h('div', {});
+    var countText = function () { return list.length + ' ' + P.what + (S.vids.q.trim() ? ' matching “' + S.vids.q.trim() + '”' : ', newest first') + (S.navLang ? ' · ' + S.navLang + ' only' : ''); };
+    var drawRes = function () {
+      res.innerHTML = ''; countEl.textContent = countText();
+      res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
+      if (list.length > S.vids.n) res.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; drawRes(); } } })]));
+      if (!list.length) res.appendChild(h('p', { class: 'note', text: S.vids.q.trim() ? 'No ' + P.what + ' match “' + S.vids.q.trim() + '”. Try a film, a singer or fewer words.' : 'Nothing here yet.' }));
+    };
+    head.appendChild(countEl);
+    var what = S.param === 'songs' ? 'Search songs, films or singers' : S.param === 'trailers' ? 'Search trailers or films' : 'Search videos or shows';
+    var qIn = h('input', { class: 'in', id: 'vQ', type: 'search', placeholder: what, autocomplete: 'off' }); qIn.value = S.vids.q;
+    var tmr = null;
+    qIn.addEventListener('input', function () { clearTimeout(tmr); tmr = setTimeout(function () { S.vids.q = qIn.value; S.vids.n = 48; list = filtered(); drawRes(); }, 150); });
+    var tools = h('div', { class: 'vtools' }, [
+      h('div', { class: 'field vq' }, [h('label', { class: 'l', for: 'vQ', text: 'Search' }), qIn])
+    ]);
+    bar.appendChild(tools);
     if (!S.navLang && Object.keys(langs).length > 1) {
       var e = h('select', { class: 'in', id: 'vLang' }, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })).map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === S.vids.lang }); }));
-      e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); render(true); });
-      bar.appendChild(h('div', { class: 'field', style: 'width:220px;margin:0' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
+      e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); list = filtered(); drawRes(); });
+      tools.appendChild(h('div', { class: 'field vl' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
-    w.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
-    if (list.length > S.vids.n) w.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; render(true); } } })]));
-    if (!list.length) w.appendChild(h('p', { class: 'note', text: 'Nothing here yet.' }));
+    w.appendChild(res); drawRes();
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------

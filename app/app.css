@@ -1381,3 +1381,9 @@ body.r-lists .pr .crumbs { display: block; }
 @media (max-width: 760px) { .tov-bar { position: relative; flex-wrap: wrap; row-gap: 8px; } .tov-t { flex: 1 1 100%; padding-right: 52px; line-height: 44px; } .tov-acts { flex: 1 1 100%; flex-wrap: wrap; justify-content: flex-end; gap: 8px; } .tov:not(.tov-mini) .tov-x { position: absolute; top: 4px; right: 10px; } }
 .tp .tp-mini { position: absolute; top: 24px; right: 76px; z-index: 3; gap: 6px; background: rgba(11,10,15,.75); }
 .btn .ico, .tp-mini svg, .vp-mini svg { flex: none; }
+/* Songs / Trailers pages: search and language */
+.vtools { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: flex-end; flex: 0 1 560px; min-width: 0; }
+.vtools .field { margin: 0; }
+.vtools .vq { flex: 1 1 260px; max-width: 320px; }
+.vtools .vl { flex: 0 0 220px; }
+@media (max-width: 640px) { .vtools { flex: 1 1 100%; justify-content: flex-start; } .vtools .vq, .vtools .vl { flex: 1 1 100%; max-width: none; } }
