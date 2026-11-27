@@ -4644,7 +4644,8 @@
   // Card actions by status: Book tickets for theatre titles, Watch now for released titles with a streaming link, reminders for upcoming ones.
   function actOpts(m) {
     var sec = m.data.section, inTh = (S.route === 'browse' && S.browse && S.browse.status === 'In theatres') || (S.route === 'movies' && S.cat.movies.status === 'In theatres');
-    if (!released(m)) return { dateBadge: true, remind: true, book: sec === 'Coming soon' || sec === 'In theatres' };
+    // Upcoming films: the Coming soon icon row (Trailer, Remind me or Tickets, Not for me), as on the home page.
+    if (!released(m)) return isTv(m) ? { dateBadge: true, remind: true } : { dateBadge: true, upIcons: true };
     return sec === 'In theatres' ? { book: true, inTheatresList: inTh, seenIcons: S.route === 'browse' } : { stream: true };
   }
   // ---------- Browse: status tabs with counts, a filter column (a sheet on phones), active filters as chips ----------
