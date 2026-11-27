@@ -1704,9 +1704,15 @@
       h('div', { class: 'tov-v' }, [media])
     ]);
     box.addEventListener('click', function (e) { if (e.target === box && !S.tovMini) closeTrailerOverlay(); });
+    // Keys while a video is open (not while typing in a box): Esc closes the big player; Shift+N / Shift+P next / previous;
+    // I mini player on / off (wide screens); F full screen on / off. While the YouTube player itself has focus, YouTube's own keys apply.
     S.tov = { node: box, opener: opener, miniB: miniB, key: function (e) {
-      if (e.key === 'Escape' && !S.tovMini) closeTrailerOverlay();
-      else if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'N' || e.key === 'P') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); step(e.key === 'N' ? 1 : -1); }
+      var ae = document.activeElement || {}, typing = /^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName || '') || ae.isContentEditable, plain = !e.metaKey && !e.ctrlKey && !e.altKey;
+      if (e.key === 'Escape') { if (!S.tovMini && !fsEl()) closeTrailerOverlay(); }
+      else if (typing || !plain) return;
+      else if (e.shiftKey && (e.key === 'N' || e.key === 'P')) { e.preventDefault(); step(e.key === 'N' ? 1 : -1); }
+      else if (!e.shiftKey && (e.key === 'i' || e.key === 'I') && tovMiniOk() && !fsEl()) { e.preventDefault(); setTovMini(!S.tovMini); }
+      else if (!e.shiftKey && (e.key === 'f' || e.key === 'F')) { e.preventDefault(); toggleFs(media); }
     } };
     document.addEventListener('keydown', S.tov.key);
     if (isSong) { S.tov.repeatOn = tovRepeat; if (media.tagName !== 'VIDEO') repeatYt(S.tov, media); }
@@ -1719,6 +1725,13 @@
   // Mini player helpers. miniOn: a video is playing in the corner. toMini: play this video of the title there, with the
   // title's other videos as previous / next. ytClock: follow an inline YouTube player's position, so moving it to the
   // mini player carries on from the same moment.
+  function fsEl() { return document.fullscreenElement || document.webkitFullscreenElement || null; }
+  function toggleFs(el) {
+    try {
+      if (fsEl()) { (document.exitFullscreen || document.webkitExitFullscreen).call(document); return; }
+      var go = el.requestFullscreen || el.webkitRequestFullscreen; if (go) { var p = go.call(el); if (p && p.catch) p.catch(function () {}); }
+    } catch (e) {}
+  }
   function miniOn() { return !!(S.tov && S.tovMini); }
   function titleQueue(m, x) {
     var list = vidItems(m).filter(function (y) { return y.yt || y.clip; }).map(function (y) { return { m: m, x: y }; });
@@ -1819,7 +1832,7 @@
     document.body.classList.toggle('tov-open', !on);
     if (t.miniB) {
       t.miniB.setAttribute('aria-label', on ? 'Back to the full-size player' : 'Mini player: keep watching while you browse');
-      t.miniB.title = on ? 'Full size' : 'Mini player';
+      t.miniB.title = on ? 'Full size (I)' : 'Mini player (I)';
       t.miniB.querySelector('.tov-mnl').textContent = on ? '' : 'Mini player';
     }
     if (!quiet && !on) { var x = t.node.querySelector('.tov-x'); if (x) x.focus(); }
