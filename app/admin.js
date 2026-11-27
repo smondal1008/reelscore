@@ -1537,7 +1537,37 @@ window.ReelAdmin = function (env) {
       h('thead', {}, [h('tr', {}, [h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: 'Page' }), h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: '🎟 Book tickets' }), h('th', { scope: 'col', style: 'text-align:left;padding:8px 10px', text: '▶ Watch now' })])]),
       tb])]));
   }
-  var MAX_FEAT = 8;
+  var MAX_FEAT = 8, featNoteOpen = '';
+  // Banner note: a short line of your own on a title's banner slide, until a date, in place of the automatic tag
+  // (Out today, New trailer, New song, Streaming now; app/main.js heroNews). Stored on the title as bannerNote.
+  var NOTE_BTNS = [['', 'Usual button'], ['book', 'Book tickets'], ['trailer', 'Play the newest trailer'], ['song', 'Play the newest song']];
+  function bannerNoteForm(m) {
+    var n = m.data.bannerNote || {}, td = todayStr();
+    var tx = h('input', { class: 'in', id: 'bnText', maxlength: '40', placeholder: 'e.g. Advance booking open', autocomplete: 'off', disabled: !canWrite }); tx.value = n.text || '';
+    var un = h('input', { class: 'in', id: 'bnUntil', type: 'date', min: td, disabled: !canWrite }); un.value = n.until || '';
+    var bt = h('select', { class: 'in', id: 'bnBtn', disabled: !canWrite }, NOTE_BTNS.map(function (o) { return h('option', { value: o[0], text: o[1], selected: (n.btn || '') === o[0] }); }));
+    var save = function (val, msg) {
+      db.doc('movies/' + m.id).update({ bannerNote: val, updatedAt: new Date().toISOString() }).then(function () { m.data.bannerNote = val; featNoteOpen = ''; renderFeatured(); setStatus(msg); })
+        .catch(function () { setStatus('Couldn’t save the banner note. Try again.'); });
+    };
+    return h('div', { style: 'flex-basis:100%;display:grid;grid-template-columns:minmax(200px,2fr) minmax(150px,1fr) minmax(170px,1fr);gap:10px;padding:12px;border-radius:10px;background:var(--panel,#15131B);border:1px solid var(--line)' }, [
+      h('span', {}, [h('label', { class: 'l', for: 'bnText', text: 'Banner note (up to 40 letters)' }), tx]),
+      h('span', {}, [h('label', { class: 'l', for: 'bnUntil', text: 'Show until' }), un]),
+      h('span', {}, [h('label', { class: 'l', for: 'bnBtn', text: 'Main button' }), bt]),
+      h('div', { class: 'note', style: 'grid-column:1/-1', text: 'Shows in the banner’s orange tag instead of the automatic one (Out today, New trailer, New song, Streaming now) until the end of that day. Book tickets only shows when the title has booking links.' }),
+      h('div', { style: 'grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap' }, [
+        h('button', { type: 'button', class: 'btn primary small', text: 'Save note', disabled: !canWrite, on: { click: function () {
+          var t = tx.value.replace(/\s+/g, ' ').trim(), u = un.value;
+          if (!t) { setStatus('Write the note first, or use Remove note.'); tx.focus(); return; }
+          if (!/^\d{4}-\d{2}-\d{2}$/.test(u) || u < td) { setStatus('Pick the last day to show it (today or later).'); un.focus(); return; }
+          var val = { text: t.slice(0, 40), until: u }; if (bt.value) val.btn = bt.value;
+          save(val, 'Banner note saved for ' + m.data.title);
+        } } }),
+        m.data.bannerNote ? h('button', { type: 'button', class: 'btn small danger', text: 'Remove note', disabled: !canWrite, on: { click: function () { save(null, 'Banner note removed from ' + m.data.title); } } }) : null,
+        h('button', { type: 'button', class: 'btn small', text: 'Cancel', on: { click: function () { featNoteOpen = ''; renderFeatured(); } } })
+      ])
+    ]);
+  }
   function isFeatured(id) { return featured.indexOf(id) !== -1; }
   function writeFeatured(next, msg) {
     if (featWriting) { setStatus('Still saving the banner, try again in a moment.'); return; }
@@ -1574,14 +1604,17 @@ window.ReelAdmin = function (env) {
         h('span', { class: 'thumb', style: 'width:112px;height:63px;' + bgUrl(d.bannerUrl), 'aria-hidden': 'true' }, [hasBanner ? null : 'No banner']),
         h('span', { style: 'flex:1;min-width:160px' }, [
           h('div', { class: 't', style: 'font-weight:600', text: d.title || 'Untitled' }),
-          h('div', { class: 'm', style: 'font-size:12px;color:' + (hasBanner ? 'var(--muted)' : '#F5C46B'), text: d.section + ' · ' + fmtDate(d.releaseDate) + (hasBanner ? '' : ' · add a banner image') })
+          h('div', { class: 'm', style: 'font-size:12px;color:' + (hasBanner ? 'var(--muted)' : '#F5C46B'), text: d.section + ' · ' + fmtDate(d.releaseDate) + (hasBanner ? '' : ' · add a banner image') }),
+          d.bannerNote && d.bannerNote.text ? h('div', { class: 'm', style: 'font-size:12px;color:' + (d.bannerNote.until >= todayStr() ? 'var(--accent)' : 'var(--muted)'), text: 'Note: “' + d.bannerNote.text + '” · ' + (d.bannerNote.until >= todayStr() ? 'until ' + fmtDate(d.bannerNote.until) : 'ended ' + fmtDate(d.bannerNote.until)) }) : null
         ]),
         h('span', { style: 'display:flex;gap:6px;flex-wrap:wrap' }, [
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' up', text: '↑', disabled: i === 0 || !canWrite, on: { click: function () { var n = featured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j - 1, 0, m.id); writeFeatured(n, 'Order saved'); } } }),
           h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move ' + d.title + ' down', text: '↓', disabled: i === items.length - 1 || !canWrite, on: { click: function () { var n = featured.slice(); var j = n.indexOf(m.id); n.splice(j, 1); n.splice(j + 1, 0, m.id); writeFeatured(n, 'Order saved'); } } }),
+          h('button', { type: 'button', class: 'btn small', 'aria-expanded': String(featNoteOpen === m.id), text: d.bannerNote ? 'Edit note' : 'Add note', disabled: !canWrite, on: { click: function () { featNoteOpen = featNoteOpen === m.id ? '' : m.id; renderFeatured(); var f = $('bnText'); if (f) f.focus(); } } }),
           h('a', { class: 'btn small', href: titleHref(m), text: 'Edit title' }),
           h('button', { type: 'button', class: 'btn small danger', text: 'Remove', disabled: !canWrite, on: { click: function () { toggleFeatured(m.id); } } })
-        ])
+        ]),
+        featNoteOpen === m.id ? bannerNoteForm(m) : null
       ]));
     });
     card.appendChild(list);

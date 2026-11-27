@@ -3094,6 +3094,9 @@
     var feat = S.feat; if (S.slide >= feat.length) S.slide = 0;
     var m = feat[S.slide], d = m.data, sc = score(m.id);
     var songs = S.heroCtx === 'movies', pick = S.heroCtx === 'tvshows' ? heroPicked(m) : null, clip = songs || pick ? null : safeUrl(d.trailerFileUrl), yt = clip ? null : songs ? heroSong(m) : pick || heroYt(m), playing = !!(S.play && S.play.id === m.id && (clip || yt));
+    var pv = S.play && S.play.id === m.id && S.play.vid ? vidItems(m).filter(function (x) { return x.yt && x.url === S.play.vid; })[0] : null;
+    if (pv) { clip = null; yt = pv; playing = true; }
+    var news = heroNews(m);
     if (playing && S.heroNode && S.heroNode._mid === m.id) {
       box.innerHTML = ''; box.appendChild(S.heroNode);
       if (!S.play.paused && S.heroVideo) safePlay(S.heroVideo);
@@ -3124,6 +3127,18 @@
       video.addEventListener('timeupdate', function () { var p = document.getElementById('vProg'); if (p && video.duration) p.style.width = (100 * video.currentTime / video.duration) + '%'; });
       video.addEventListener('error', function () { toast('This clip couldn’t play.'); stopTrailer(); });
     }
+    // With a tag, the main button does what the tag says: Book tickets, or play that new trailer or song.
+    var newsBtns = null;
+    if (news && !playing) {
+      var nMain = news.btn === 'book' && btnOn(btnPlace(), 'book') ? bookBtn(m, 'pill play') : news.vid ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id, news.vid.url); } } }, [icon(news.vid.cat === 'songs' ? 'music' : 'play', 18), news.btnText]) : null;
+      if (nMain) {
+        var tv = heroYt(m), second = news.kind !== 'trailer' && tv && tv.yt && (!news.vid || tv.url !== news.vid.url)
+          ? h('button', { type: 'button', class: 'pill info', on: { click: function () { startTrailer(m.id, tv.url); } } }, [h('span', { 'aria-hidden': 'true', text: '▶ ' }), vidWord(tv) === 'video' ? 'Video' : heroVidLabel(tv)])
+          : h('a', { class: 'pill info', href: movieUrl(m), text: 'View details' });
+        newsBtns = [nMain, second, h('button', { type: 'button', class: 'roundadd', 'data-list': m.id, 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist', title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
+          on: { click: function () { toggleList(m.id); } } })];
+      }
+    }
     var hero = h('section', { class: 'fh' + (S.heroCtx && S.heroCtx !== 'home' ? ' tvh' : '') + (playing ? ' playing' : '') + (playing && yt ? ' yt' : ''), style: heroArt(m, yt), 'aria-roledescription': 'carousel', 'aria-label': 'Featured: ' + d.title,
       on: { mouseenter: function () { S.heroPause = true; }, mouseleave: function () { S.heroPause = false; }, focusin: function () { S.heroPause = true; }, focusout: function () { S.heroPause = false; } } }, [
       video,
@@ -3131,11 +3146,12 @@
       playing ? h('button', { type: 'button', class: 'vclose', 'aria-label': 'Close trailer', text: '×', on: { click: stopTrailer } }) : null,
       playing ? h('div', { class: 'vprog', 'aria-hidden': 'true' }, [h('span', { id: 'vProg' })]) : null,
       h('div', { class: 'fb' }, [
-        h(S.heroCtx && S.heroCtx !== 'home' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : ''), text: d.title }),
+        news && !playing ? h('div', { class: 'ftag' }, [h('span', { class: 'ftag-p' }, [icon(news.icon, 15), news.label]), news.sub ? h('span', { class: 'ftag-s', text: news.sub }) : null]) : null,
+        h(S.heroCtx && S.heroCtx !== 'home' ? 'h2' : 'h1', { class: 'logo' + (String(d.title || '').length > 28 ? ' long' : String(d.title || '').length > 16 ? ' mid' : '') }, [newsBtns ? h('a', { href: movieUrl(m), text: d.title }) : d.title]),
         meta,
         songs && yt && yt.cat === 'songs' && !/^(official )?(video )?song$/i.test(String(yt.title || '').trim()) ? h('div', { class: 'songl' }, [h('span', { 'aria-hidden': 'true', text: '♪ ' }), yt.title]) : null,
         heroLine(d) ? h('p', { class: 'syn', text: heroLine(d) }) : null,
-        h('div', { class: 'btns' }, [
+        newsBtns ? h('div', { class: 'btns' }, newsBtns) : h('div', { class: 'btns' }, [
           playing ? h('button', { type: 'button', class: 'pill play', id: 'vPlay', on: { click: togglePause } }, ['❚❚  Pause'])
             : clip ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer'])
             : yt ? h('button', { type: 'button', class: 'pill play', on: { click: function () { startTrailer(m.id); } } }, [h('span', { 'aria-hidden': 'true', text: '▶' }), S.heroCtx && S.heroCtx !== 'home' ? heroVidLabel(yt) : 'Trailer'])
@@ -3253,9 +3269,54 @@
     return it.filter(function (x) { return x.cat === 'trailers'; })[0] || it[0] || null;
   }
   function safePlay(el, onFail) { try { var p = el.play(); if (p && p.catch) p.catch(function () { if (onFail) onFail(); }); } catch (e) { if (onFail) onFail(); } }
-  function startTrailer(id) {
-    if (miniOn()) { var mm = S.byId[id]; if (mm) { toMini(mm, heroYt(mm) || vidItems(mm).filter(function (x) { return x.clip; })[0]); return; } }
-    S.play = { id: id, muted: false, paused: false }; S.heroNode = null; drawHero();
+  // vid: the URL of one video to play (a banner tag's new trailer or song); without it the banner's usual video.
+  function startTrailer(id, vid) {
+    var mm = S.byId[id], pv = vid && mm ? vidItems(mm).filter(function (x) { return x.yt && x.url === vid; })[0] : null;
+    if (miniOn()) { if (mm) { toMini(mm, pv || heroYt(mm) || vidItems(mm).filter(function (x) { return x.clip; })[0]); return; } }
+    S.play = { id: id, muted: false, paused: false, vid: pv ? vid : '' }; S.heroNode = null; drawHero();
+  }
+  // ---------- banner tags: one piece of news per slide for 7 days (design board: "Home banner: a tag for what's new") ----------
+  // In order: a note set in Admin › Home banner (until its end date), Out today / Now in theatres (days 0–6 of a theatre
+  // release), New trailer (trailer, teaser or promo uploaded on YouTube in the last 7 days), New song, Streaming now.
+  // Video dates are YouTube's own upload dates (publishedAt); a video with none never counts as new.
+  var NEWS_DAYS = 7;
+  function agoLabel(iso) { var n = daysSince(iso); return n <= 0 ? 'today' : n === 1 ? 'yesterday' : n + ' days ago'; }
+  function vidWord(x) { var w = heroVidLabel(x); return w === 'Play video' ? 'video' : w.toLowerCase(); }
+  function freshVid(vids, cat) {
+    var td = today(), best = null;
+    vids.forEach(function (x) { if (x.yt && x.cat === cat && x.pub && x.pub <= td && daysSince(x.pub) < NEWS_DAYS && (!best || x.pub > best.pub)) best = x; });
+    return best;
+  }
+  function newestVid(vids, cat) {
+    var best = null;
+    vids.forEach(function (x) { if (x.yt && x.cat === cat && (!best || (x.pub || '') > (best.pub || ''))) best = x; });
+    return best;
+  }
+  // A video's own name without the film's title in front ("Avengers: Doomsday | Special Look" → "Special Look").
+  function vidName(m, x) {
+    var t = String(x.title || '').trim(), ft = String(m.data.title || '').trim();
+    if (ft && t.toLowerCase().indexOf(ft.toLowerCase()) === 0 && !/\w/.test(t.charAt(ft.length))) { var rest = t.slice(ft.length).replace(/^[\s|:\-–—]+/, '').trim(); if (rest) t = rest; }
+    else { var w = ft.split(/[\s:]+/)[0]; if (w && w.length > 2 && new RegExp('^' + w.replace(/[^\w]/g, '') + '\\s*[:|\\-–—]\\s*', 'i').test(t)) t = t.replace(new RegExp('^' + w.replace(/[^\w]/g, '') + '\\s*[:|\\-–—]\\s*', 'i'), ''); }
+    return t;
+  }
+  function heroNews(m) {
+    var d = m.data, td = today(), vids = vidItems(m), n = d.bannerNote;
+    if (n && String(n.text || '').trim() && isoDay(n.until) && n.until >= td) {
+      var nv = n.btn === 'trailer' ? newestVid(vids, 'trailers') : n.btn === 'song' ? newestVid(vids, 'songs') : null;
+      return { kind: 'note', icon: 'bell', label: String(n.text).trim().slice(0, 40), sub: '', btn: n.btn === 'book' && hasBooking(d) ? 'book' : '', vid: nv,
+        btnText: nv ? (nv.cat === 'songs' ? 'Play song' : 'Watch ' + vidWord(nv)) : '' };
+    }
+    if (!isTv(m) && isoDay(d.releaseDate) && d.section === 'In theatres') {
+      var ds = daysSince(d.releaseDate);
+      if (ds >= 0 && ds < NEWS_DAYS) return { kind: 'theatres', icon: 'ticket', label: ds === 0 ? 'Out today' : 'Now in theatres', sub: ds === 0 ? '' : 'Released ' + fmtDate(d.releaseDate), btn: hasBooking(d) ? 'book' : '' };
+    }
+    var tr = freshVid(vids, 'trailers');
+    if (tr) return { kind: 'trailer', icon: 'play', label: 'New ' + vidWord(tr), sub: vidName(m, tr) + ' · ' + agoLabel(tr.pub), vid: tr, btnText: 'Watch new ' + vidWord(tr) };
+    var sg = freshVid(vids, 'songs');
+    if (sg) return { kind: 'song', icon: 'music', label: 'New song', sub: [vidName(m, sg), String(sg.artists || '').split(/,|&| and /)[0].trim()].filter(Boolean).join(' · '), vid: sg, btnText: 'Play song' };
+    var e = ottEntry(m);
+    if (e && !e.expected && e.date <= td && daysSince(e.date) < NEWS_DAYS) return { kind: 'ott', icon: 'tv', label: 'Streaming now', sub: 'on ' + (e.platName || d.platform || 'OTT') + ' · ' + (daysSince(e.date) ? 'since ' + fmtDate(e.date) : 'from today') };
+    return null;
   }
   function stopTrailer() { if (S.heroVideo) { try { S.heroVideo.pause(); } catch (e) {} } S.play = null; S.heroNode = null; S.heroVideo = null; drawHero(); }
   function togglePause() {
@@ -3815,6 +3876,7 @@
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
     play: '<path d="M7 4.5l12.5 7.5L7 19.5z"/>',
+    music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
