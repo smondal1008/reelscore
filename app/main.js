@@ -1602,7 +1602,7 @@
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
@@ -2479,6 +2479,14 @@
     out.sort(function (a, b) { return a.date.localeCompare(b.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     tba.sort(function (a, b) { return b.data.releaseDate.localeCompare(a.data.releaseDate) || (a.data.title || '').localeCompare(b.data.title || ''); });
     return { all: out, tba: tba };
+  }
+  // Home "Streaming this year": On OTT films by streaming date, newest first; ones with no known streaming date last.
+  // Films that started in the last 30 days are left out (they are in Released recently on OTT), unless pinned in Admin.
+  function streamingYearList() {
+    var td = today(), from = addDays(td, -30), pins = rowPins('On OTT');
+    var list = homeSection('On OTT').filter(function (m) { var s = streamDate(m.data); return pins.indexOf(m.id) !== -1 || !(s && s >= from && s <= td); });
+    list.sort(function (a, b) { return (streamDate(b.data) || '0').localeCompare(streamDate(a.data) || '0') || (a.data.title || '').localeCompare(b.data.title || ''); });
+    return pinFirst(list, pins);
   }
   // Home: what started streaming in the last 30 days, newest first (See all opens the OTT release dates page).
   function recentOttSection() {
