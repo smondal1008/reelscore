@@ -1602,7 +1602,7 @@
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottMeta: streamingYearMeta }, seeAll('/browse/on-ott')); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
@@ -2483,10 +2483,19 @@
   // Home "Streaming this year": On OTT films by streaming date, newest first; ones with no known streaming date last.
   // Films that started in the last 30 days are left out (they are in Released recently on OTT), unless pinned in Admin.
   function streamingYearList() {
-    var td = today(), from = addDays(td, -30), pins = rowPins('On OTT');
-    var list = homeSection('On OTT').filter(function (m) { var s = streamDate(m.data); return pins.indexOf(m.id) !== -1 || !(s && s >= from && s <= td); });
-    list.sort(function (a, b) { return (streamDate(b.data) || '0').localeCompare(streamDate(a.data) || '0') || (a.data.title || '').localeCompare(b.data.title || ''); });
+    var td = today(), from = addDays(td, -30), pins = rowPins('On OTT'), ago = new Date(); ago.setFullYear(ago.getFullYear() - 1);
+    var yAgo = ago.toISOString().slice(0, 10), when = function (m) { return isTv(m) ? m.data.releaseDate : streamDate(m.data); };
+    var recent = function (m) { var s = when(m); return pins.indexOf(m.id) === -1 && !!s && s >= from && s <= td; };
+    // Series: premiered on a streaming service (not a TV channel) in the last 12 months.
+    var series = S.movies.filter(function (m) { var e = isTv(m) && inNavLang(m) && ottEntry(m); return e && e.date >= yAgo && e.date <= td; });
+    var list = homeSection('On OTT').concat(series).filter(function (m) { return !recent(m); });
+    list.sort(function (a, b) { return (when(b) || '0').localeCompare(when(a) || '0') || (a.data.title || '').localeCompare(b.data.title || ''); });
     return pinFirst(list, pins);
+  }
+  // Card line in Streaming this year: service, Series for shows, and the day it started streaming.
+  function streamingYearMeta(m) {
+    var d = m.data, s = isTv(m) ? d.releaseDate : streamDate(d), e = isTv(m) && ottEntry(m);
+    return [(e && e.platName) || d.platform || 'OTT', isTv(m) ? 'Series' : '', s ? fmtDate(s) : ''].filter(Boolean).join(' · ');
   }
   // Home: what started streaming in the last 30 days, newest first (See all opens the OTT release dates page).
   function recentOttSection() {
