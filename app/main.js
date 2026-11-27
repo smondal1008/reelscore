@@ -1911,7 +1911,6 @@
     ]);
   }
   // YouTube view counts under each song on /songs, from /api/views (cached by the CDN for 6 hours).
-  // Asks for the whole list in the same 50-id batches for every visitor, so searching and filtering reuse the cache.
   function fmtViews(n) {
     var u = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']], t = String(n);
     for (var i = 0; i < u.length; i++) {
@@ -1920,18 +1919,24 @@
     }
     return t + (n === 1 ? ' view' : ' views');
   }
-  function loadViews(ids, done) {
+  // allIds: the whole list in its usual order, cut into fixed 50-id batches (the same URLs for every visitor, so the
+  // CDN cache is shared). Only the batches holding a song on screen are asked for.
+  function loadViews(allIds, shownIds, done) {
     S.views = S.views || {}; S.viewsAsked = S.viewsAsked || {};
-    ids = ids.filter(function (id, i) { return id && ids.indexOf(id) === i; }).sort();
-    var batches = []; for (var i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50));
-    batches.forEach(function (b) {
-      var k = b.join(','); if (S.viewsAsked[k]) return; S.viewsAsked[k] = 1;
-      fetch('/api/views?ids=' + k).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
-        if (!j || !j.counts) return;
-        Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; });
-        done();
-      }).catch(function () {});
-    });
+    var ids = allIds.filter(function (id, i) { return id && allIds.indexOf(id) === i; }), want = {};
+    shownIds.forEach(function (id) { if (id) want[id] = 1; });
+    for (var i = 0; i < ids.length; i += 50) {
+      var b = ids.slice(i, i + 50);
+      if (!b.some(function (id) { return want[id]; })) continue;
+      (function (k) {
+        if (S.viewsAsked[k]) return; S.viewsAsked[k] = 1;
+        fetch('/api/views?ids=' + k).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          if (!j || !j.counts) return;
+          Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; });
+          done();
+        }).catch(function () {});
+      })(b.join(','));
+    }
   }
   function fillViews(root) {
     if (!S.views) return;
@@ -2231,6 +2236,7 @@
       var words = fold(S.vids.q).split(/\s+/).filter(Boolean);
       return all.filter(function (p) { return (!S.vids.lang || langOf(p.m.data) === S.vids.lang) && (!words.length || (function (t) { return words.every(function (wd) { return t.indexOf(wd) !== -1; }); })(hay(p))); });
     };
+    var allYt = S.param === 'songs' ? all.map(function (p) { return p.x.yt; }) : [];
     var list = filtered(), countEl = h('p', { class: 'note', style: 'margin:0' }), res = h('div', {});
     var countText = function () { return list.length + ' ' + P.what + (S.vids.q.trim() ? ' matching “' + S.vids.q.trim() + '”' : ', newest first') + (S.navLang ? ' · ' + S.navLang + ' only' : ''); };
     var drawRes = function () {
@@ -2238,6 +2244,7 @@
       res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
       if (list.length > S.vids.n) res.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; drawRes(); } } })]));
       fillViews(res);
+      if (S.param === 'songs') loadViews(allYt, list.slice(0, S.vids.n).map(function (p) { return p.x.yt; }), function () { if (res.isConnected) fillViews(res); });
       if (!list.length) res.appendChild(h('p', { class: 'note', text: S.vids.q.trim() ? 'No ' + P.what + ' match “' + S.vids.q.trim() + '”. Try a film, a singer or fewer words.' : 'Nothing here yet.' }));
     };
     head.appendChild(countEl);
@@ -2255,7 +2262,6 @@
       tools.appendChild(h('div', { class: 'field vl' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
     w.appendChild(res); drawRes();
-    if (S.param === 'songs') loadViews(all.map(function (p) { return p.x.yt; }), function () { if (res.isConnected) fillViews(res); });
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
