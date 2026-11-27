@@ -674,14 +674,17 @@
   function postKind(p) { return p && p.kind === 'blog' ? 'blog' : p && p.kind === 'list' ? 'list' : 'news'; }
   // Movies (/movies, /movies/<section>) and TV Shows (/tv-shows): Browse split by kind. Titles match scripts/build.mjs.
   var MOVIES_TITLE = 'Indian Movies – Reviews, Verdicts & OTT | Reelscore', TV_TITLE = 'Indian TV Shows & Web Series | Reelscore';
-  var MOVIE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases' };
-  var BROWSE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases', 'tv-shows': 'TV shows' };
+  // Section slugs (same as scripts/build.mjs HUBS). The old slugs and /movies/<section> paths are 301s in vercel.json;
+  // OLD_SECTIONS maps them for in-app navigation too.
+  var MOVIE_SECTIONS = { 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT', 'older-movies': 'Older releases' };
+  var BROWSE_SECTIONS = { 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT', 'older-movies': 'Older releases', 'tv-shows': 'TV shows' };
+  var OLD_SECTIONS = { 'in-theatres': 'movies-in-theatres', 'coming-soon': 'movies-coming-soon', 'on-ott': 'movies-on-ott', 'older-releases': 'older-movies' };
   function legacyHashToPath(hsh) {
     if (/^t-[A-Za-z0-9-]+$/.test(hsh)) return '/movie/' + hsh.slice(2);
     if (hsh === 'list') return '/my-list';
     if (hsh === 'browse') return '/browse';
-    if (hsh === 'browse-older') return '/browse/older-releases';
-    if (hsh === 'browse-ott') return '/browse/on-ott';
+    if (hsh === 'browse-older') return '/browse/older-movies';
+    if (hsh === 'browse-ott') return '/browse/movies-on-ott';
     if (hsh === 'admin') return '/admin';
     if (hsh === 'home') return '/';
     return null;
@@ -714,6 +717,11 @@
     if (legacy) history.replaceState(null, '', legacy);
     var path = decodeURIComponent(location.pathname).replace(/\/+$/, '') || '/';
     var mm;
+    // Old section URLs (/browse/on-ott, /movies/in-theatres, …) move to the new /browse/<slug> addresses, as the 301s do.
+    if ((mm = path.match(/^\/(browse|movies)\/([a-z-]+)$/)) && (OLD_SECTIONS[mm[2]] || (mm[1] === 'movies' && MOVIE_SECTIONS[mm[2]]))) {
+      path = '/browse/' + (OLD_SECTIONS[mm[2]] || mm[2]);
+      history.replaceState(null, '', path + location.search);
+    }
     if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)$/i))) { S.route = 'title'; S.param = mm[1].toLowerCase(); }
     else if ((mm = path.match(/^\/(?:movie|tv)\/([a-z0-9-]+)(\/(?:trailer|song|episode|video)(?:\/[a-z0-9-]+)?)$/i))) { S.route = 'video'; S.param = mm[1].toLowerCase(); S.vpath = mm[2].toLowerCase(); }
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
@@ -740,9 +748,7 @@
       var qs = new URLSearchParams(location.search);
       S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}(-\d{4})?$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.ott = bVals(qs.get('ott')).filter(function (o) { return ottName(o); }).join(','); S.browse.q = qs.get('q') || ''; S.browse.page = qPage();
     }
-    else if ((mm = path.match(/^\/movies(?:\/([a-z-]+))?$/)) && (!mm[1] || MOVIE_SECTIONS[mm[1]])) {
-      S.route = 'movies'; S.param = null; catFromUrl(S.cat.movies, mm[1] ? MOVIE_SECTIONS[mm[1]] : 'All');
-    }
+    else if (path === '/movies') { S.route = 'movies'; S.param = null; catFromUrl(S.cat.movies, 'All'); }
     else if (path === '/tv-shows') { S.route = 'tvshows'; S.param = null; catFromUrl(S.cat.tv, 'All'); }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
     else if ((mm = path.match(/^\/lists(?:\/([a-z0-9-]+))?$/i))) { S.route = 'lists'; S.param = mm[1] ? mm[1].toLowerCase() : null; }
@@ -1760,11 +1766,11 @@
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/in-theatres', text: 'All films in theatres' })])); }, 3),
+      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/movies-in-theatres', text: 'All films in theatres' })])); }, 3),
       lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return rateSection(); }, 4),
       lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
-      lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
+      lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/movies-coming-soon')); }, 6),
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
@@ -1772,7 +1778,7 @@
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
-      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Browse all' })])); }, 13),
+      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-movies', text: 'Browse all' })])); }, 13),
       lazySection(function () { return langSection(); }, 14)
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
@@ -2986,7 +2992,7 @@
     var yrs = []; for (var k = now + (S.movies.some(function (m) { return (m.data.releaseDate || '').slice(0, 4) === String(now + 1); }) ? 1 : 0); k >= now - 9; k--) yrs.push(String(k));
     v.appendChild(h('nav', { class: 'gnav', 'aria-label': 'Other years' }, yrs.map(function (x) {
       return h('a', { class: 'chip', href: '/year/' + x, 'aria-current': x === y ? 'page' : null, 'aria-pressed': String(x === y), text: x });
-    }).concat([h('a', { class: 'chip', href: '/browse/older-releases', text: 'Older…' })])));
+    }).concat([h('a', { class: 'chip', href: '/browse/older-movies', text: 'Older…' })])));
     if (!S.loaded) return;
     var w = h('section', { class: 'wrapx', style: 'padding-top:18px', 'aria-label': 'Movies of ' + y }); v.appendChild(w);
     var langs = {}; all.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; });
@@ -3011,7 +3017,7 @@
     for (var k = now; k > now - 10; k--) { var n = st ? st[k] || 0 : yearMovies(String(k)).length; if (n) tiles.push([String(k), n]); }
     if (tiles.length < 3) return null;
     return h('section', { class: 'sect', 'aria-label': 'Years' }, [
-      h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by year' }), h('span', { class: 'sub' }, [h('a', { href: '/browse/older-releases', text: 'Older releases' })])]),
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by year' }), h('span', { class: 'sub' }, [h('a', { href: '/browse/older-movies', text: 'Older releases' })])]),
       h('div', { class: 'rowx gtiles' }, tiles.map(function (x) {
         var c = yearCol(x[0]);
         return h('a', { class: 'gtile ytile', href: '/year/' + x[0], style: '--g1:' + c[0] + ';--g2:' + c[1], 'aria-label': x[0] + ', ' + x[1] + ' movies' }, [
@@ -5365,14 +5371,14 @@
     if (o.ott) q.push('ott=' + encodeURIComponent(o.ott));
     if (page > 1) q.push('page=' + page);
     var base = '/tv-shows';
-    if (kind === 'movies') { base = '/movies'; for (var k in MOVIE_SECTIONS) if (MOVIE_SECTIONS[k] === o.status) base += '/' + k; }
+    if (kind === 'movies') { base = '/movies'; for (var k in MOVIE_SECTIONS) if (MOVIE_SECTIONS[k] === o.status) base = '/browse/' + k; }
     return base + (q.length ? '?' + q.join('&') : '');
   }
   // A Movies section lists the same films as its Browse section, so search engines are pointed there.
   function catCanonical() {
     var page = qPage(), qs = new URLSearchParams(location.search), filtered = qs.get('lang') || qs.get('genre') || qs.get('year') || qs.get('ott');
     var m = location.pathname.match(/^\/movies\/([a-z-]+)$/);
-    if (m) return '/browse/' + m[1] + (page > 1 && !filtered ? '?page=' + page : '');
+    if (m) return '/browse/' + (OLD_SECTIONS[m[1]] || m[1]) + (page > 1 && !filtered ? '?page=' + page : '');
     return location.pathname + (page > 1 && !filtered ? '?page=' + page : '');
   }
   function drawCatalog(kind) {
@@ -5516,8 +5522,8 @@
     var pop = popularityOf(out), byPop = function (a, b) { return pop[b.id] - pop[a.id] || newest(a, b); };
     var rows = [];
     var add = function (title, items, opts, href) { if (items.length >= 6) rows.push([title, items, opts, href]); };
-    add('In theatres now', pinFirst(all.filter(function (m) { return m.data.section === 'In theatres'; }).sort(newest), rowPins('In theatres')), { book: true, inTheatresList: true }, '/browse/in-theatres');
-    add('Coming soon', pinFirst(withDate(all.filter(function (m) { return m.data.section === 'Coming soon'; }), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true }, '/browse/coming-soon');
+    add('In theatres now', pinFirst(all.filter(function (m) { return m.data.section === 'In theatres'; }).sort(newest), rowPins('In theatres')), { book: true, inTheatresList: true }, '/browse/movies-in-theatres');
+    add('Coming soon', pinFirst(withDate(all.filter(function (m) { return m.data.section === 'Coming soon'; }), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true }, '/browse/movies-coming-soon');
     // New on a service: on it in the last 12 months (its OTT date, else its release date).
     var ottDate = function (m) { return m.data.ottReleaseDate || m.data.releaseDate || ''; };
     [['netflix', 'Netflix'], ['prime-video', 'Prime Video'], ['zee5', 'ZEE5'], ['jiohotstar', 'JioHotstar'], ['sonyliv', 'SonyLIV']].forEach(function (o) {

@@ -149,6 +149,46 @@
   "trailingSlash": false,
   "redirects": [
     {
+      "source": "/browse/in-theatres",
+      "destination": "/browse/movies-in-theatres",
+      "permanent": true
+    },
+    {
+      "source": "/browse/coming-soon",
+      "destination": "/browse/movies-coming-soon",
+      "permanent": true
+    },
+    {
+      "source": "/browse/on-ott",
+      "destination": "/browse/movies-on-ott",
+      "permanent": true
+    },
+    {
+      "source": "/browse/older-releases",
+      "destination": "/browse/older-movies",
+      "permanent": true
+    },
+    {
+      "source": "/movies/in-theatres",
+      "destination": "/browse/movies-in-theatres",
+      "permanent": true
+    },
+    {
+      "source": "/movies/coming-soon",
+      "destination": "/browse/movies-coming-soon",
+      "permanent": true
+    },
+    {
+      "source": "/movies/on-ott",
+      "destination": "/browse/movies-on-ott",
+      "permanent": true
+    },
+    {
+      "source": "/movies/older-releases",
+      "destination": "/browse/older-movies",
+      "permanent": true
+    },
+    {
       "source": "/movie/attack-part-1-2020",
       "destination": "/movie/attack-part-1-2022",
       "permanent": true

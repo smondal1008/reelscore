@@ -965,10 +965,10 @@ async function main() {
   // the shell other routes fall back to; it carries no canonical (the app sets it), and its pre-rendered home block
   // only shows on "/" (the app switches views at once elsewhere). Titles match app/main.js BROWSE_TITLES / PEOPLE_TITLE.
   const HUBS = [
-    ['in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts: theatre, OTT or skip.'],
-    ['coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
-    ['on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
-    ['older-releases', 'Older releases', 'Older Indian Movies | Reelscore', 'Older Bollywood and regional Indian films, with cast, crew and verdicts.'],
+    ['movies-in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts: theatre, OTT or skip.'],
+    ['movies-coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
+    ['movies-on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
+    ['older-movies', 'Older releases', 'Older Indian Movies | Reelscore', 'Older Bollywood and regional Indian films, with cast, crew and verdicts.'],
     ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, with cast, trailers and verdicts.']
   ];
   const sectionOf = m => m.data.section === 'Releasing this week' ? 'In theatres' : (m.data.section || 'Older releases');
@@ -1007,11 +1007,11 @@ async function main() {
   const released = m => isTv(m.data) || !(m.data.releaseDate > today);
   let homeBody = '<h1>Verdicts on Indian movies and series</h1><p>Reelscore tracks ' + movies.length + ' Bollywood and regional Indian films and shows. ' +
     'For each one, people say whether it is worth the theatre, worth streaming on OTT, or worth skipping.</p>';
-  homeBody += block('In theatres now', bySection['In theatres'].slice(0, 18).map(titleLi), ['/browse/in-theatres', 'All ' + bySection['In theatres'].length + ' in theatres →']);
+  homeBody += block('In theatres now', bySection['In theatres'].slice(0, 18).map(titleLi), ['/browse/movies-in-theatres', 'All ' + bySection['In theatres'].length + ' in theatres →']);
   // As on the site: the home row lists titles with a release date (TBA ones only when pinned); the link counts them all.
-  homeBody += block('Coming soon', bySection['Coming soon'].filter(m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id)).slice(0, 18).map(titleLi), ['/browse/coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
-  homeBody += block('On OTT', bySection['On OTT'].slice(0, 18).map(titleLi), ['/browse/on-ott', 'All ' + bySection['On OTT'].length + ' on OTT →']);
-  homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-releases', 'All older releases →']);
+  homeBody += block('Coming soon', bySection['Coming soon'].filter(m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id)).slice(0, 18).map(titleLi), ['/browse/movies-coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
+  homeBody += block('On OTT', bySection['On OTT'].slice(0, 18).map(titleLi), ['/browse/movies-on-ott', 'All ' + bySection['On OTT'].length + ' on OTT →']);
+  homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-movies', 'All older releases →']);
   homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);
   homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
     langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
@@ -1448,7 +1448,7 @@ async function main() {
   write('page-dates.json', JSON.stringify(PAGE_DATES));
 
   // /llms.txt: a short Markdown guide to the site for AI tools (llmstxt.org format).
-  const sections = [['In theatres', '/browse/in-theatres'], ['Coming soon', '/browse/coming-soon'], ['On OTT', '/browse/on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-releases']];
+  const sections = [['In theatres', '/browse/movies-in-theatres'], ['Coming soon', '/browse/movies-coming-soon'], ['On OTT', '/browse/movies-on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-movies']];
   const recent = movies.filter(m => isTv(m.data) || (m.data.releaseDate || '') <= new Date().toISOString().slice(0, 10)).sort((a, b) => String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || ''))).slice(0, 25);
   const busiest = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a)).slice(0, 25);
   write('llms.txt', [
