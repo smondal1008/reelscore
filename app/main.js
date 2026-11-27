@@ -248,7 +248,7 @@
   }
   function needUser() { if (!S.db || !S.uid) { if (window.reelSignIn) { toast('Sign in with Google to do that.'); window.reelSignIn(); } else toast('Sign in to do that.'); return false; } return true; }
   function setVerdict(mid, val) {
-    if (!needUser() || writing.v) return;
+    if (!needUser() || writing.v || !verdictsReady()) return;
     var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {};
     if (cur.v[mid] === val) delete cur.v[mid]; else cur.v[mid] = val;
     cur.at = new Date().toISOString();
@@ -275,6 +275,7 @@
   }
   function saveReview(mid, text, spoiler, where, via) {
     if (!needUser() || writing.r) return;
+    if (!S.reviewsIn) { toast('Loading reviews. Try again in a moment.'); return; }
     var cur = clone(S.reviews[S.uid] || { items: {} }); cur.items = cur.items || {};
     if (text) { cur.items[mid] = { text: text.slice(0, 2000), spoiler: !!spoiler, at: new Date().toISOString() }; if (where) cur.items[mid].where = where; if (via) cur.items[mid].via = String(via).slice(0, 40); }
     else delete cur.items[mid];
@@ -282,14 +283,31 @@
     writing.r = true;
     guard(S.db.doc('reviews/' + S.uid).set(cur), text ? 'Review posted' : 'Review removed').then(function () { writing.r = false; });
   }
+  // Your list (watchlist, reminders, seen, following…) is one document, written whole. It must never be written
+  // before the saved copy has loaded: the page starts with an empty list, and writing that would wipe the real one.
+  // A tap that comes before it loads is kept and merged into the saved list when it arrives (mergeMine).
   function saveMine(msg) {
     if (!needUser()) return;
+    if (!S.mineLoaded) { S.minePending = true; if (msg) toast(msg); return; }
     if (writing.m) { writing.mAgain = msg || true; return; }
     writing.m = true;
     guard(S.db.doc('data/users/' + S.uid + '/profile').set(clone(S.mine)), msg).then(function () {
       writing.m = false; if (writing.mAgain) { var again = writing.mAgain; writing.mAgain = null; saveMine(again === true ? null : again); }
     });
   }
+  // The list keys a tap can add to. Before the saved list loads, everything in them came from taps on this page.
+  var MINE_KEYS = ['watchlist', 'following', 'reminders', 'wtw', 'nope', 'seen', 'unseen'];
+  function mergeMine(saved, local) {
+    var out = {};
+    MINE_KEYS.forEach(function (k) {
+      var a = Array.isArray(saved[k]) ? saved[k].slice() : [];
+      (Array.isArray(local[k]) ? local[k] : []).forEach(function (id) { if (a.indexOf(id) === -1) a.push(id); });
+      out[k] = a;
+    });
+    return out;
+  }
+  // Ratings and reviews are written whole too: wait until the saved ones have loaded.
+  function verdictsReady() { if (S.verdictsIn) return true; toast('Loading your ratings. Try again in a moment.'); return false; }
   // Titles you've said you've seen (Seen it on a "Seen these?" card, Don't rate in Tonight's picks). Saved with
   // My List; the ones without a verdict show in "Seen, not rated" there.
   function isSeen(id) { return (S.mine.seen || []).indexOf(id) !== -1; }
@@ -3700,7 +3718,7 @@
     return { n: n, when: when };
   }
   function setPlan(mid, val) {
-    if (!needUser() || writing.v) return;
+    if (!needUser() || writing.v || !verdictsReady()) return;
     var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
     var k = planKey(mid), off = cur.bo[k] === val;
     if (off) delete cur.bo[k]; else cur.bo[k] = val;
@@ -4035,7 +4053,7 @@
     var y = 0, n = 0;
     Object.keys(S.verdicts).forEach(function (u) { var x = (S.verdicts[u].bo || {})[key]; if (x === 'y') y++; else if (x === 'n') n++; });
     var vote = function (val) {
-      if (!needUser() || writing.v) return;
+      if (!needUser() || writing.v || !verdictsReady()) return;
       var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
       if (cur.bo[key] === val) delete cur.bo[key]; else cur.bo[key] = val;
       cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; if (!patchTitleBits()) render();
@@ -4345,7 +4363,7 @@
     var key = m.id + ':best', mine = S.uid && S.verdicts[S.uid] && (S.verdicts[S.uid].bo || {})[key], n = {}, tot = 0;
     Object.keys(S.verdicts).forEach(function (u) { var x = (S.verdicts[u].bo || {})[key]; if (x) { n[x] = (n[x] || 0) + 1; tot++; } });
     var vote = function (slug) {
-      if (!needUser() || writing.v) return;
+      if (!needUser() || writing.v || !verdictsReady()) return;
       var cur = clone(S.verdicts[S.uid] || { v: {} }); cur.v = cur.v || {}; cur.bo = cur.bo || {};
       if (cur.bo[key] === slug) delete cur.bo[key]; else cur.bo[key] = slug;
       cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur; if (!patchTitleBits()) render();
@@ -5967,7 +5985,7 @@
     db.collection('reviews').onSnapshot(function (snap) {
       var o = {}; snap.docs.forEach(function (s) { o[s.id] = s.data(); });
       if (S.uid && writing.r && S.reviews[S.uid]) o[S.uid] = S.reviews[S.uid];
-      S.reviews = o; render();
+      S.reviews = o; S.reviewsIn = true; render();
     }, function () {});
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
@@ -5975,9 +5993,11 @@
       var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || [], o.seen || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
-      S.mine = { watchlist: (d.watchlist || []).slice(), following: (d.following || []).slice(), reminders: (d.reminders || []).slice(), wtw: (d.wtw || []).slice(), nope: (d.nope || []).slice(), seen: (d.seen || []).slice(), unseen: (d.unseen || []).slice() };
+      var pending = !S.mineLoaded && S.minePending ? S.mine : null;
+      S.mine = mergeMine(d, pending || {});
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
-      S.mineLoaded = true; render();
-    }, function () {});
+      S.mineLoaded = true; S.minePending = false; render();
+      if (pending) saveMine(null);
+    }, function () { if (S.minePending) toast('Couldn’t load your list, so your last change wasn’t saved. Reload to try again.'); });
   }).catch(function () { clearTimeout(timer); S.loadMsg = 'The catalogue is unavailable in this view.'; render(true); });
 })();
