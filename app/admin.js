@@ -1132,7 +1132,7 @@ window.ReelAdmin = function (env) {
   var ROWS = [
     ['theatres', 'In theatres', 'Newest release first, then this week’s releases', 'in theatres', 'film'],
     ['coming', 'Coming soon', 'In the usual Coming soon order', 'in Coming soon', 'film'],
-    ['ott', 'New on OTT', 'In the usual On OTT order', 'on OTT', 'film'],
+    ['ott', 'Streaming this year', 'In the usual On OTT order', 'on OTT', 'film'],
     ['trailers', 'New trailers', 'Newest release first, films from the last 6 months and upcoming ones', 'with a trailer', 'film'],
     ['songs', 'New songs', 'Newest song first (its YouTube upload date, or the film’s release if that’s earlier), films from the last 6 months and upcoming ones (up to 3 songs each)', 'with a video song', 'film'],
     ['tvpromos', 'New TV promotionals', 'Shows still running first, then newest (up to 2 videos each)', 'with a video', 'show']

@@ -273,7 +273,7 @@ function pageDate(url, content) {
 }
 
 // Titles the admin pins to the front of a homescreen row (settings/rows, set in Admin > Home rows):
-// In theatres, Coming soon, New on OTT, New trailers, New songs and New TV promotionals.
+// In theatres, Coming soon, Streaming this year (On OTT), New trailers, New songs and New TV promotionals.
 const ROW_KEYS = ['theatres', 'coming', 'ott', 'trailers', 'songs', 'tvpromos'];
 function cleanRows(d) { const ids = a => Array.isArray(a) ? a.filter(x => typeof x === 'string') : [], o = {}; ROW_KEYS.forEach(k => { o[k] = ids(d && d[k]); }); return o; }
 // Book tickets / Watch now switched per page in Admin > Buttons (settings/buttons); anything missing counts as shown.

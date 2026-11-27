@@ -204,6 +204,9 @@
   // "2000–present", "2016–2019", or "2024"
   function tvYears(d) { var a = (d.releaseDate || '').slice(0, 4), b = String(d.endYear || '').trim(); if (!a) return b; return b ? (b === a ? a : a + '–' + b) : a + '–present'; }
   function fmtDate(iso, withYear) { if (!iso) return 'Date TBA'; if (/^\d{4}$/.test(iso)) return iso; var p = iso.split('-'); return (+p[2]) + ' ' + MONTHS[+p[1] - 1] + (withYear ? ' ' + p[0] : ''); }
+  // The day a film started (or starts) streaming: its OTT Release Date; for straight-to-OTT films, the release date.
+  // A theatre film marked Now on OTT with no OTT date has none (its release date is the theatre date).
+  function streamDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d.ottReleaseDate || '') ? d.ottReleaseDate : d.nowPlaying === 'ott' ? '' : d.releaseDate || ''; }
   function isOld(m) { return m.data.section === 'Older releases'; }
   function statusLabel(m) {
     var d = m.data, rel = released(m);
@@ -877,7 +880,7 @@
     } else if (!(opts.noNew && shownPct(sc) === null && released(m))) {
       top = h('span', { class: 'badge' }, [h('i'), shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
     }
-    var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
+    var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + (streamDate(d) ? ' · ' + fmtDate(streamDate(d)) : '') : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
     // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me or Tickets / Not for me icons.
     var up = !!opts.upIcons && !isTv(m) && !released(m), due = up ? dueLabel(d) : '';
     if (up) meta = [upLead(d), (d.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ');
@@ -1599,7 +1602,7 @@
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
