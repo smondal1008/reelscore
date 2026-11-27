@@ -1311,7 +1311,8 @@ body.r-about .pr > ul > li, body.r-privacy .pr > ul > li { margin: 0 0 8px; line
 .tov-mini .tov-v { flex: none; padding: 0; }
 .tov.tov-mini .tov-v iframe, .tov.tov-mini .tov-v video, .tov.tov-mini.has-next .tov-v iframe, .tov.tov-mini.has-next .tov-v video { width: 100%; border-radius: 0; }
 @media (max-width: 899px), (hover: none) { .tov-mn { display: none; } }
-@media (max-width: 760px) { .tov-auto span:last-child { display: none; } .tov-auto { padding: 0 8px; } }
+/* Phones keep the Autoplay and Repeat labels: two bare switches side by side would be impossible to tell apart. */
+@media (max-width: 760px) { .tov-auto { padding: 0 10px 0 8px; } }
 @media (prefers-reduced-motion: reduce) { .tov.tov-mini { animation: none; } }
 
 /* ---------- News (/news, /news/<slug>) ---------- */

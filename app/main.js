@@ -1590,10 +1590,16 @@
         d2 < 0 ? [h('span', { 'aria-hidden': 'true', text: '‹' }), h('span', { class: 'tov-nl', text: lab })] : [h('span', { class: 'tov-nl', text: lab }), h('span', { 'aria-hidden': 'true', text: '›' })]);
     };
     var navs = qPrev || qNext ? h('div', { class: 'tov-navs', role: 'group', 'aria-label': 'Previous and next ' + what }, [navB(-1), navB(1)]) : null;
+    // Repeat (songs): play the same song again when it ends, instead of moving on. Remembered like Autoplay.
+    var isSong = x.cat === 'songs';
+    if (isSong && media.tagName === 'VIDEO') media.loop = tovRepeat();
+    var repB = isSong ? h('button', { type: 'button', class: 'tov-auto tov-rep', role: 'switch', 'aria-checked': String(tovRepeat()), title: 'Play this song again when it ends',
+      on: { click: function () { var on = !tovRepeat(); try { localStorage.setItem('rs_repeat', on ? '1' : '0'); } catch (e) {} repB.setAttribute('aria-checked', String(on)); if (media.tagName === 'VIDEO') media.loop = on; if (on && S.tov && S.tov.hideNext) S.tov.hideNext(); } } },
+      [h('span', { class: 'tov-sw', 'aria-hidden': 'true' }), h('span', { text: 'Repeat' })]) : null;
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [
         h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
-        h('div', { class: 'tov-acts' }, [navs, auto, shareB, more, miniB, close])
+        h('div', { class: 'tov-acts' }, [navs, repB, auto, shareB, more, miniB, close])
       ]),
       h('div', { class: 'tov-v' }, [media])
     ]);
@@ -1603,11 +1609,33 @@
       else if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'N' || e.key === 'P') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); step(e.key === 'N' ? 1 : -1); }
     } };
     document.addEventListener('keydown', S.tov.key);
+    if (isSong) { S.tov.repeatOn = tovRepeat; if (media.tagName !== 'VIDEO') repeatYt(S.tov, media); }
     upNext(box, media, opener, queue);
     document.body.appendChild(box);
     if (!tovMiniOk()) S.tovMini = false;
     setTovMini(!!S.tovMini, true);
     if (!S.tovMini) close.focus();
+  }
+  function tovRepeat() { try { return localStorage.getItem('rs_repeat') === '1'; } catch (e) { return false; } }
+  // Repeat for a YouTube song: when the player reports the end (state 0), go back to the start and play again.
+  function repeatYt(t, media) {
+    var YT = 'https://www.youtube-nocookie.com';
+    var send = function (func, args) { try { media.contentWindow.postMessage(JSON.stringify({ event: 'command', func: func, args: args || [], id: 'rs-tov', channel: 'widget' }), YT); } catch (e) {} };
+    var onMsg = function (e) {
+      if (e.origin !== YT || e.source !== media.contentWindow || S.tov !== t || !tovRepeat()) return;
+      var m; try { m = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (er) { return; }
+      var ended = m && ((m.event === 'onStateChange' && m.info === 0) || (m.info && typeof m.info === 'object' && m.info.playerState === 0));
+      if (ended) { send('seekTo', [0, true]); send('playVideo'); }
+    };
+    var hello = function () {
+      try {
+        media.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'rs-tov', channel: 'widget' }), YT);
+        media.contentWindow.postMessage(JSON.stringify({ event: 'command', func: 'addEventListener', args: ['onStateChange'], id: 'rs-tov', channel: 'widget' }), YT);
+      } catch (er) {}
+    };
+    window.addEventListener('message', onMsg);
+    media.addEventListener('load', function () { hello(); setTimeout(hello, 1000); });
+    var prev = t.cleanup; t.cleanup = function () { window.removeEventListener('message', onMsg); if (prev) prev(); };
   }
   function tovAutoplay() { try { return localStorage.getItem('rs_autoplay') !== '0'; } catch (e) { return true; } }
   function tovMiniOk() { try { return window.matchMedia('(min-width: 900px) and (hover: hover)').matches; } catch (e) { return false; } }
@@ -1648,8 +1676,10 @@
       ])
     ]);
     box.querySelector('.tov-v').appendChild(card);
+    t.hideNext = function () { shown = false; card.hidden = true; box.classList.remove('has-next'); };
     var tick = function (cur, dur, ended) {
       if (done || S.tov !== t) return;
+      if (t.repeatOn && t.repeatOn()) { if (shown) t.hideNext(); return; } // Repeat is on: this song plays again instead
       if (ended) {
         if (!cancelled && autoOn) playNext();
         else if (!cancelled) { shown = true; card.hidden = false; box.classList.add('has-next'); count.textContent = ''; }
@@ -1685,7 +1715,7 @@
     };
     window.addEventListener('message', onMsg);
     media.addEventListener('load', function () { hello(); setTimeout(hello, 1000); });
-    t.cleanup = function () { window.removeEventListener('message', onMsg); };
+    var prevClean = t.cleanup; t.cleanup = function () { window.removeEventListener('message', onMsg); if (prevClean) prevClean(); };
   }
   function closeTrailerOverlay() {
     if (!S.tov) return;
