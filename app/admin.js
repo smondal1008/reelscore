@@ -2033,10 +2033,17 @@ window.ReelAdmin = function (env) {
       && (miss.indexOf('Missing info') === -1 || fields.every(function (k) { return missField(d, id, k); }));
   }
   function setList(fn) { fn(); renderList(); }
+  var needsOpen = false;
+  // Close the Needs work dropdown on a click outside it.
+  document.addEventListener('click', function (e) { if (needsOpen && !(e.target.closest && e.target.closest('.needs')) && document.body.contains(e.target)) { needsOpen = false; renderFilters(); } });
   function renderFilters() {
     var box = $('filters'); box.innerHTML = '';
     var base = movies.filter(function (m) { return passQL(m.data, m.id); });
-    FILTERS.forEach(function (f, i) {
+    // One row: the six section chips, then "Needs work", a dropdown holding the Google filters (pick one) and the
+    // Missing filters (they stack). Picked ones show as chips beside it, each with an × to drop it.
+    var SECS = FILTERS.filter(function (f) { return f === 'All' || SECTIONS.indexOf(f) !== -1; });
+    var WORK = FILTERS.filter(function (f) { return SECS.indexOf(f) === -1; });
+    var info = function (f) {
       var on, n, click;
       if (f === 'All') {
         on = filter === 'All' && !missF.length; n = base.length;
@@ -2050,10 +2057,41 @@ window.ReelAdmin = function (env) {
         n = base.filter(function (m) { return chipOk(m.data, m.id, f); }).length;
         click = function () { filter = on ? 'All' : f; if (/not in Google/.test(f)) loadSeoVotes(); };
       }
-      if (isMiss(f) && !isMiss(FILTERS[i - 1])) box.appendChild(h('span', { class: 'chipsep', 'aria-hidden': 'true' }));
-      box.appendChild(h('button', { type: 'button', class: 'chip' + (isMiss(f) ? ' gap' : ''), 'aria-pressed': String(on), text: (isMiss(f) && on ? '✓ ' : '') + f + ' · ' + n,
-        title: isMiss(f) ? 'Combine with a section and other Missing filters' : null,
-        on: { click: function () { setList(function () { click(); pageNo = 1; }); } } }));
+      return { on: on, n: n, click: click };
+    };
+    var act = function (fn, keep) { return function () { setList(function () { fn(); pageNo = 1; }); if (keep) { var b = document.querySelector('#filters [data-f="' + keep + '"]'); if (b) b.focus(); } }; };
+    SECS.forEach(function (f) {
+      var x = info(f);
+      box.appendChild(h('button', { type: 'button', class: 'chip', 'aria-pressed': String(x.on), text: f + ' · ' + x.n, on: { click: act(x.click) } }));
+    });
+    var picked = WORK.filter(function (f) { return info(f).on; });
+    box.appendChild(h('span', { class: 'chipsep', 'aria-hidden': 'true' }));
+    var wrap = h('span', { class: 'needs' });
+    var nbtn = h('button', { type: 'button', class: 'chip needs-b', id: 'needsBtn', 'aria-expanded': String(needsOpen), 'aria-controls': 'needsPanel', 'aria-pressed': String(picked.length > 0),
+      on: { click: function () { needsOpen = !needsOpen; renderFilters(); var b = $('needsBtn'); if (b) b.focus(); } } },
+      ['Needs work' + (picked.length ? ' · ' + picked.length : ''), h('span', { 'aria-hidden': 'true', class: 'needs-c', text: needsOpen ? '▴' : '▾' })]);
+    wrap.appendChild(nbtn);
+    if (needsOpen) {
+      var grp = function (label, list, note) {
+        return h('div', { class: 'needs-g', role: 'group', 'aria-label': label }, [h('div', { class: 'needs-h' }, [label, note ? h('span', { class: 'note', text: ' · ' + note }) : null])].concat(list.map(function (f) {
+          var x = info(f);
+          return h('button', { type: 'button', class: 'needs-i', 'data-f': f, 'aria-pressed': String(x.on), on: { click: act(x.click, f) } }, [
+            h('span', { class: 'needs-x', 'aria-hidden': 'true', text: x.on ? '✓' : '' }), h('span', { class: 'needs-t', text: f }), h('span', { class: 'needs-n', text: String(x.n) })]);
+        })));
+      };
+      var panel = h('div', { class: 'needs-p', id: 'needsPanel' }, [
+        grp('Google', WORK.filter(function (f) { return /not in Google/.test(f); }), 'pick one'),
+        grp('Missing', WORK.filter(isMiss), 'combine as many as you like'),
+        h('div', { class: 'needs-f' }, [picked.length ? h('button', { type: 'button', class: 'linkbtn', text: 'Clear these', on: { click: act(function () { missF = []; fieldF = []; if (/not in Google/.test(filter)) filter = 'All'; }) } }) : h('span'),
+          h('button', { type: 'button', class: 'btn small', text: 'Done', on: { click: function () { needsOpen = false; renderFilters(); var b = $('needsBtn'); if (b) b.focus(); } } })])
+      ]);
+      panel.addEventListener('keydown', function (e) { if (e.key === 'Escape') { needsOpen = false; renderFilters(); var b = $('needsBtn'); if (b) b.focus(); } });
+      wrap.appendChild(panel);
+    }
+    box.appendChild(wrap);
+    picked.forEach(function (f) {
+      var x = info(f);
+      box.appendChild(h('span', { class: 'chip needs-on' }, [f + ' · ' + x.n, h('button', { type: 'button', class: 'needs-rm', 'aria-label': 'Remove filter: ' + f, text: '×', on: { click: act(x.click) } })]));
     });
     if (missF.indexOf('Missing info') !== -1) {
       var fr = h('div', { class: 'fieldrow', role: 'group', 'aria-label': 'Missing which field' }, [
