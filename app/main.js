@@ -374,6 +374,7 @@
   var dupTitles = { list: null, map: {} };
   function titleKey(m) { var d = m.data; return String(d.title || '').trim().toLowerCase() + '|' + (isTv(m) ? 'tv ' + tvYears(d) : (d.releaseDate || '').slice(0, 4)); }
   function movieTitleTag(m) {
+    var ov = String(m.data.seoTitle || '').trim(); if (ov) return ov; // SEO title typed in Admin > Edit title
     if (dupTitles.list !== S.movies) { dupTitles = { list: S.movies, map: {} }; S.movies.forEach(function (x) { var k = titleKey(x); dupTitles.map[k] = (dupTitles.map[k] || 0) + 1; }); }
     var d = m.data, parts = [isTv(m) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : (d.releaseDate || '').slice(0, 4)];
     if (dupTitles.map[titleKey(m)] > 1 && langOf(d)) parts.push(langOf(d));
@@ -4289,7 +4290,7 @@
         latest: latest && { title: latest.m.data.title, year: when(latest).slice(0, 4), theatres: !!latest.w.th, platform: latest.svc.join(' / ') },
         streaming: streams.length, services: svcNames, picks: streams.filter(function (t) { return t.acting || !acting.length; }).slice(0, 4).map(function (t) { return t.m.data.title; }),
         famous: (acting.length ? acting : crew).filter(function (t) { return !t.w.up && when(t) && when(t) <= today(); }).slice(0, 4).map(function (t) { return t.m.data.title; }) });
-      document.title = builtHead && builtHead.title && location.pathname.replace(/\/+$/, '') === builtHead.path ? builtHead.title : seo.title;
+      document.title = builtHead && builtHead.title && location.pathname.replace(/\/+$/, '') === builtHead.path ? builtHead.title : (String((stored && stored.seoTitle) || '').trim() || seo.title);
     } else document.title = personTitleTag(name);
     var langCount = {}; titles.forEach(function (t) { if (t.lang) langCount[t.lang] = (langCount[t.lang] || 0) + 1; });
     var langList = Object.keys(langCount).sort(function (a, b) { return langCount[b] - langCount[a] || a.localeCompare(b); });

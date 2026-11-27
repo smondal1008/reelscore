@@ -493,7 +493,7 @@ window.ReelAdmin = function (env) {
   function peStart(key) {
     var st = people[key] || {}, any = personCredits(key)[0];
     var name = st.name || (any && any.c.name) || (allPeople().filter(function (p) { return p.key === key; })[0] || {}).name || '';
-    pe = { key: key, d: { name: name, bio: st.bio || '', birthday: st.birthday || '', birthplace: st.birthplace || '', gender: st.gender || '', aka: (st.aka || []).slice(), pop: popState(key) },
+    pe = { key: key, d: { name: name, bio: st.bio || '', birthday: st.birthday || '', birthplace: st.birthplace || '', gender: st.gender || '', aka: (st.aka || []).slice(), pop: popState(key), seoTitle: st.seoTitle || '', seoDescription: st.seoDescription || '' },
       cr: {}, ott: {}, dirty: false, saving: false, tab: 'miss', crTab: 'all', q: '', crAll: false };
   }
   function peTouch() { if (pe && !pe.dirty) { pe.dirty = true; peBar(); } }
@@ -734,9 +734,15 @@ window.ReelAdmin = function (env) {
 
     // Side: Google, and what the public page shows.
     var gt = h('span', { class: 'pe-gt' }), gd = h('span', { class: 'pe-gd' }), gn = h('div', { class: 'pe-gn' });
+    var stIn = bind(h('input', { class: 'in', id: 'pe_seot', maxlength: 120, disabled: !canWrite }), 'seoTitle', peGoogle); stIn.value = pe.d.seoTitle;
+    var sdIn = bind(h('textarea', { class: 'in', id: 'pe_seod', rows: 3, maxlength: 320, disabled: !canWrite }), 'seoDescription', peGoogle); sdIn.value = pe.d.seoDescription;
+    var stN = h('span', { class: 'note' }), sdN = h('span', { class: 'note' }), stW = h('div', { class: 'warn', hidden: true }), sdW = h('div', { class: 'warn', hidden: true });
     side.appendChild(h('section', { class: 'card', 'aria-labelledby': 'pe_h_g' }, [h('h2', { id: 'pe_h_g', text: 'In Google' }),
       h('div', { class: 'pe-serp' }, [h('span', { class: 'pe-gu', text: location.host + ' › person › ' + key }), gt, gd]), gn,
       h('div', { class: 'note', text: 'Worked out from ' + pron + ' published titles, as on the live page. Changes reach Google at the next deploy.' }),
+      h('div', { class: 'field', style: 'margin-top:10px' }, [h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: 'pe_seot', text: 'SEO title (optional)' }), stN]), stIn, stW]),
+      h('div', { class: 'field' }, [h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: 'pe_seod', text: 'SEO description (optional)' }), sdN]), sdIn, sdW]),
+      h('div', { class: 'note', text: 'Leave blank to keep the worked-out text above, which stays up to date. Your text replaces it from the next deploy.' }),
       h('div', { class: 'pe-checks' }, [
         [g.on, g.on ? 'In Google' : 'Not in Google', g.text.replace(/^(In Google|Not in Google)[:]?\s*/, '')],
         [!!safeUrl(st.photoUrl), 'Photo', safeUrl(st.photoUrl) ? 'on file' : 'none yet'],
@@ -751,8 +757,14 @@ window.ReelAdmin = function (env) {
       h('div', { class: 'note', text: 'Known for, About, Works most with and By language are worked out from ' + pron + ' credits.' })]));
     function peGoogle() {
       var s = peSeoText(key, personCredits(key), pe.d).seo;
-      gt.textContent = s.title || '—'; gd.textContent = s.description || '—';
-      gn.textContent = 'Title ' + s.title.length + ' / 60 · Description ' + s.description.length + ' / 158';
+      var ot = String(pe.d.seoTitle || '').trim(), od = String(pe.d.seoDescription || '').trim();
+      var t = ot || s.title || '', ds = od || s.description || '';
+      gt.textContent = t || '—'; gd.textContent = ds || '—';
+      gn.textContent = 'Title ' + t.length + ' / 60 · Description ' + ds.length + ' / 155' + (ot || od ? ' · your text, from the next deploy' : ' · worked out');
+      stIn.placeholder = s.title ? 'Worked out: ' + s.title : ''; sdIn.placeholder = s.description ? 'Worked out: ' + s.description : '';
+      stN.textContent = ot.length + ' / 60'; sdN.textContent = od.length + ' / 155';
+      var tw = ot ? seoWarn(ot, 60, 'title') : [], dw = od ? seoWarn(od, 155, 'description') : [];
+      stW.hidden = !tw.length; stW.textContent = tw.join(' '); sdW.hidden = !dw.length; sdW.textContent = dw.join(' ');
     }
     peGoogle(); peBar();
     if (same) window.scrollTo(0, keepY);
@@ -793,7 +805,8 @@ window.ReelAdmin = function (env) {
     Promise.all(jobs).then(function () {
       var body = { name: name, bio: String(d.bio || '').trim().slice(0, 600), updatedAt: new Date().toISOString(),
         birthday: /^\d{4}-\d{2}-\d{2}$/.test(d.birthday || '') ? d.birthday : '', birthplace: String(d.birthplace || '').trim().slice(0, 120), gender: d.gender || '',
-        aka: d.aka.map(function (x) { return String(x).trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10) };
+        aka: d.aka.map(function (x) { return String(x).trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10),
+        seoTitle: String(d.seoTitle || '').replace(/\s+/g, ' ').trim().slice(0, 120), seoDescription: String(d.seoDescription || '').replace(/\s+/g, ' ').trim().slice(0, 320) };
       // 2. A new name: rename on every title (that moves the people record), then write the profile at the new address.
       var p = k !== oldKey ? renamePerson(oldKey, name) : Promise.resolve();
       return p.then(function () { return db.doc('people/' + k).set(body, { merge: true }); })
@@ -3668,6 +3681,7 @@ window.ReelAdmin = function (env) {
       slugField()
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
+    if (movies.some(function (m) { return m.id === currentId; })) main.appendChild(seoCard());
 
     // images
     main.appendChild(h('section', { class: 'card' }, [
@@ -3807,6 +3821,72 @@ window.ReelAdmin = function (env) {
   function urlSlug(t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); }
   function suggestedSlug(d) { var b = urlSlug(d.title), y = (d.releaseDate || '').slice(0, 4); return b ? (/^\d{4}$/.test(y) ? b + '-' + y : b) : ''; }
   function slugOf(m) { return urlSlug(m.data.slug) || suggestedSlug(m.data) || m.id; }
+  // ---------- Search results (SEO) on Edit title ----------
+  // "Live now" is read from the title's public page as last deployed, so it is exactly what Google and link previews get.
+  // An SEO title or description typed here replaces the worked-out one at the next deploy (scripts/build.mjs, app/main.js).
+  var seoLive = {};
+  var SEO_DATEISH = /\b(19|20)\d{2}\b|\b(jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*\b|\b(today|tomorrow|tonight|this (week|weekend|friday|month)|next (week|month)|releases?|releasing|now showing|in theatres now|day \d+)\b|\d+\s*(crore|cr)\b/i;
+  function seoLiveFor(path, done) {
+    var c = seoLive[path];
+    if (c && c.state !== 'loading') return done(c);
+    if (c) { c.wait.push(done); return; }
+    c = seoLive[path] = { state: 'loading', wait: [done] };
+    fetch(path, { cache: 'no-store', credentials: 'omit' }).then(function (r) { return r.ok ? r.text() : ''; }).then(function (html) {
+      var doc = new DOMParser().parseFromString(html || '', 'text/html');
+      var can = doc.querySelector('link[rel="canonical"]'), canon = can ? can.getAttribute('href') || '' : '';
+      // A path with no built page gets the app's shell back (the home page's head): treat that as "no page yet".
+      if (!canon || canon.replace(/^https?:\/\/[^/]+/, '') !== path) { c.state = 'none'; }
+      else {
+        var md = doc.querySelector('meta[name="description"]'), rb = doc.querySelector('meta[name="robots"]');
+        c.state = 'ok'; c.title = (doc.querySelector('title') || {}).textContent || ''; c.description = md ? md.getAttribute('content') || '' : '';
+        c.canonical = canon; c.robots = rb ? rb.getAttribute('content') || '' : '';
+      }
+    }).catch(function () { c.state = 'error'; }).then(function () { var w = c.wait; delete c.wait; w.forEach(function (f) { f(c); }); });
+  }
+  function seoWarn(txt, max, what) {
+    var out = [], n = txt.length;
+    if (n > max) out.push('Over ' + max + ' characters: Google will likely cut the ' + what + ' off.');
+    if (what === 'title' && n && n < 25) out.push('Short: add the year or what the page offers (verdicts, OTT, cast).');
+    if (SEO_DATEISH.test(txt)) out.push('Mentions a date, a release status or a figure. The worked-out text updates itself; this won’t, so check it again later.');
+    return out;
+  }
+  function seoCard() {
+    var path = pathBase(draft) + slugOf({ id: currentId, data: draft });
+    var gt = h('span', { class: 'pe-gt' }), gd = h('span', { class: 'pe-gd' }), gn = h('div', { class: 'pe-gn' }), live = h('div', { class: 'note' });
+    var tIn = h('input', { class: 'in', id: 'f_seoTitle', maxlength: 120, disabled: !canWrite }), dIn = h('textarea', { class: 'in', id: 'f_seoDescription', rows: 3, maxlength: 320, disabled: !canWrite });
+    tIn.value = draft.seoTitle || ''; dIn.value = draft.seoDescription || '';
+    var tN = h('span', { class: 'note' }), dN = h('span', { class: 'note' }), tW = h('div', { class: 'warn', hidden: true }), dW = h('div', { class: 'warn', hidden: true });
+    var cur = { state: 'loading' };
+    function draw() {
+      var ot = String(draft.seoTitle || '').trim(), od = String(draft.seoDescription || '').trim();
+      var at = cur.state === 'ok' ? cur.title : '', ad = cur.state === 'ok' ? cur.description : '';
+      gt.textContent = ot || at || (draft.title || 'Untitled'); gd.textContent = od || ad || '—';
+      tIn.placeholder = at ? 'Worked out: ' + at : 'Leave blank to use the worked-out title';
+      dIn.placeholder = ad ? 'Worked out: ' + ad : 'Leave blank to use the worked-out description';
+      gn.textContent = 'Title ' + gt.textContent.length + ' / 60 · Description ' + (od || ad).length + ' / 155' + (ot || od ? ' · your text, from the next deploy' : ' · worked out');
+      tN.textContent = ot.length + ' / 60'; dN.textContent = od.length + ' / 155';
+      var tw = ot ? seoWarn(ot, 60, 'title') : [], dw = od ? seoWarn(od, 155, 'description') : [];
+      tW.hidden = !tw.length; tW.textContent = tw.join(' '); dW.hidden = !dw.length; dW.textContent = dw.join(' ');
+      if (cur.state === 'loading') live.textContent = 'Reading the live page…';
+      else if (cur.state === 'none') live.textContent = 'No public page yet: it is created at the next deploy (published titles only).';
+      else if (cur.state === 'error') live.textContent = 'Couldn’t read the live page just now.';
+      else live.textContent = 'Live now (last deploy): ' + (cur.robots && /noindex/.test(cur.robots) ? 'kept out of Google (noindex)' : 'open to Google') + ' · canonical ' + cur.canonical.replace(/^https?:\/\//, '') + '. Edits to the story, cast or dates change the worked-out text at the next deploy too.';
+    }
+    tIn.addEventListener('input', function () { draft.seoTitle = tIn.value; touch(); draw(); });
+    dIn.addEventListener('input', function () { draft.seoDescription = dIn.value; touch(); draw(); });
+    seoLiveFor(path, function (c) { cur = c; draw(); });
+    draw();
+    var lab = function (id, txt, n) { return h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: id, text: txt }), n]); };
+    return h('section', { class: 'card', 'aria-labelledby': 'h_seo' }, [
+      h('h2', { id: 'h_seo', text: 'Search results (SEO)' }),
+      h('div', { class: 'pe-serp' }, [h('span', { class: 'pe-gu', text: location.host + ' › ' + path.slice(1).replace('/', ' › ') }), gt, gd]), gn, live,
+      h('div', { class: 'grid', style: 'margin-top:12px' }, [
+        h('div', { class: 'field wide' }, [lab('f_seoTitle', 'SEO title (optional)', tN), tIn, tW]),
+        h('div', { class: 'field wide' }, [lab('f_seoDescription', 'SEO description (optional)', dN), dIn, dW])
+      ]),
+      h('div', { class: 'note', text: 'Leave both blank to keep the worked-out text, which stays up to date with the verdicts, release and where to watch. Fill one in only for pages you want to hand-tune; it replaces the worked-out text for Google and link previews from the next deploy.' })
+    ]);
+  }
   function pathBase(d) { return d && d.section === 'TV shows' ? '/tv/' : '/movie/'; }
   function slugTakenBy(slug, exceptId) {
     return movies.find(function (m) { return m.id !== exceptId && (slugOf(m) === slug || m.id === slug); }) || null;
@@ -3878,6 +3958,7 @@ window.ReelAdmin = function (env) {
     if (clash) { saving = false; setDirty(true); setStatus('The page URL ' + pathBase(draft) + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
     if (isNew) currentId = slugify(draft.title) + '-' + Math.random().toString(36).slice(2, 6);
     var body = clone(draft); body.updatedAt = new Date().toISOString();
+    ['seoTitle', 'seoDescription'].forEach(function (k) { var v = String(body[k] || '').replace(/\s+/g, ' ').trim(); if (v) body[k] = v; else delete body[k]; });
     if (body.nowPlaying && body.section !== 'TV shows') body.section = npSection(body); // dates may have changed since it was picked
     body.slug = slug;
     var prev = movies.find(function (m) { return m.id === currentId; });

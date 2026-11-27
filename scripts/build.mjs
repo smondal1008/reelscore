@@ -664,6 +664,7 @@ async function main() {
   const titleKey = m => String(m.data.title || '').trim().toLowerCase() + '|' + (isTv(m.data) ? 'tv ' + tvYears(m.data) : year(m.data));
   const dupTitle = {}; movies.forEach(m => { const k = titleKey(m); dupTitle[k] = (dupTitle[k] || 0) + 1; });
   function movieTitleTag(m) {
+    const ov = String(m.data.seoTitle || '').trim(); if (ov) return ov; // SEO title typed in Admin > Edit title
     const d = m.data, parts = [isTv(d) ? (tvYears(d) ? 'TV series ' + tvYears(d) : 'TV series') : year(d)];
     const lang = String(d.languages || '').split(/[,;]/)[0].trim();
     if (dupTitle[titleKey(m)] > 1 && lang) parts.push(lang);
@@ -694,7 +695,7 @@ async function main() {
   const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
   // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
   // empty lists and the default "Cast" role.
-  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId;
+  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId; delete o.seoDescription;
     if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
     if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
     return o; };
@@ -733,7 +734,7 @@ async function main() {
     const where = upc ? 'Releases ' + (d.releaseDate ? fmtDate(d.releaseDate) : 'soon') + (d.platform && (isOtt(d) || tv) ? ' on ' + d.platform : '') + '. '
       : d.section === 'In theatres' ? 'In theatres now. ' : d.platform ? (tv ? 'Watch on ' : 'Streaming on ') + d.platform + '. ' : '';
     const verdict = sc.tot >= 3 ? 'Verdict: ' + sc.pct + '% positive from ' + sc.tot + ' viewers. ' : '';
-    const description = clip(verdict + where + (d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto : '') : auto), 158);
+    const description = String(d.seoDescription || '').trim() || clip(verdict + where + (d.synopsis ? d.synopsis + ' ' + (d.synopsis.length < 80 ? auto : '') : auto), 158);
 
     const metaLine = [tv ? tvYears(d) : (d.releaseDate ? fmtDate(d.releaseDate) : ''), d.languages ? '\u0000' : '', d.genre, d.runtime, d.certificate, d.platform ? 'on ' + d.platform : ''].filter(Boolean)
       .map(x => x === '\u0000' ? langLinks(d.languages) : esc(x)).join(' · ');
@@ -878,7 +879,8 @@ async function main() {
       upcoming: comingUp.map(t => ({ title: t.m.data.title, date: t.m.data.releaseDate || '' })),
       latest: latest && { title: latest.m.data.title, year: latest.when.slice(0, 4), theatres: inTh(latest), platform: svcs(latest).join(' / ') },
       streaming: streams.length, services: svcNames, picks: streams.filter(t => t.acting || !acting.length).slice(0, 4).map(t => t.m.data.title), famous });
-    const title = seo.title, description = seo.description;
+    // SEO title / description typed in Admin > Edit person replace the worked-out ones.
+    const title = String(st.seoTitle || '').trim() || seo.title, description = String(st.seoDescription || '').trim() || seo.description;
     const li = t => '<li>' + tLink(t.m) + ' <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', '), inTh(t) ? 'In theatres' : svcs(t).length ? 'On ' + svcs(t).join(', ') : ''].filter(Boolean).join(' · ')) + '</span></li>';
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav>';
     body += '<div class="pr-top">' + (photo ? '<img class="pr-photo" src="' + esc(photo) + '" alt="' + esc(name) + '" width="160" height="160" fetchpriority="high">' : '') + '<div>';
