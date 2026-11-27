@@ -572,6 +572,30 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .pa .nppill { position: absolute; left: 8px; bottom: 8px; z-index: 2; padding: 3px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #0B0A0F; background: rgba(244,241,234,.92); box-shadow: 0 1px 6px rgba(0,0,0,.35); }
   .tag.np { background: rgba(244,241,234,.14); border-color: rgba(244,241,234,.3); }
   .pc a.pa:has(.nppill) .ptitle { bottom: 38px; }
+  /* Coming soon cards: days-to-go pill and the Trailer / Remind me or Tickets / Not for me icon row (same layout as the verdict icons) */
+  .pa .nppill.duepill { color: var(--text); background: rgba(11,10,15,.82); box-shadow: none; }
+  .qv.icons.up .qb { text-decoration: none; }
+  .qv.icons.up .qb.tr { color: var(--text); }
+  .qv.icons.up .qb.tr.off { color: var(--dim); opacity: .55; cursor: default; }
+  .qv.icons.up .qb.rm { color: #7FB2FF; }
+  .qv.icons.up .qb.tk { color: var(--accent); border-color: rgba(245,165,36,.55); }
+  .qv.icons.up .qb.sk { color: #A39FB0; }
+  .qv.icons.up .qb.rm.on { background: #7FB2FF; border-color: #7FB2FF; color: #0B0A0F; }
+  .qv.icons.up .qb.rm.on svg path { fill: currentColor; }
+  .qv.icons.up .qb.sk.on { background: #8E8899; border-color: #8E8899; color: #0B0A0F; }
+  .qv.icons.up .qb.tr .qtip { --tx: 0; left: 0; }
+  .qv.icons.up .qb.sk .qtip { --tx: 0; left: auto; right: 0; }
+  @media (hover: hover) {
+    .qv.icons.up .qb.tr:not(.off):hover svg { animation: upplay .5s ease; }
+    .qv.icons.up .qb.rm:hover svg { animation: upring .6s ease; transform-origin: 50% 8%; }
+    .qv.icons.up .qb.tk:hover svg { animation: upticket .55s ease; }
+    .qv.icons.up .qb.sk:hover svg { animation: upshake .45s ease; }
+  }
+  @keyframes upplay { 0% { transform: none; } 35% { transform: scale(1.35) translateX(2px); } 65% { transform: scale(.92) translateX(-1px); } 100% { transform: none; } }
+  @keyframes upring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(18deg); } 30% { transform: rotate(-16deg); } 45% { transform: rotate(11deg); } 60% { transform: rotate(-7deg); } 75% { transform: rotate(3deg); } }
+  @keyframes upticket { 0%, 100% { transform: none; } 30% { transform: rotate(-14deg) translateX(-1px); } 55% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
+  @keyframes upshake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(4deg); } }
+  @media (prefers-reduced-motion: reduce) { .qv.icons.up .qb svg { animation: none !important; } }
 
 /* ---------- title page, 2026 redesign ---------- */
 .ic { display: inline-flex; align-items: center; justify-content: center; }

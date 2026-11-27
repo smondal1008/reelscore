@@ -791,6 +791,45 @@
     var b = S.buttons || window.RS_BTNS || {}, p = place && b[place];
     return !(p && p[kind] === false);
   }
+  // Days to go for a dated upcoming film: Tomorrow, In 12 days (up to 99 days; past that the date badge says enough).
+  function dueLabel(d) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '')) return '';
+    var n = Math.round((new Date(d.releaseDate + 'T00:00:00') - new Date(today() + 'T00:00:00')) / 864e5);
+    return n <= 0 ? 'Out today' : n === 1 ? 'Tomorrow' : n < 100 ? 'In ' + n + ' days' : '';
+  }
+  // The first listed actor (crew left out); with no cast yet, the first genre.
+  function upLead(d) {
+    var c = (d.cast || []).filter(function (x) { return x && x.name && !CREW_RE.test(x.role || ''); })[0];
+    return c ? c.name : String(d.genre || '').split(/,/)[0].trim();
+  }
+  // Coming soon icon row, laid out like the verdict icons: Trailer, then Tickets when booking is open (else Remind me), then Not for me.
+  // The word pops up on hover or keyboard focus; each tap confirms with a toast.
+  function upRow(m) {
+    var d = m.data, t = d.title;
+    var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
+    var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
+    var trB = h('button', { type: 'button', class: 'qb tr' + (tr ? '' : ' off'), 'aria-disabled': tr ? null : 'true',
+      'aria-label': tr ? 'Play the trailer of ' + t : 'No trailer for ' + t + ' yet',
+      on: { click: function (e) { e.preventDefault(); if (tr) openTrailerOverlay(m, tr, trB, titleQueue(m, tr)); else toast('No trailer for ' + t + ' yet'); } } },
+      [icon('play', 18), tip(tr ? 'Trailer' : 'No trailer yet')]);
+    var mid = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
+    if (mid) { mid.textContent = ''; mid.appendChild(icon('ticket', 18)); mid.appendChild(tip('Tickets')); }
+    else {
+      var rem = hasReminder(m.id);
+      mid = h('button', { type: 'button', class: 'qb rm' + (rem ? ' on' : ''), 'aria-pressed': String(rem),
+        'aria-label': rem ? 'Reminder set for ' + t + '. Tap to turn it off' : 'Remind me when ' + t + ' releases',
+        on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 18), tip(rem ? 'Reminder set' : 'Remind me')]);
+    }
+    var no = myPlan(m.id) === 'c';
+    var skB = h('button', { type: 'button', class: 'qb sk' + (no ? ' on' : ''), 'aria-pressed': String(no),
+      'aria-label': no ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
+      on: { click: function () {
+        var had = hasReminder(m.id); setPlan(m.id, 'c');
+        var now = myPlan(m.id) === 'c'; if (now === no) return;
+        if (!now) toast('Cleared Not for me for ' + t); else if (!had) toast(t + ' marked Not for me');
+      } } }, [icon('skip', 18), tip('Not for me')]);
+    return h('div', { class: 'qv icons up', role: 'group', 'aria-label': 'Your plan for ' + t }, [trB, mid, skB]);
+  }
   function posterCard(m, opts) {
     opts = opts || {};
     var bpl = btnPlace();
@@ -811,6 +850,9 @@
       top = h('span', { class: 'badge' }, [h('i'), shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
     }
     var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + ' · ' + fmtDate(d.releaseDate) : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
+    // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me or Tickets / Not for me icons.
+    var up = !!opts.upIcons && !isTv(m) && !released(m), due = up ? dueLabel(d) : '';
+    if (up) meta = [upLead(d), (d.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ');
     var on = inList(m.id), pa = artLazy(m, 'poster');
     var kids = [
       h('div', { class: 'pw' }, [
@@ -818,7 +860,8 @@
           h('span', { class: 'pfade' }), h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title }), top,
           d.platform && (isOtt(m) || isTv(m)) ? platBadge(d.platform, isTv(m)) : null,
           // Now playing pill (left out for "Now on OTT" when the platform logo already says it)
-          npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) && !(opts.inTheatresList && nowPlayingOf(d) === 'theatres') ? h('span', { class: 'nppill', text: npLabel(m) }) : null
+          up ? (due ? h('span', { class: 'nppill duepill', text: due }) : null)
+            : npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) && !(opts.inTheatresList && nowPlayingOf(d) === 'theatres') ? h('span', { class: 'nppill', text: npLabel(m) }) : null
         ]),
         h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
           'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
@@ -830,6 +873,7 @@
     ];
     var tagTxt = opts.tagFor ? opts.tagFor(m) : opts.tag;
     if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
+    if (up) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
@@ -1517,7 +1561,7 @@
       lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return rateSection(); }, 4),
       lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
-      lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
+      lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
       lazySection(function () { return rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
@@ -1572,7 +1616,7 @@
     syncListUrl(genreHref(G, G.page));
     var from = (G.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }));
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null); })));
     if (pages > 1) w.appendChild(pagerNav(G.page, pages, function (n) { return genreHref(G, n); }));
     v.appendChild(footer());
   }
@@ -2464,7 +2508,7 @@
     syncListUrl(yearHref(Y, Y.page));
     var from = (Y.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' movies' : list.length + (list.length === 1 ? ' movie' : ' movies') }));
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, remind: true } : null); })));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null); })));
     if (pages > 1) w.appendChild(pagerNav(Y.page, pages, function (n) { return yearHref(Y, n); }));
     v.appendChild(footer());
   }
@@ -2783,7 +2827,7 @@
     var posters = postersBlock(m);
     if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
     var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
-    var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, remind: true } : null);
+    var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null);
     if (r) r.id = 'more';
     // Titles sharing cast or crew with this one: more shared people (top-billed weigh more) first, then newest.
     var ppl = {};
@@ -3181,6 +3225,7 @@
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    play: '<path d="M7 4.5l12.5 7.5L7 19.5z"/>',
     moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     eyeoff: '<path d="M10.7 5.1A10.7 10.7 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M14.1 14.2a3 3 0 0 1-4.2-4.2"/><path d="M17.5 17.5A10.7 10.7 0 0 1 12 19c-7 0-10-7-10-7a13 13 0 0 1 4.7-5.2"/><path d="M2 2l20 20"/>',
@@ -4879,7 +4924,7 @@
     var rows = [];
     var add = function (title, items, opts, href) { if (items.length >= 6) rows.push([title, items, opts, href]); };
     add('In theatres now', pinFirst(all.filter(function (m) { return m.data.section === 'In theatres'; }).sort(newest), rowPins('In theatres')), { book: true, inTheatresList: true }, '/browse/in-theatres');
-    add('Coming soon', pinFirst(withDate(all.filter(function (m) { return m.data.section === 'Coming soon'; }), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true }, '/browse/coming-soon');
+    add('Coming soon', pinFirst(withDate(all.filter(function (m) { return m.data.section === 'Coming soon'; }), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true }, '/browse/coming-soon');
     // New on a service: on it in the last 12 months (its OTT date, else its release date).
     var ottDate = function (m) { return m.data.ottReleaseDate || m.data.releaseDate || ''; };
     [['netflix', 'Netflix'], ['prime-video', 'Prime Video'], ['zee5', 'ZEE5'], ['jiohotstar', 'JioHotstar'], ['sonyliv', 'SonyLIV']].forEach(function (o) {
