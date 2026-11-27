@@ -468,6 +468,343 @@ window.ReelAdmin = function (env) {
     document.body.appendChild(back);
     check(); nameIn.focus();
   }
+  // ---------- one person's edit page: /admin/people/<key> ----------
+  // Profile fields, the public page's Google title and description (the same rule as the site, app/about.js), their
+  // coming-soon titles (published or not), released titles with no OTT name, and every credit with its role, character
+  // and billing. Profile and credit edits save together; Publish, OTT names and Remove save straight away.
+  var personEdMode = false, peWant = '', pe = null;
+  // Credits that are a kind of on-screen work rather than a character (kept in Credit, not moved to Character).
+  var PE_PLAIN = /^(as\s+)?(cast|actor|actress|lead|self|host|co-host|judge|narrator|guest|presenter|anchor|mentor|contestant)\b/i;
+  function peIsTv(d) { return d.section === 'TV shows'; }
+  function peUpcoming(d) { return !peIsTv(d) && (d.releaseDate ? d.releaseDate > todayStr() : d.section === 'Coming soon'); }
+  function peLang(d) { return (Array.isArray(d.languages) ? d.languages[0] : d.language) || ''; }
+  function peWhen(d, c) { if (peIsTv(d)) { var ys = String((c && c.year) || d.releaseDate || '').match(/\d{4}/g); return ys ? ys.sort().pop() : ''; } return d.releaseDate || ''; }
+  function peSvcs(d) { return peUpcoming(d) || d.section === 'In theatres' ? [] : String(d.platform || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean); }
+  // Every credit for key: one row per cast entry, plus a row for a Director-field name with no cast entry.
+  function personCredits(key) {
+    var out = [];
+    movies.forEach(function (m) {
+      var cast = m.data.cast || [], inCast = false;
+      cast.forEach(function (c, i) { if (personKey(c.name) === key) { inCast = true; out.push({ m: m, idx: i, c: c, crew: CREDIT_CREW.test(c.role || '') }); } });
+      if (!inCast && directorNames(m.data).some(function (n) { return personKey(n) === key; })) out.push({ m: m, idx: -1, c: { name: '', role: 'Director' }, crew: true });
+    });
+    return out.sort(function (a, b) { return peWhen(b.m.data, b.c).localeCompare(peWhen(a.m.data, a.c)); });
+  }
+  function peStart(key) {
+    var st = people[key] || {}, any = personCredits(key)[0];
+    var name = st.name || (any && any.c.name) || (allPeople().filter(function (p) { return p.key === key; })[0] || {}).name || '';
+    pe = { key: key, d: { name: name, bio: st.bio || '', birthday: st.birthday || '', birthplace: st.birthplace || '', gender: st.gender || '', aka: (st.aka || []).slice(), pop: popState(key) },
+      cr: {}, ott: {}, dirty: false, saving: false, tab: 'miss', crTab: 'all', q: '', crAll: false };
+  }
+  function peTouch() { if (pe && !pe.dirty) { pe.dirty = true; peBar(); } }
+  function peBar() {
+    var el = $('peState'); if (el) { el.textContent = pe.saving ? 'Saving…' : pe.dirty ? 'Unsaved changes' : 'All changes saved'; el.className = pe.dirty || pe.saving ? 'pe-dirty' : 'note'; }
+    var s = $('peSave'); if (s) s.disabled = !canWrite || !pe.dirty || pe.saving;
+    var x = $('peDiscard'); if (x) x.disabled = !pe.dirty || pe.saving;
+  }
+  // Published titles only, the way the build and the app work out the page's title and description.
+  function peSeoText(key, cred, d) {
+    var pub = cred.filter(function (x) { return x.m.data.published !== false; }), seen = {}, titles = [];
+    pub.forEach(function (x) { var t = seen[x.m.id]; if (!t) { t = seen[x.m.id] = { m: x.m, acting: false, crew: false, when: '' }; titles.push(t); } if (x.crew) t.crew = true; else t.acting = true; var w = peWhen(x.m.data, x.c); if (w > t.when) t.when = w; });
+    titles.sort(function (a, b) { return b.when.localeCompare(a.when); });
+    var acting = titles.filter(function (t) { return t.acting; }), crew = titles.filter(function (t) { return t.crew; });
+    var up = titles.filter(function (t) { return peUpcoming(t.m.data); }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
+    var th = function (t) { return !peUpcoming(t.m.data) && t.m.data.section === 'In theatres'; };
+    var streams = titles.filter(function (t) { return peSvcs(t.m.data).length; }), bySvc = {};
+    streams.forEach(function (t) { peSvcs(t.m.data).forEach(function (s) { bySvc[s] = (bySvc[s] || 0) + 1; }); });
+    var svcNames = Object.keys(bySvc).sort(function (a, b) { return bySvc[b] - bySvc[a] || a.localeCompare(b); });
+    var latest = titles.filter(function (t) { return !peUpcoming(t.m.data) && t.when; })[0], today = todayStr();
+    var seo = window.RS_ABOUT && RS_ABOUT.personSeo ? RS_ABOUT.personSeo({ name: d.name || key, gender: d.gender, bio: d.bio, total: titles.length, tvOnly: titles.length > 0 && titles.every(function (t) { return peIsTv(t.m.data); }),
+      upcoming: up.map(function (t) { return { title: t.m.data.title, date: t.m.data.releaseDate || '' }; }),
+      latest: latest && { title: latest.m.data.title, year: latest.when.slice(0, 4), theatres: th(latest), platform: peSvcs(latest.m.data).join(' / ') },
+      streaming: streams.length, services: svcNames, picks: streams.filter(function (t) { return t.acting || !acting.length; }).slice(0, 4).map(function (t) { return t.m.data.title; }),
+      famous: (acting.length ? acting : crew).filter(function (t) { return t.when && t.when <= today && !peUpcoming(t.m.data); }).slice(0, 4).map(function (t) { return t.m.data.title; }) }) : { title: '', description: '' };
+    return { seo: seo, titles: titles, up: up, streams: streams, bySvc: bySvc, svcNames: svcNames, theatres: titles.filter(th) };
+  }
+  function renderPersonEdit(force) {
+    var main = $('main'), key = peWant;
+    if (!pe || pe.key !== key) peStart(key);
+    // A data update while someone is typing: keep the page as it is (the draft lives in pe, so nothing is lost).
+    if (!force && main.querySelector('.pe') && document.activeElement && document.activeElement.closest && document.activeElement.closest('#main') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName)) return;
+    if (!force && !pe.dirty) { var ui = { tab: pe.tab, crTab: pe.crTab, q: pe.q, crAll: pe.crAll, missAll: pe.missAll, ott: pe.ott }, nm = pe.d.name; peStart(key); Object.assign(pe, ui); if (!pe.d.name) pe.d.name = nm; }
+    var same = !!main.querySelector('.pe[data-k="' + key + '"]'), keepY = window.scrollY;
+    main.innerHTML = '';
+    var cred = personCredits(key), st = people[key] || {}, d = pe.d;
+    var list = allPeople(), li = list.map(function (p) { return p.key; }).indexOf(key);
+    if (!cred.length && !people[key]) {
+      main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/people', text: '← All cast & crew' })]));
+      main.appendChild(h('div', { class: 'empty', text: moviesLoaded ? 'No one at this address. They may have been renamed or merged.' : 'Loading…' }));
+      return;
+    }
+    var info = peSeoText(key, cred, d), g = personSeo(key);
+    var nUnpub = Object.keys(cred.reduce(function (o, x) { if (x.m.data.published === false) o[x.m.id] = 1; return o; }, {})).length;
+    var nTitles = Object.keys(cred.reduce(function (o, x) { o[x.m.id] = 1; return o; }, {})).length;
+    var pron = d.gender === 'Male' ? 'his' : d.gender === 'Female' ? 'her' : 'their';
+    var roleWords = []; if (cred.some(function (x) { return !x.crew; })) roleWords.push('Actor');
+    cred.forEach(function (x) { if (x.crew) { var w = String(x.c.role || 'Director').replace(/\s*\(.*?\)/g, '').replace(/^(co-|executive )/i, '').trim(); w = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); if (roleWords.indexOf(w) === -1) roleWords.push(w); } });
+    var wrap = h('div', { class: 'pe', 'data-k': key }); main.appendChild(wrap);
+
+    // Crumbs: back, previous / next person (most titles first, as on Cast & crew), public page.
+    var prev = li > 0 ? list[li - 1] : null, next = li !== -1 && li < list.length - 1 ? list[li + 1] : null;
+    wrap.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/people', text: '← All cast & crew' }),
+      h('span', { class: 'tnav' }, [prev ? h('a', { class: 'tnav-a', href: '/admin/people/' + prev.key, title: 'Previous: ' + prev.name, text: '‹ ' + prev.name }) : null, next ? h('a', { class: 'tnav-a', href: '/admin/people/' + next.key, title: 'Next: ' + next.name, text: next.name + ' ›' }) : null]),
+      h('a', { href: '/person/' + key, target: '_blank', rel: 'noopener', text: 'View public page ↗' })]));
+
+    // Header: photo, name, address, Google status, Save.
+    wrap.appendChild(h('section', { class: 'card pe-head', 'aria-label': 'Person' }, [
+      avatarBtn(d.name || key, 88),
+      h('div', { class: 'pe-id' }, [
+        roleWords.length ? h('div', { class: 'pe-kick', text: roleWords.slice(0, 3).join(' · ') }) : null,
+        h('h1', { class: 'pe-name', text: d.name || key }),
+        h('div', { class: 'pe-meta' }, [h('a', { href: '/person/' + key, target: '_blank', rel: 'noopener', text: '/person/' + key }),
+          h('button', { type: 'button', class: 'linkbtn', text: 'Copy URL', on: { click: function () { copyToClipboard(personPageUrl(key), 'Copied ' + personPageUrl(key)); } } }),
+          h('span', { class: g.on ? 'pe-ok' : 'warn', title: g.text, text: (g.on ? '✓ ' : '') + g.short }),
+          h('span', { class: 'note', text: nTitles + (nTitles === 1 ? ' title' : ' titles') + (nUnpub ? ' · ' + nUnpub + ' not published' : '') })])
+      ]),
+      h('div', { class: 'pe-save' }, [h('span', { id: 'peState', class: 'note', text: '' }),
+        h('div', { style: 'display:flex;gap:8px' }, [h('button', { type: 'button', class: 'btn ghost', id: 'peDiscard', text: 'Discard', on: { click: function () { pe = null; renderPersonEdit(true); setStatus('Changes discarded.'); } } }),
+          h('button', { type: 'button', class: 'btn primary', id: 'peSave', text: 'Save', on: { click: peSaveAll } })])])
+    ]));
+
+    var cols = h('div', { class: 'pe-cols' }), left = h('div', { class: 'pe-main' }), side = h('aside', { class: 'pe-side' });
+    cols.appendChild(left); cols.appendChild(side); wrap.appendChild(cols);
+    function fld(id, label, el, note, wide) { return h('div', { class: 'field' + (wide ? ' wide' : '') }, [h('label', { class: 'l', for: id, text: label }), el, note ? h('div', { class: 'note', text: note }) : null]); }
+    function bind(el, k, after) { el.addEventListener('input', function () { pe.d[k] = el.value; peTouch(); if (after) after(); }); el.addEventListener('change', function () { pe.d[k] = el.value; peTouch(); if (after) after(); }); return el; }
+
+    // Profile
+    var nameIn = bind(h('input', { class: 'in', id: 'pe_name', autocomplete: 'off', disabled: !canWrite }), 'name', peGoogle); nameIn.value = d.name;
+    var bioIn = bind(h('textarea', { class: 'in', id: 'pe_bio', rows: 4, maxlength: 600, disabled: !canWrite, placeholder: 'One or two lines in our own words, e.g. “Hindi film actor known for…”' }), 'bio', function () { bioN.textContent = pe.d.bio.length + ' / 600'; peGoogle(); }); bioIn.value = d.bio;
+    var bioN = h('span', { class: 'note', text: d.bio.length + ' / 600' });
+    var bdayIn = bind(h('input', { class: 'in', id: 'pe_bday', type: 'date', min: '1880-01-01', max: todayStr(), disabled: !canWrite }), 'birthday'); bdayIn.value = d.birthday;
+    var bplIn = bind(h('input', { class: 'in', id: 'pe_bplace', maxlength: 120, placeholder: 'e.g. Kotagiri, Tamil Nadu, India', disabled: !canWrite }), 'birthplace'); bplIn.value = d.birthplace;
+    var gIn = bind(h('select', { class: 'in', id: 'pe_gender', disabled: !canWrite }, [['', 'Not set'], ['Female', 'Female'], ['Male', 'Male'], ['Non-binary', 'Non-binary']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: d.gender === o[0] }); })), 'gender', peGoogle);
+    var popIn = bind(h('select', { class: 'in', id: 'pe_pop', disabled: !canWrite }, [['', 'Automatic'], ['pin', 'Always popular'], ['hide', 'Never popular']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: d.pop === o[0] }); })), 'pop');
+    var akaBox = h('div', { class: 'pe-aka' });
+    function drawAka() {
+      akaBox.innerHTML = '';
+      pe.d.aka.forEach(function (a) { akaBox.appendChild(h('span', { class: 'gchip' }, [a, h('button', { type: 'button', class: 'gx', 'aria-label': 'Remove ' + a, text: '×', disabled: !canWrite, on: { click: function () { pe.d.aka = pe.d.aka.filter(function (x) { return x !== a; }); peTouch(); drawAka(); } } })])); });
+      var ai = h('input', { class: 'in', id: 'pe_aka', placeholder: 'Add a name, then Enter', style: 'width:240px', disabled: !canWrite || pe.d.aka.length >= 10 });
+      ai.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter' && e.key !== ',') return; e.preventDefault();
+        var v = ai.value.trim().slice(0, 80); if (!v || personKey(v) === personKey(pe.d.name) || pe.d.aka.indexOf(v) !== -1) { ai.value = ''; return; }
+        pe.d.aka.push(v); peTouch(); drawAka(); var n = $('pe_aka'); if (n) n.focus();
+      });
+      akaBox.appendChild(ai);
+    }
+    drawAka();
+    left.appendChild(h('section', { class: 'card', 'aria-labelledby': 'pe_h_prof' }, [h('h2', { id: 'pe_h_prof', text: 'Profile' }),
+      h('div', { class: 'pe-grid' }, [
+        fld('pe_name', 'Name', nameIn, 'Changing the name renames them on every title and moves the page to the new address.', true),
+        h('div', { class: 'field wide' }, [h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: 'pe_bio', text: 'Short bio' }), bioN]), bioIn,
+          h('div', { class: 'note', text: 'In our own words (Wikipedia and Wikidata only). Its first sentence joins the Google description when there is room.' })]),
+        fld('pe_bday', 'Birthday', bdayIn), fld('pe_bplace', 'Birthplace', bplIn),
+        fld('pe_gender', 'Gender', gIn, 'Sets his / her / their on the page and the Male and Female filters on People.'),
+        fld('pe_pop', 'Popular list', popIn, 'Automatic ranks by billing, recent work and verdicts.'),
+        h('div', { class: 'field wide' }, [h('label', { class: 'l', for: 'pe_aka', text: 'Also known as' }), akaBox, h('div', { class: 'note', text: 'Search finds them by these names too.' })])
+      ]),
+      safeUrl(st.photoUrl) ? h('div', {}, [h('button', { type: 'button', class: 'btn small danger', text: 'Remove photo', disabled: !canWrite, on: { click: function () { removePhoto(d.name || key); } } })]) : h('div', { class: 'note', text: 'No photo yet: tap the circle at the top to add a square headshot you have the rights to use.' })
+    ]));
+
+    // Coming up: their coming-soon titles, published or not.
+    var upAll = {}; cred.forEach(function (x) { if (peUpcoming(x.m.data)) upAll[x.m.id] = x.m; });
+    var ups = Object.keys(upAll).map(function (k) { return upAll[k]; }).sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); });
+    var upCard = h('section', { class: 'card', 'aria-labelledby': 'pe_h_up' }, [h('div', { class: 'pe-hd' }, [h('h2', { id: 'pe_h_up', text: 'Coming up · ' + ups.length }), h('span', { class: 'note', text: 'The page shows published coming-soon titles only.' })])]);
+    if (!ups.length) upCard.appendChild(h('div', { class: 'note', text: 'No coming-soon titles. Add them to a title’s cast to show Coming up on the page and “Upcoming” in the Google title.' }));
+    ups.forEach(function (m) {
+      var dd = m.data, pub = dd.published !== false;
+      upCard.appendChild(h('div', { class: 'pe-row' }, [
+        h('span', { class: 'pe-thumb', style: bgUrl(dd.posterUrl), 'aria-hidden': 'true' }),
+        h('div', { class: 'pe-rb' }, [h('a', { href: titleHref(m), class: 'pe-t', text: dd.title || '(No title)' }),
+          h('span', { class: 'note', text: [peLang(dd), dd.genre, /^\d{4}-\d{2}-\d{2}$/.test(dd.releaseDate || '') ? 'Releasing ' + dd.releaseDate : 'Release date not announced'].filter(Boolean).join(' · ') }),
+          h('span', { class: pub ? 'pe-ok' : 'warn', text: pub ? '● Published' : '● Not published: hidden from ' + pron + ' page' })]),
+        h('div', { class: 'pe-act' }, [pub ? null : h('button', { type: 'button', class: 'btn small primary', text: 'Publish title', disabled: !canWrite, on: { click: function () {
+            askConfirm('Publish “' + dd.title + '”?', 'It will show on the site, in lists and in search, and on ' + pron + ' page under Coming up. Google sees it at the next deploy.', 'Publish').then(function (yes) {
+              if (!yes) return; db.doc('movies/' + m.id).update({ published: true, updatedAt: new Date().toISOString() }).then(function () { setStatus('Published ' + dd.title + '.'); }).catch(function (e) { setStatus('Couldn’t publish' + (e && e.message ? ': ' + e.message : '') + '.'); });
+            }); } } }),
+          h('a', { class: 'btn small', href: titleHref(m), text: 'Edit title' })])
+      ]));
+    });
+    if (ups.some(function (m) { return m.data.published === false; }) && !info.up.length) upCard.appendChild(h('div', { class: 'note', text: 'Once one is published, the Google title gains “Upcoming” and the description opens with “Next: …”.' }));
+    left.appendChild(upCard);
+
+    // Where to watch: released, published titles with no OTT name, fixed in place; or the services on the page.
+    var missSeen = {}, miss = [];
+    cred.forEach(function (x) { var dd = x.m.data; if (missSeen[x.m.id] || dd.published === false || peUpcoming(dd) || !missingOttName(dd)) return; missSeen[x.m.id] = 1; miss.push(x.m); });
+    var wwCard = h('section', { class: 'card', 'aria-labelledby': 'pe_h_ww' }, [h('div', { class: 'pe-hd' }, [h('h2', { id: 'pe_h_ww', text: 'Where to watch' }),
+      h('span', { class: 'note' }, [h('b', { text: String(info.streams.length) }), ' of ' + pron + ' ' + info.titles.length + ' published titles have a service · ', h('b', { class: miss.length ? 'pe-warnb' : '', text: String(miss.length) }), ' released without one'])])]);
+    wwCard.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Show' }, [['miss', 'Missing OTT name · ' + miss.length], ['has', 'Has a service · ' + info.streams.length]].map(function (o) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(pe.tab === o[0]), text: o[1], on: { click: function () { pe.tab = o[0]; renderPersonEdit(true); } } });
+    })));
+    if (pe.tab === 'miss') {
+      if (!miss.length) wwCard.appendChild(h('div', { class: 'note', text: 'Every released, published title of ' + pron + 's has a service on file.' }));
+      var ottDl = $('peOttList'); if (!ottDl) { ottDl = h('datalist', { id: 'peOttList' }, OTT_LIST.concat(TV_LIST).map(function (x) { return h('option', { value: x }); })); document.body.appendChild(ottDl); }
+      var mbox = h('div', { class: 'pe-list' });
+      miss.slice(0, pe.missAll ? 400 : 12).forEach(function (m, i) {
+        var dd = m.data, o = pe.ott[m.id] || (pe.ott[m.id] = { p: '', u: '' });
+        var pIn = h('input', { class: 'in', id: 'pe_ott' + i, list: 'peOttList', placeholder: 'Now streaming on, e.g. Prime Video', disabled: !canWrite }); pIn.value = o.p;
+        var uIn = h('input', { class: 'in', id: 'pe_ottu' + i, type: 'url', placeholder: 'Link (optional)', disabled: !canWrite }); uIn.value = o.u;
+        pIn.addEventListener('input', function () { o.p = pIn.value; }); uIn.addEventListener('input', function () { o.u = uIn.value; });
+        var sb = h('button', { type: 'button', class: 'btn small', text: 'Save', disabled: !canWrite, on: { click: function () {
+          var p = o.p.trim().slice(0, 120), u = o.u.trim();
+          if (!p) { setStatus('Type the service first.'); pIn.focus(); return; }
+          if (u && !safeUrl(u)) { setStatus('The link must start with https://'); uIn.focus(); return; }
+          var up = { platform: p, updatedAt: new Date().toISOString() }; if (u) up.platformUrl = u;
+          sb.disabled = true; sb.textContent = 'Saving…';
+          db.doc('movies/' + m.id).update(up).then(function () { delete pe.ott[m.id]; setStatus(dd.title + ': now streaming on ' + p + '.'); }).catch(function (e) { sb.disabled = false; sb.textContent = 'Save'; setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+        } } });
+        mbox.appendChild(h('div', { class: 'pe-row' }, [
+          h('div', { class: 'pe-rb', style: 'flex:1 1 200px' }, [h('a', { href: titleHref(m), class: 'pe-t', text: dd.title }), h('span', { class: 'note', text: [peLang(dd), peIsTv(dd) ? 'TV' : '', peWhen(dd).slice(0, 4), dd.genre].filter(Boolean).join(' · ') })]),
+          h('label', { class: 'sr', for: 'pe_ott' + i, text: 'Now streaming on, ' + dd.title }), h('span', { style: 'flex:1 1 220px' }, [pIn]),
+          h('label', { class: 'sr', for: 'pe_ottu' + i, text: 'Streaming link, ' + dd.title }), h('span', { style: 'flex:1 1 180px' }, [uIn]), sb]));
+      });
+      if (miss.length) wwCard.appendChild(mbox);
+      if (miss.length > 12 && !pe.missAll) wwCard.appendChild(h('button', { type: 'button', class: 'btn small', text: 'Show all ' + miss.length, on: { click: function () { pe.missAll = true; renderPersonEdit(true); } } }));
+      if (miss.length) wwCard.appendChild(h('div', { class: 'note', text: 'Saves to the title’s “Now streaming on” straight away. Only published, released titles are listed; in-theatre and coming-soon titles are left out, as in Missing OTT name on All titles.' }));
+    } else {
+      if (!info.svcNames.length) wwCard.appendChild(h('div', { class: 'note', text: 'None yet.' }));
+      else wwCard.appendChild(h('div', { class: 'chips' }, info.svcNames.map(function (s) { return h('span', { class: 'chip', style: 'cursor:default' }, [s + ' ', h('span', { class: 'note', text: String(info.bySvc[s]) })]); })));
+      wwCard.appendChild(h('div', { class: 'note', text: 'These are the “Streaming on” chips on ' + pron + ' page. Change a title’s service on the title.' }));
+    }
+    left.appendChild(wwCard);
+
+    // Credits & roles
+    ensureCreditList();
+    var nAct = cred.filter(function (x) { return !x.crew && !peIsTv(x.m.data); }).length, nTv = cred.filter(function (x) { return peIsTv(x.m.data); }).length,
+      nCrew = cred.filter(function (x) { return x.crew && !peIsTv(x.m.data); }).length, nNp = cred.filter(function (x) { return x.m.data.published === false; }).length;
+    var crTabs = [['all', 'All · ' + cred.length], ['act', 'Acting · ' + nAct], ['tv', 'TV shows · ' + nTv], ['crew', 'Behind the camera · ' + nCrew], ['np', 'Not published · ' + nNp]].filter(function (t) { return t[0] === 'all' || +t[1].split('· ')[1] > 0; });
+    var q = pe.q.trim().toLowerCase();
+    var shown = cred.filter(function (x) {
+      var dd = x.m.data, t = pe.crTab;
+      return (t === 'all' || (t === 'act' && !x.crew && !peIsTv(dd)) || (t === 'tv' && peIsTv(dd)) || (t === 'crew' && x.crew && !peIsTv(dd)) || (t === 'np' && dd.published === false)) &&
+        (!q || String(dd.title || '').toLowerCase().indexOf(q) !== -1 || String(x.c.character || x.c.role || '').toLowerCase().indexOf(q) !== -1);
+    });
+    var crCard = h('section', { class: 'card', 'aria-labelledby': 'pe_h_cr' }, [h('div', { class: 'pe-hd' }, [h('h2', { id: 'pe_h_cr' }, ['Credits & roles ', h('span', { class: 'note', text: '· ' + nTitles + (nTitles === 1 ? ' title' : ' titles') })])])]);
+    var qIn = h('input', { class: 'in', id: 'pe_crq', type: 'search', placeholder: 'Search ' + pron + ' titles or roles', style: 'flex:1 1 200px;width:auto' }); qIn.value = pe.q;
+    qIn.addEventListener('input', function () { pe.q = qIn.value; pe.crAll = false; var pos = qIn.selectionStart; renderPersonEdit(true); var n = $('pe_crq'); if (n) { n.focus(); n.setSelectionRange(pos, pos); } });
+    crCard.appendChild(h('div', { class: 'chips', style: 'align-items:center' }, crTabs.map(function (t) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(pe.crTab === t[0]), text: t[1], on: { click: function () { pe.crTab = t[0]; pe.crAll = false; renderPersonEdit(true); } } });
+    }).concat([h('label', { class: 'sr', for: 'pe_crq', text: 'Search ' + pron + ' titles' }), qIn])));
+    var tbl = h('div', { class: 'pe-tw' }), inner = h('div', { class: 'pe-tbl' });
+    inner.appendChild(h('div', { class: 'pe-tr pe-th' }, ['Title', 'Credit', 'Character', 'Billing', 'Where to watch', ''].map(function (x) { return h('span', { text: x }); })));
+    var LIM = 30;
+    (pe.crAll ? shown : shown.slice(0, LIM)).forEach(function (x, i) {
+      var dd = x.m.data, ek = x.m.id + '|' + x.idx, ed = pe.cr[ek] || {}, cast = dd.cast || [];
+      // Older cast rows keep the character in Credit ("as Raghu"): show it as the character, with Credit left blank (Actor).
+      var r0 = String(x.c.role || '').trim(), inRole = !String(x.c.character || '').trim() && !!r0 && !CREDIT_CREW.test(r0) && !PE_PLAIN.test(r0);
+      var roleV = ed.role != null ? ed.role : (inRole ? '' : r0), charV = ed.character != null ? ed.character : (x.c.character || (inRole ? r0.replace(/^as\s+/i, '') : '')), billV = ed.bill != null ? ed.bill : String(x.idx + 1);
+      function edit(k, v) { var e = pe.cr[ek] || (pe.cr[ek] = { mid: x.m.id, idx: x.idx, role: roleV, character: charV }); e[k] = v; peTouch(); }
+      var dir = x.idx === -1, pub = dd.published !== false, sv = peSvcs(dd);
+      var rIn = h('input', { class: 'in', list: 'creditList', placeholder: 'Actor', 'aria-label': 'Credit on ' + dd.title, disabled: !canWrite || dir }); rIn.value = dir ? 'Director' : roleV;
+      var cIn = h('input', { class: 'in', 'aria-label': 'Character on ' + dd.title, disabled: !canWrite || dir || CREDIT_CREW.test(roleV), placeholder: CREDIT_CREW.test(roleV) || dir ? '' : 'Character' }); cIn.value = charV;
+      var bIn = h('input', { class: 'in', type: 'number', min: 1, max: Math.max(1, cast.length), 'aria-label': 'Billing on ' + dd.title, disabled: !canWrite || dir, style: 'width:72px' }); bIn.value = dir ? '' : billV;
+      rIn.addEventListener('input', function () { edit('role', rIn.value); var crew = CREDIT_CREW.test(rIn.value); cIn.disabled = !canWrite || crew; });
+      cIn.addEventListener('input', function () { edit('character', cIn.value); });
+      bIn.addEventListener('input', function () { edit('bill', bIn.value); });
+      var where = peUpcoming(dd) ? 'Coming soon' : dd.section === 'In theatres' ? 'In theatres' : sv.length ? 'On ' + sv.join(', ') : 'Not set';
+      inner.appendChild(h('div', { class: 'pe-tr' }, [
+        h('span', { class: 'pe-tt' }, [h('span', { class: 'pe-thumb sm', style: bgUrl(dd.posterUrl), 'aria-hidden': 'true' }), h('span', { class: 'pe-rb' }, [
+          h('a', { href: titleHref(x.m), class: 'pe-t', text: dd.title || '(No title)' }),
+          h('span', { class: 'note', text: [peLang(dd), peIsTv(dd) ? 'TV' : '', peUpcoming(dd) ? 'Coming soon' : peWhen(dd, x.c).slice(0, 4)].filter(Boolean).join(' · ') }),
+          pub ? null : h('span', { class: 'warn', style: 'font-size:12px', text: 'Not published' })])]),
+        h('span', {}, [rIn]), h('span', {}, [dir ? h('span', { class: 'note', text: 'From the title’s Director field' }) : cIn]), h('span', {}, [bIn]),
+        h('span', { class: where === 'Not set' ? 'warn' : 'note', style: 'font-size:13px', text: where }),
+        h('span', { class: 'pe-act' }, [h('a', { class: 'btn small', href: titleHref(x.m), 'aria-label': 'Edit ' + dd.title, text: 'Edit' }),
+          h('button', { type: 'button', class: 'btn small danger', 'aria-label': 'Remove from ' + dd.title, text: 'Remove', disabled: !canWrite, on: { click: function () { peRemove(x); } } })])
+      ]));
+    });
+    tbl.appendChild(inner); crCard.appendChild(shown.length ? tbl : h('div', { class: 'empty', text: 'Nothing matches.' }));
+    crCard.appendChild(h('div', { class: 'pe-hd' }, [h('span', { class: 'note', text: 'Credit, character and billing save with Save above. Billing is the order on the title page; the first three count most for Popular.' }),
+      !pe.crAll && shown.length > LIM ? h('button', { type: 'button', class: 'btn small', text: 'Show all ' + shown.length, on: { click: function () { pe.crAll = true; renderPersonEdit(true); } } }) : null]));
+    left.appendChild(crCard);
+
+    // Merge
+    namesDatalist();
+    var mIn = h('input', { class: 'in', id: 'pe_merge', list: 'peopleNames', placeholder: 'Same person listed twice? Type the other name', disabled: !canWrite, style: 'flex:1 1 300px;width:auto' });
+    left.appendChild(h('section', { class: 'card pe-danger', 'aria-labelledby': 'pe_h_m' }, [h('h2', { id: 'pe_h_m', text: 'Merge' }),
+      h('div', { style: 'display:flex;flex-wrap:wrap;gap:10px;align-items:center' }, [h('label', { class: 'sr', for: 'pe_merge', text: 'Merge into' }), mIn,
+        h('button', { type: 'button', class: 'btn danger', text: 'Merge into…', disabled: !canWrite, on: { click: function () {
+          if (pe.dirty) { setStatus('Save or discard your changes first.'); return; }
+          var tk = personKey(mIn.value), to = allPeople().filter(function (p) { return p.key === tk; })[0];
+          if (!tk || tk === key) { setStatus('Type the other person’s name.'); mIn.focus(); return; }
+          if (!to) { setStatus('No one called “' + mIn.value.trim() + '” on Reelscore.'); mIn.focus(); return; }
+          var from = { key: key, name: d.name || key }, done = false;
+          mergeInto(from, to); var t0 = Date.now(), iv = setInterval(function () { if (!done && personCredits(key).length === 0 && !people[key]) { done = true; clearInterval(iv); pe = null; history.pushState(null, '', '/admin/people/' + to.key); window.dispatchEvent(new PopStateEvent('popstate')); } if (Date.now() - t0 > 20000) clearInterval(iv); }, 500);
+        } } })]),
+      h('div', { class: 'note', text: 'Moves every credit, the photo and the bio to the other person, and keeps this name under their Also known as.' })]));
+
+    // Side: Google, and what the public page shows.
+    var gt = h('span', { class: 'pe-gt' }), gd = h('span', { class: 'pe-gd' }), gn = h('div', { class: 'pe-gn' });
+    side.appendChild(h('section', { class: 'card', 'aria-labelledby': 'pe_h_g' }, [h('h2', { id: 'pe_h_g', text: 'In Google' }),
+      h('div', { class: 'pe-serp' }, [h('span', { class: 'pe-gu', text: location.host + ' › person › ' + key }), gt, gd]), gn,
+      h('div', { class: 'note', text: 'Worked out from ' + pron + ' published titles, as on the live page. Changes reach Google at the next deploy.' }),
+      h('div', { class: 'pe-checks' }, [
+        [g.on, g.on ? 'In Google' : 'Not in Google', g.text.replace(/^(In Google|Not in Google)[:]?\s*/, '')],
+        [!!safeUrl(st.photoUrl), 'Photo', safeUrl(st.photoUrl) ? 'on file' : 'none yet'],
+        [info.streams.length > 0, 'Where to watch', info.streams.length + ' titles with a service' + (miss.length ? ', ' + miss.length + ' released without one' : '')],
+        [info.up.length > 0 || !ups.length, 'Coming up', info.up.length ? info.up.length + ' published' : ups.length ? ups.length + ' not published' : 'none']
+      ].map(function (c) { return h('div', { class: 'pe-check' }, [h('span', { class: 'pe-dot' + (c[0] ? '' : ' no'), 'aria-hidden': 'true', text: c[0] ? '✓' : '!' }), h('span', {}, [h('b', { text: c[1] }), ' ', h('span', { class: 'note', text: c[2] })])]); }))
+    ]));
+    var langs = {}; info.titles.forEach(function (t) { var l = peLang(t.m.data); if (l) langs[l] = 1; });
+    side.appendChild(h('section', { class: 'card', 'aria-labelledby': 'pe_h_pg' }, [h('h2', { id: 'pe_h_pg', text: 'On ' + pron + ' page' }),
+      h('div', { class: 'pe-onpage' }, [['Coming up', info.up.length + (ups.length > info.up.length ? ' · ' + (ups.length - info.up.length) + ' unpublished' : '')], ['Where to watch', String(info.streams.length + info.theatres.length)],
+        ['Filmography', String(info.titles.length)], ['Languages', String(Object.keys(langs).length)]].map(function (r) { return h('div', {}, [h('span', { text: r[0] }), h('b', { text: r[1] })]); })),
+      h('div', { class: 'note', text: 'Known for, About, Works most with and By language are worked out from ' + pron + ' credits.' })]));
+    function peGoogle() {
+      var s = peSeoText(key, personCredits(key), pe.d).seo;
+      gt.textContent = s.title || '—'; gd.textContent = s.description || '—';
+      gn.textContent = 'Title ' + s.title.length + ' / 60 · Description ' + s.description.length + ' / 158';
+    }
+    peGoogle(); peBar();
+    if (same) window.scrollTo(0, keepY);
+  }
+  function peRemove(x) {
+    if (pe.dirty) { setStatus('Save or discard your changes first.'); return; }
+    var dd = x.m.data, name = pe.d.name || pe.key;
+    askConfirm('Remove ' + name + ' from “' + dd.title + '”?', x.idx === -1 ? 'Their name comes off the title’s Director field.' : 'Their credit (' + (x.c.role || 'Actor') + (x.c.character ? ', ' + x.c.character : '') + ') comes off the title’s cast list.', 'Remove', true).then(function (yes) {
+      if (!yes) return;
+      var m = movies.find(function (y) { return y.id === x.m.id; }); if (!m) return;
+      var up = { updatedAt: new Date().toISOString() };
+      if (x.idx === -1) up.director = directorNames(m.data).filter(function (n) { return personKey(n) !== pe.key; }).join(', ');
+      else { var cast = (m.data.cast || []).slice(); if (!cast[x.idx] || personKey(cast[x.idx].name) !== pe.key) { setStatus('That title changed; reload and try again.'); return; } cast.splice(x.idx, 1); up.cast = cast; }
+      db.doc('movies/' + m.id).update(up).then(function () { setStatus('Removed ' + name + ' from ' + dd.title + '.'); }).catch(function (e) { setStatus('Couldn’t remove' + (e && e.message ? ': ' + e.message : '') + '.'); });
+    });
+  }
+  function peSaveAll() {
+    if (!pe || !pe.dirty || pe.saving || !canWrite) return;
+    var d = pe.d, oldKey = pe.key, name = String(d.name || '').trim(), k = personKey(name);
+    if (!k) { setStatus('Enter a name.'); var n = $('pe_name'); if (n) n.focus(); return; }
+    pe.saving = true; peBar();
+    // 1. Credit edits, title by title, against the title as it is now.
+    var byMovie = {}, skipped = 0;
+    Object.keys(pe.cr).forEach(function (ek) { var e = pe.cr[ek]; (byMovie[e.mid] = byMovie[e.mid] || []).push(e); });
+    var jobs = Object.keys(byMovie).map(function (mid) {
+      var m = movies.find(function (y) { return y.id === mid; }); if (!m) { skipped++; return Promise.resolve(); }
+      var cast = (m.data.cast || []).map(function (c) { return Object.assign({}, c); }), moves = [];
+      byMovie[mid].forEach(function (e) {
+        var c = cast[e.idx]; if (!c || personKey(c.name) !== oldKey) { skipped++; return; }
+        if (e.role != null) c.role = String(e.role).trim().slice(0, 60);
+        if (e.character != null) c.character = String(e.character).trim().slice(0, 120);
+        if (CREDIT_CREW.test(c.role || '')) c.character = '';
+        if (e.bill != null && /^\d+$/.test(String(e.bill)) && +e.bill - 1 !== e.idx) moves.push([c, Math.max(0, Math.min(cast.length - 1, +e.bill - 1))]);
+      });
+      moves.forEach(function (mv) { var at = cast.indexOf(mv[0]); cast.splice(at, 1); cast.splice(mv[1], 0, mv[0]); });
+      return db.doc('movies/' + mid).update({ cast: cast, updatedAt: new Date().toISOString() });
+    });
+    Promise.all(jobs).then(function () {
+      var body = { name: name, bio: String(d.bio || '').trim().slice(0, 600), updatedAt: new Date().toISOString(),
+        birthday: /^\d{4}-\d{2}-\d{2}$/.test(d.birthday || '') ? d.birthday : '', birthplace: String(d.birthplace || '').trim().slice(0, 120), gender: d.gender || '',
+        aka: d.aka.map(function (x) { return String(x).trim().slice(0, 80); }).filter(function (x, i, a) { return x && personKey(x) !== k && a.indexOf(x) === i; }).slice(0, 10) };
+      // 2. A new name: rename on every title (that moves the people record), then write the profile at the new address.
+      var p = k !== oldKey ? renamePerson(oldKey, name) : Promise.resolve();
+      return p.then(function () { return db.doc('people/' + k).set(body, { merge: true }); })
+        .then(function () { if (d.pop !== popState(k)) return setPopular(k, name, d.pop); });
+    }).then(function () {
+      pe.saving = false; pe.dirty = false; pe.cr = {};
+      setStatus('Saved ' + name + '.' + (skipped ? ' ' + skipped + ' credit change' + (skipped === 1 ? '' : 's') + ' skipped: the title changed meanwhile.' : ''));
+      if (k !== oldKey) { pe = null; peWant = k; history.replaceState(null, '', '/admin/people/' + k); }
+      renderPersonEdit(true);
+    }).catch(function (e) { pe.saving = false; peBar(); setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+  }
   // In-page confirm. Native confirm() dialogs are silently blocked in some browsers and app webviews
   // (they return false without showing anything), which made these actions look broken.
   function askConfirm(title, body, okLabel, danger) {
@@ -553,7 +890,7 @@ window.ReelAdmin = function (env) {
             return sel;
           })(),
           h('button', { type: 'button', class: 'btn small', text: 'Copy URL', on: { click: function () { copyToClipboard(page, 'Copied ' + page); } } }),
-          h('button', { type: 'button', class: 'btn small', text: 'Edit', disabled: !canWrite, on: { click: function () { openPersonForm({ key: p.key, name: p.name, onSaved: function () { renderPeople(); } }); } } }),
+          h('a', { class: 'btn small', href: '/admin/people/' + p.key, text: 'Edit', style: 'text-decoration:none' }),
           url ? h('button', { type: 'button', class: 'btn small', text: 'Remove photo', disabled: !canWrite, on: { click: function () { removePhoto(p.name); } } }) : null
         ])
       ]));
@@ -1748,10 +2085,10 @@ window.ReelAdmin = function (env) {
     $('titlesPage').hidden = page !== 'titles';
     $('editPage').hidden = page === 'titles';
     document.querySelectorAll('.atabs a').forEach(function (a) {
-      var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title');
+      var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title') || (p === 'people' && page === 'person');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -1765,8 +2102,9 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; pbMode = null; peopleMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
-    if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
+    featuredMode = false; pbMode = null; peopleMode = false; personEdMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
+    if (parts[0] === 'people' && parts[1]) { page = 'person'; personEdMode = true; var pk = personKey(decodeURIComponent(parts[1])); if (pk !== peWant) pe = null; peWant = pk; }
+    else if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
     else if (parts[0] === 'tv-banner') { page = 'tvbanner'; pbMode = 'tv'; }
@@ -1791,6 +2129,15 @@ window.ReelAdmin = function (env) {
       askConfirm('Leave without saving?', 'You have unsaved changes to this ' + NK[newsKind].one + '.', 'Discard changes', true).then(function (yes) {
         leaveAsking = false; if (!yes) return;
         newsDirty = false; newsEd = null; history.pushState(null, '', to); window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      return false;
+    }
+    if (page === 'person' && pe && pe.dirty && nextPath !== location.pathname) {
+      if (leaveAsking) return false;
+      var pto = nextPath || (location.pathname + location.search); leaveAsking = true;
+      askConfirm('Leave without saving?', 'You have unsaved changes to ' + (pe.d.name || 'this person') + '.', 'Discard changes', true).then(function (yes) {
+        leaveAsking = false; if (!yes) return;
+        pe = null; history.pushState(null, '', pto); window.dispatchEvent(new PopStateEvent('popstate'));
       });
       return false;
     }
@@ -2858,6 +3205,7 @@ window.ReelAdmin = function (env) {
     if (cards[1]) main.insertBefore(bar, cards[1]);
   }
   function renderEditorInner() {
+    if (personEdMode) { renderPersonEdit(); return; }
     if (peopleMode) { renderPeople(); return; }
     if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
@@ -3296,7 +3644,8 @@ window.ReelAdmin = function (env) {
     renderPopCount(); if (popularMode && !popDragging) renderPopular();
     renderPeopleCount();
     namesDatalist();
-    if (peopleMode) { var a = document.activeElement; if (!(a && a.id === 'pplQ')) renderPeople(); else refreshAvatars(); }
+    if (personEdMode) renderPersonEdit();
+    else if (peopleMode) { var a = document.activeElement; if (!(a && a.id === 'pplQ')) renderPeople(); else refreshAvatars(); }
     else refreshAvatars();
   }, function () {});
   db.collection('movies').orderBy('order').onSnapshot(function (snap) {
