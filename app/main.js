@@ -3074,7 +3074,8 @@
     return out;
   }
   function rankIn(m) {
-    var list = sectionOf(m.data.section).map(function (x) { return { id: x.id, s: score(x.id) }; }).filter(function (x) { return x.s.pct !== null; });
+    // Only titles whose score is shown (MIN_SHOW verdicts or more) are ranked, so one early verdict can't make a "TOP #1".
+    var list = sectionOf(m.data.section).map(function (x) { return { id: x.id, s: score(x.id) }; }).filter(function (x) { return shownPct(x.s) !== null; });
     list.sort(function (a, b) { return b.s.pct - a.s.pct || b.s.tot - a.s.tot; });
     for (var i = 0; i < list.length; i++) if (list[i].id === m.id) return i + 1;
     return 0;
