@@ -1420,3 +1420,13 @@ body.r-lists .pr .crumbs { display: block; }
 .wwbtn.pri { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
 .wwbtn.pri:hover { filter: brightness(1.08); color: #0B0A0F; }
 .wwcard .note { margin-top: 10px; }
+
+/* Mini player: drag it anywhere by its title bar or the ⠿ grip */
+.tov-grip { display: none; }
+.tov-mini .tov-grip { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 32px; margin-left: -6px; padding: 0; border: 0; border-radius: 6px; background: none; color: var(--dim); font-size: 16px; cursor: grab; flex: none; touch-action: none; }
+.tov-mini .tov-grip:hover, .tov-mini .tov-grip:focus-visible { color: var(--text); background: rgba(255,255,255,.06); }
+.tov-mini .tov-bar { cursor: grab; touch-action: none; user-select: none; }
+.tov-mini.tov-dragging, .tov-mini.tov-dragging .tov-bar, .tov-mini.tov-dragging .tov-grip { cursor: grabbing; }
+.tov-mini.tov-dragging { box-shadow: 0 30px 80px rgba(0,0,0,.75); }
+.tov-mini.tov-dragging .tov-v { pointer-events: none; } /* the video frame would swallow the pointer mid-drag */
+.tov-mini .tov-bar a, .tov-mini .tov-bar button:not(.tov-grip) { cursor: pointer; }

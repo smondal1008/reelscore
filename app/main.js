@@ -1601,6 +1601,7 @@
       [h('span', { class: 'tov-sw', 'aria-hidden': 'true' }), h('span', { text: 'Repeat' })]) : null;
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [
+        tovMiniOk() ? h('button', { type: 'button', class: 'tov-grip', 'aria-label': 'Move the mini player: drag, or use the arrow keys', title: 'Drag to move', text: '⠿' }) : null,
         h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
         h('div', { class: 'tov-acts' }, [navs, repB, auto, shareB, more, miniB, close])
       ]),
@@ -1669,10 +1670,55 @@
   }
   function tovAutoplay() { try { return localStorage.getItem('rs_autoplay') !== '0'; } catch (e) { return true; } }
   function tovMiniOk() { try { return window.matchMedia('(min-width: 900px) and (hover: hover)').matches; } catch (e) { return false; } }
+  // Mini player position: dragged by its title bar (or the ⠿ grip, which also takes the arrow keys), kept inside the
+  // window and remembered in this browser. No position saved = the bottom-right corner.
+  function miniPos() { try { var p = JSON.parse(localStorage.getItem('rs_mini_pos') || 'null'); return p && isFinite(p.x) && isFinite(p.y) ? p : null; } catch (e) { return null; } }
+  function placeMini(node, p, save) {
+    if (!p) { node.style.left = node.style.top = node.style.right = node.style.bottom = ''; return; }
+    var w = node.offsetWidth || 420, ht = node.offsetHeight || 280, m = 8;
+    var x = Math.max(m, Math.min(window.innerWidth - w - m, p.x)), y = Math.max(m, Math.min(window.innerHeight - ht - m, p.y));
+    node.style.left = x + 'px'; node.style.top = y + 'px'; node.style.right = 'auto'; node.style.bottom = 'auto';
+    if (save) try { localStorage.setItem('rs_mini_pos', JSON.stringify({ x: Math.round(x), y: Math.round(y) })); } catch (e) {}
+  }
+  function miniDrag(t) {
+    if (t.dragOn) return; t.dragOn = true;
+    var node = t.node, bar = node.querySelector('.tov-bar'), grip = node.querySelector('.tov-grip'); if (!bar) return;
+    var start = null, moved = false;
+    // Starts on the title too (it's a link): a press that moves more than 4px drags and the click is dropped; a plain click still opens the page.
+    bar.addEventListener('pointerdown', function (e) {
+      if (!S.tovMini || S.tov !== t || e.button !== 0) return;
+      if (e.target.closest('button, input, select') && !e.target.closest('.tov-grip')) return;
+      var r = node.getBoundingClientRect(); start = { px: e.clientX, py: e.clientY, x: r.left, y: r.top, id: e.pointerId }; moved = false;
+      if (e.target.closest('.tov-grip')) e.preventDefault();
+    });
+    document.addEventListener('pointermove', function (e) {
+      if (!start || e.pointerId !== start.id) return;
+      var dx = e.clientX - start.px, dy = e.clientY - start.py;
+      if (!moved) { if (Math.abs(dx) + Math.abs(dy) < 5) return; moved = true; node.classList.add('tov-dragging'); }
+      placeMini(node, { x: start.x + dx, y: start.y + dy }, false);
+    });
+    var end = function (e) {
+      if (!start || (e && e.pointerId !== start.id)) return; start = null;
+      if (!moved) return;
+      node.classList.remove('tov-dragging');
+      var r = node.getBoundingClientRect(); placeMini(node, { x: r.left, y: r.top }, true);
+      setTimeout(function () { moved = false; }, 0); // the click that may follow this pointerup is dropped first
+    };
+    document.addEventListener('pointerup', end); document.addEventListener('pointercancel', end);
+    bar.addEventListener('click', function (e) { if (moved) { e.preventDefault(); e.stopPropagation(); moved = false; } }, true);
+    bar.addEventListener('dragstart', function (e) { if (S.tovMini) e.preventDefault(); });
+    if (grip) grip.addEventListener('keydown', function (e) {
+      var k = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key]; if (!k || !S.tovMini) return;
+      e.preventDefault(); var r = node.getBoundingClientRect(), d = e.shiftKey ? 80 : 24;
+      placeMini(node, { x: r.left + k[0] * d, y: r.top + k[1] * d }, true);
+    });
+  }
+  window.addEventListener('resize', function () { if (S.tov && S.tovMini && miniPos()) placeMini(S.tov.node, miniPos(), false); });
   function setTovMini(on, quiet) {
     var t = S.tov; if (!t) return;
     S.tovMini = on;
     t.node.classList.toggle('tov-mini', on);
+    if (on) { miniDrag(t); var mp = miniPos(); if (mp) requestAnimationFrame(function () { if (S.tov === t && S.tovMini) placeMini(t.node, mp, false); }); } else placeMini(t.node, null);
     t.node.setAttribute('aria-modal', on ? 'false' : 'true');
     document.body.classList.toggle('tov-open', !on);
     if (t.miniB) {
