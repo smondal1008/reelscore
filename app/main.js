@@ -2692,7 +2692,7 @@
     if (list.length < 4) return null;
     list.sort(function (a, b) { return b.date.localeCompare(a.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     var when = {}; list.forEach(function (e) { when[e.m.id] = e; });
-    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return (e.platName || 'OTT') + ' · ' + (e.date === td ? 'Today' : fmtDate(e.date)); } }, seeAll('/ott-release-dates'));
+    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return [e.platName || 'OTT', isTv(m) ? 'Series' : '', e.date === td ? 'Today' : fmtDate(e.date)].filter(Boolean).join(' · '); } }, seeAll('/ott-release-dates'));
   }
   function drawOttDates() {
     var v = $('view-ottdates');
