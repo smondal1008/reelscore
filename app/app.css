@@ -1702,6 +1702,31 @@ textarea.fbin { resize: vertical; min-height: 96px; }
     .odrail { grid-template-columns: minmax(0, 1fr); }
   }
 
-  /* Offer to add back titles this browser saved that are missing from the loaded list */
-  .restorebar { position: fixed; left: 50%; bottom: 20px; transform: translateX(-50%); z-index: 30; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; width: min(680px, calc(100vw - 24px)); box-sizing: border-box; padding: 14px 16px; border-radius: 14px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 12px 34px rgba(0,0,0,.5); font-size: 14px; line-height: 1.45; }
-  .restorebar span { flex: 1 1 260px; }
+  /* Offer to add back titles this browser saved that are missing from the loaded list: a card (desktop) or bottom sheet (phones) */
+  .rbwrap { position: fixed; inset: 0; z-index: 40; pointer-events: none; }
+  .rbshade { display: none; }
+  .restorebar { pointer-events: auto; position: absolute; right: 24px; bottom: 20px; width: min(520px, calc(100vw - 32px)); max-height: calc(100vh - 40px); display: flex; flex-direction: column; box-sizing: border-box; padding: 16px 18px; border-radius: 16px; background: var(--panel); border: 1px solid var(--accent); box-shadow: 0 14px 40px rgba(0,0,0,.55); }
+  .rbhead { display: flex; gap: 10px; align-items: flex-start; }
+  .rbhead > div { flex: 1; }
+  .rbhead h2 { margin: 0; font-size: 16px; font-weight: 800; }
+  .rbhead p { margin: 4px 0 0; font-size: 13px; line-height: 1.45; color: var(--muted); }
+  .rbx { border: 0; background: none; color: var(--dim); font-size: 22px; line-height: 1; cursor: pointer; padding: 2px 6px; }
+  .rblist { margin-top: 12px; overflow-y: auto; min-height: 0; max-height: 300px; }
+  .rbrow { display: flex; align-items: center; gap: 12px; padding: 9px 0; border-top: 1px solid var(--line); cursor: pointer; }
+  .rbrow input { width: 20px; height: 20px; accent-color: var(--accent); flex: none; margin: 0; }
+  .rbpost { width: 34px; height: 51px; border-radius: 6px; background-size: cover; background-position: center; flex: none; }
+  .rbt { min-width: 0; flex: 1; display: flex; flex-direction: column; }
+  .rbt b { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .rbt small { font-size: 12px; color: var(--dim); margin-top: 2px; }
+  .rbrem { font-size: 11px; font-weight: 700; color: #7FB2FF; border: 1px solid #2E4366; border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+  .rbmore { padding: 10px 0; border-top: 1px solid var(--line); font-size: 13px; color: var(--dim); }
+  .rbacts { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-top: 14px; }
+  .rbacts .btn { height: 40px; }
+  .rbgo:disabled { opacity: .5; cursor: default; }
+  .rbnote { margin-left: auto; font-size: 12px; color: var(--dim); }
+  @media (max-width: 640px) {
+    .rbshade { display: block; position: absolute; inset: 0; background: rgba(0,0,0,.5); pointer-events: auto; }
+    .restorebar { left: 0; right: 0; bottom: 0; width: auto; border-radius: 20px 20px 0 0; border-bottom: 0; max-height: 85vh; padding-bottom: calc(16px + env(safe-area-inset-bottom)); }
+    .rbacts .rbgo { flex: 1; }
+    .rbnote { margin-left: 0; }
+  }

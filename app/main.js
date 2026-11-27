@@ -330,21 +330,53 @@
     if (n >= 3 && n >= had * 0.3) { showRestoreBar(mw, mr, b.at); return; }
     backupMine();
   }
+  // The missing titles as a card (desktop, bottom right) or a bottom sheet (phones): each with a tickbox, poster, title and
+  // where it is now. All ticked; Restore adds back the ticked ones (and their reminders). It never removes anything.
+  // × hides it for now (it comes back next visit); Keep as it is makes the loaded list this browser's copy.
   function showRestoreBar(mw, mr, at) {
     if (S.bakOffer) return;
     S.bakOffer = true;
+    var ids = mw.slice(); mr.forEach(function (id) { if (ids.indexOf(id) === -1) ids.push(id); });
+    var on = {}; ids.forEach(function (id) { on[id] = true; });
+    var known = ids.filter(function (id) { return S.byId[id]; }), unknown = ids.length - known.length;
     var when = at ? new Date(at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
-    var close = function () { S.bakOffer = false; if (bar.parentNode) bar.parentNode.removeChild(bar); };
-    var bar = h('div', { class: 'restorebar', role: 'alert' }, [
-      h('span', { text: 'Your watchlist has ' + mw.length + ' fewer title' + (mw.length === 1 ? '' : 's') + ' than this browser saved' + (when ? ' on ' + when : '') + (mr.length ? ' (and ' + mr.length + ' reminder' + (mr.length === 1 ? '' : 's') + ')' : '') + '.' }),
-      h('button', { type: 'button', class: 'btn primary small', text: 'Restore them', on: { click: function () {
-        mw.forEach(function (id) { if (S.mine.watchlist.indexOf(id) === -1) S.mine.watchlist.push(id); });
-        S.mine.reminders = S.mine.reminders || []; mr.forEach(function (id) { if (S.mine.reminders.indexOf(id) === -1) S.mine.reminders.push(id); });
-        close(); render(); saveMine('Restored ' + mw.length + ' title' + (mw.length === 1 ? '' : 's') + (mr.length ? ' and ' + mr.length + ' reminder' + (mr.length === 1 ? '' : 's') : ''));
-      } } }),
-      h('button', { type: 'button', class: 'btn small', text: 'Keep as it is', on: { click: function () { close(); backupMine(); } } })
+    var nw = mw.length, nRem = mr.length;
+    var prev = document.activeElement;
+    var close = function () { document.removeEventListener('keydown', onKey, true); if (wrap.parentNode) wrap.parentNode.removeChild(wrap); if (prev && prev.focus) try { prev.focus({ preventScroll: true }); } catch (e) {} };
+    var onKey = function (e) { if (e.key === 'Escape') close(); };
+    var btn = h('button', { type: 'button', class: 'btn primary rbgo' });
+    var count = function () { var n = ids.filter(function (id) { return on[id]; }).length; btn.textContent = n ? 'Restore ' + n + ' title' + (n === 1 ? '' : 's') : 'Nothing ticked'; btn.disabled = !n; };
+    var rows = known.map(function (id) {
+      var m = S.byId[id], d = m.data, pa = artLazy(m, 'poster', 80), cb = h('input', { type: 'checkbox', checked: true, 'aria-label': 'Restore ' + d.title });
+      cb.addEventListener('change', function () { on[id] = cb.checked; count(); });
+      var thumb = h('span', { class: 'rbpost', style: pa.style + (pa.bg ? ';background-image:url("' + pa.bg.replace(/"/g, '%22') + '")' : '') });
+      return h('label', { class: 'rbrow' }, [cb, thumb, h('span', { class: 'rbt' }, [h('b', { text: d.title }), h('small', { text: [langOf(d), isTv(m) ? 'Series' : 'Film', statusLabel(m)].filter(Boolean).join(' · ') })]),
+        mr.indexOf(id) !== -1 ? h('span', { class: 'rbrem', text: '🔔 Reminder' }) : null]);
+    });
+    var title = nw ? nw + ' title' + (nw === 1 ? ' is' : 's are') + ' missing from your watchlist' : nRem + ' release reminder' + (nRem === 1 ? ' is' : 's are') + ' missing';
+    var card = h('div', { class: 'restorebar', role: 'dialog', 'aria-modal': 'false', 'aria-labelledby': 'rbTitle' }, [
+      h('div', { class: 'rbhead' }, [h('div', {}, [h('h2', { id: 'rbTitle', text: title }),
+        h('p', { text: 'This browser saved ' + (ids.length === 1 ? 'it' : 'them') + (when ? ' on ' + when : '') + ', but ' + (ids.length === 1 ? 'it isn’t' : 'they aren’t') + ' in your list now. Untick any you don’t want back.' })]),
+        h('button', { type: 'button', class: 'rbx', 'aria-label': 'Close for now', text: '×', on: { click: close } })]),
+      h('div', { class: 'rblist' }, rows.concat(unknown ? [h('div', { class: 'rbmore', text: 'And ' + unknown + ' more title' + (unknown === 1 ? '' : 's') + ' (restored with the rest)' })] : [])),
+      h('div', { class: 'rbacts' }, [btn, h('button', { type: 'button', class: 'btn', text: 'Keep as it is', on: { click: function () { close(); S.bakOffer = false; backupMine(); } } }),
+        nRem ? h('span', { class: 'rbnote', text: nRem + ' of these had release reminder' + (nRem === 1 ? '' : 's') + '; they come back too.' }) : null])
     ]);
-    document.body.appendChild(bar);
+    btn.addEventListener('click', function () {
+      var aw = 0, ar = 0; S.mine.reminders = S.mine.reminders || [];
+      ids.forEach(function (id) {
+        if (!on[id]) return;
+        if (mw.indexOf(id) !== -1 && S.mine.watchlist.indexOf(id) === -1) { S.mine.watchlist.push(id); aw++; }
+        if (mr.indexOf(id) !== -1 && S.mine.reminders.indexOf(id) === -1) { S.mine.reminders.push(id); ar++; }
+      });
+      close(); S.bakOffer = false; render();
+      saveMine('Restored ' + aw + ' title' + (aw === 1 ? '' : 's') + (ar ? ' and ' + ar + ' reminder' + (ar === 1 ? '' : 's') : ''));
+    });
+    count();
+    var wrap = h('div', { class: 'rbwrap' }, [h('div', { class: 'rbshade', on: { click: close } }), card]);
+    document.body.appendChild(wrap);
+    document.addEventListener('keydown', onKey, true);
+    btn.focus({ preventScroll: true });
   }
   // The list keys a tap can add to. Before the saved list loads, everything in them came from taps on this page.
   var MINE_KEYS = ['watchlist', 'following', 'reminders', 'wtw', 'nope', 'seen', 'unseen'];
