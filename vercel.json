@@ -165,7 +165,7 @@
     },
     {
       "source": "/browse/older-releases",
-      "destination": "/browse/older-movies",
+      "destination": "/browse/movies",
       "permanent": true
     },
     {
@@ -185,7 +185,7 @@
     },
     {
       "source": "/movies/older-releases",
-      "destination": "/browse/older-movies",
+      "destination": "/browse/movies",
       "permanent": true
     },
     {

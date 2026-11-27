@@ -633,6 +633,7 @@
   function listCanonical() {
     var page = qPage(), qs = new URLSearchParams(location.search);
     var filtered = qs.get('lang') || qs.get('genre') || qs.get('year') || qs.get('ott') || qs.get('q');
+    if (location.pathname === '/browse/movies' && page < 2) return '/movies'; // the Movies page is the one for search engines
     return location.pathname + (page > 1 && !filtered ? '?page=' + page : '');
   }
   function syncListUrl(href) {
@@ -661,7 +662,9 @@
   }
   // Hub page titles, the same as the pre-rendered hub pages (scripts/build.mjs HUBS).
   var BROWSE_TITLES = { All: 'Browse Indian Movies & Series | Reelscore', 'In theatres': 'Indian Movies in Theatres Now | Reelscore', 'Coming soon': 'Upcoming Indian Movies | Reelscore',
-    'On OTT': 'Indian Movies on OTT | Reelscore', 'Older releases': 'Older Indian Movies | Reelscore', 'TV shows': 'Indian TV Shows & Series | Reelscore' };
+    'On OTT': 'Indian Movies on OTT | Reelscore', 'All movies': 'All Indian Movies | Reelscore', 'TV shows': 'Indian TV Shows & Series | Reelscore' };
+  // Browse tab labels where the status value differs ("All" is every title, films and series).
+  var BROWSE_TAB = { All: 'Movies & TV' };
   var PEOPLE_TITLE = 'Indian Actors & Filmmakers | Reelscore';
   var NEWS_TITLE = 'Indian Movie & OTT News | Reelscore';
   // News and the product blog share one database collection ("news"; kind "blog" for blog posts) and one page view.
@@ -676,14 +679,15 @@
   var MOVIES_TITLE = 'Indian Movies – Reviews, Verdicts & OTT | Reelscore', TV_TITLE = 'Indian TV Shows & Web Series | Reelscore';
   // Section slugs (same as scripts/build.mjs HUBS). The old slugs and /movies/<section> paths are 301s in vercel.json;
   // OLD_SECTIONS maps them for in-app navigation too.
-  var MOVIE_SECTIONS = { 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT', 'older-movies': 'Older releases' };
-  var BROWSE_SECTIONS = { 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT', 'older-movies': 'Older releases', 'tv-shows': 'TV shows' };
-  var OLD_SECTIONS = { 'in-theatres': 'movies-in-theatres', 'coming-soon': 'movies-coming-soon', 'on-ott': 'movies-on-ott', 'older-releases': 'older-movies' };
+  // Browse > All movies (/browse/movies) is every film; the "Older releases" section has no tab of its own.
+  var MOVIE_SECTIONS = { 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT' };
+  var BROWSE_SECTIONS = { 'movies': 'All movies', 'movies-in-theatres': 'In theatres', 'movies-coming-soon': 'Coming soon', 'movies-on-ott': 'On OTT', 'tv-shows': 'TV shows' };
+  var OLD_SECTIONS = { 'in-theatres': 'movies-in-theatres', 'coming-soon': 'movies-coming-soon', 'on-ott': 'movies-on-ott', 'older-releases': 'movies' };
   function legacyHashToPath(hsh) {
     if (/^t-[A-Za-z0-9-]+$/.test(hsh)) return '/movie/' + hsh.slice(2);
     if (hsh === 'list') return '/my-list';
     if (hsh === 'browse') return '/browse';
-    if (hsh === 'browse-older') return '/browse/older-movies';
+    if (hsh === 'browse-older') return '/browse/movies';
     if (hsh === 'browse-ott') return '/browse/movies-on-ott';
     if (hsh === 'admin') return '/admin';
     if (hsh === 'home') return '/';
@@ -1778,7 +1782,7 @@
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
-      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/older-movies', text: 'Browse all' })])); }, 13),
+      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
       lazySection(function () { return langSection(); }, 14)
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
@@ -2992,7 +2996,7 @@
     var yrs = []; for (var k = now + (S.movies.some(function (m) { return (m.data.releaseDate || '').slice(0, 4) === String(now + 1); }) ? 1 : 0); k >= now - 9; k--) yrs.push(String(k));
     v.appendChild(h('nav', { class: 'gnav', 'aria-label': 'Other years' }, yrs.map(function (x) {
       return h('a', { class: 'chip', href: '/year/' + x, 'aria-current': x === y ? 'page' : null, 'aria-pressed': String(x === y), text: x });
-    }).concat([h('a', { class: 'chip', href: '/browse/older-movies', text: 'Older…' })])));
+    }).concat([h('a', { class: 'chip', href: '/browse/movies', text: 'All movies' })])));
     if (!S.loaded) return;
     var w = h('section', { class: 'wrapx', style: 'padding-top:18px', 'aria-label': 'Movies of ' + y }); v.appendChild(w);
     var langs = {}; all.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; });
@@ -3017,7 +3021,7 @@
     for (var k = now; k > now - 10; k--) { var n = st ? st[k] || 0 : yearMovies(String(k)).length; if (n) tiles.push([String(k), n]); }
     if (tiles.length < 3) return null;
     return h('section', { class: 'sect', 'aria-label': 'Years' }, [
-      h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by year' }), h('span', { class: 'sub' }, [h('a', { href: '/browse/older-movies', text: 'Older releases' })])]),
+      h('div', { class: 'sect-h' }, [h('h2', { text: 'Movies by year' }), h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'All movies' })])]),
       h('div', { class: 'rowx gtiles' }, tiles.map(function (x) {
         var c = yearCol(x[0]);
         return h('a', { class: 'gtile ytile', href: '/year/' + x[0], style: '--g1:' + c[0] + ';--g2:' + c[1], 'aria-label': x[0] + ', ' + x[1] + ' movies' }, [
@@ -5185,7 +5189,7 @@
       var d = m.data;
       if (!inNavLang(m)) return false;
       if (LP && LP.kind === 'movies' && isTv(m)) return false;
-      if (skip !== 'status' && B.status !== 'All' && d.section !== B.status) return false;
+      if (skip !== 'status' && B.status !== 'All' && (B.status === 'All movies' ? isTv(m) : d.section !== B.status)) return false;
       if (skip !== 'status' && B.status === 'Coming soon' && soonTba(m)) return false; // TBA titles stay off Browse > Coming soon
       if (skip !== 'lang' && langs.length && langs.indexOf(langOf(d)) === -1) return false;
       if (skip !== 'ott' && otts.length && !ottsOf(d).some(function (o) { return otts.indexOf(o) !== -1; })) return false;
@@ -5222,13 +5226,14 @@
 
     // Status tabs, with counts under the other filters
     var sc = counts('status', function (d) { return d.section; }), tot = 0; Object.keys(sc).forEach(function (k) { tot += sc[k]; });
+    sc['All movies'] = tot - (sc['TV shows'] || 0);
     if (sc['Coming soon'] && S.loaded) sc['Coming soon'] -= S.movies.filter(function (m) { return soonTba(m) && pass(m, 'status'); }).length; // the tab counts what it shows
-    var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
+    var statuses = ['All', 'All movies', 'In theatres', 'Coming soon', 'On OTT', 'TV shows'];
     w.appendChild(h('nav', { class: 'btabs', 'aria-label': 'What to show' }, statuses.map(function (st) {
       var n = st === 'All' ? tot : sc[st] || 0, on = B.status === st;
       return h('a', { class: 'btab' + (on ? ' on' : '') + (S.loaded && !n ? ' zero' : ''), href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year, ott: B.ott }, 1), 'aria-current': on ? 'page' : null,
         on: { click: function (e) { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); go({ status: st }); } } },
-        [h('span', { text: st }), S.loaded ? h('span', { class: 'bn', text: nf(n) }) : null]);
+        [h('span', { text: BROWSE_TAB[st] || st }), S.loaded ? h('span', { class: 'bn', text: nf(n) }) : null]);
     })));
 
     // Filter groups (the same for the column and the phone sheet)

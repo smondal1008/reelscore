@@ -965,10 +965,10 @@ async function main() {
   // the shell other routes fall back to; it carries no canonical (the app sets it), and its pre-rendered home block
   // only shows on "/" (the app switches views at once elsewhere). Titles match app/main.js BROWSE_TITLES / PEOPLE_TITLE.
   const HUBS = [
+    ['movies', 'All movies', 'All Indian Movies | Reelscore', 'Every Bollywood and regional Indian film on Reelscore, old and new, with cast, crew and verdicts.'],
     ['movies-in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts: theatre, OTT or skip.'],
     ['movies-coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
     ['movies-on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
-    ['older-movies', 'Older releases', 'Older Indian Movies | Reelscore', 'Older Bollywood and regional Indian films, with cast, crew and verdicts.'],
     ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, with cast, trailers and verdicts.']
   ];
   const sectionOf = m => m.data.section === 'Releasing this week' ? 'In theatres' : (m.data.section || 'Older releases');
@@ -983,6 +983,8 @@ async function main() {
   const datedSoon = m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id);
   bySection['Coming soon'] = pinFirst((bySection['Coming soon'] || []).filter(datedSoon), data.rows.coming);
   bySection['On OTT'] = pinFirst(bySection['On OTT'] || [], data.rows.ott);
+  // Browse > All movies: every film (the "Older releases" section has no hub of its own).
+  bySection['All movies'] = movies.filter(m => !isTv(m.data)).sort(newest);
   const titleLi = m => '<li>' + tLink(m) + ' <span class="note">' +
     esc([isTv(m.data) ? tvYears(m.data) : (/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate > today ? fmtDate(m.data.releaseDate) : year(m.data)), String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>';
   const hubPeople = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a) || personName(a).localeCompare(personName(b)));
@@ -1011,7 +1013,7 @@ async function main() {
   // As on the site: the home row lists titles with a release date (TBA ones only when pinned); the link counts them all.
   homeBody += block('Coming soon', bySection['Coming soon'].filter(m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id)).slice(0, 18).map(titleLi), ['/browse/movies-coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
   homeBody += block('On OTT', bySection['On OTT'].slice(0, 18).map(titleLi), ['/browse/movies-on-ott', 'All ' + bySection['On OTT'].length + ' on OTT →']);
-  homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-movies', 'All older releases →']);
+  homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/movies', 'All movies →']);
   homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);
   homeBody += '<h2>Browse</h2><ul>' + HUBS.map(h => '<li><a href="/browse/' + h[0] + '">' + h[1] + '</a> <span class="note">' + bySection[h[1]].length + '</span></li>').join('') +
     langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
@@ -1034,25 +1036,28 @@ async function main() {
   HUBS.forEach(h => { browseBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
   browseBody += '<h2>By genre</h2><ul>' + genreLinks() + '</ul>';
   browseBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + '</a> <span class="note">' + langs[l] + '</span></li>').join('') + '</ul>';
-  writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: in theatres, coming soon, on OTT, older releases and TV shows.', canonical: '/browse', ogPath: '/browse', route: 'browse', body: browseBody,
+  writeHub('browse.html', { title: 'Browse Indian Movies & Series | Reelscore', description: 'Browse ' + movies.length + ' Bollywood and regional Indian movies and series: all movies, in theatres, coming soon, on OTT and TV shows.', canonical: '/browse', ogPath: '/browse', route: 'browse', body: browseBody,
     jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse']), listLd('Browse sections', HUBS.map(h => '/browse/' + h[0]))] });
   for (const [slug, name, title, desc] of HUBS) {
     const list = bySection[name];
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/browse">Browse</a> › ' + esc(name) + '</nav><h1>' + esc(name) + '</h1><p>' + list.length + ' title' + (list.length === 1 ? '' : 's') + '. ' + esc(desc) + '</p>' +
       (list.length ? '<ul>' + list.map(titleLi).join('') + '</ul>' : '<p>Nothing here right now.</p>') +
       '<h2>Other sections</h2><ul>' + HUBS.filter(x => x[0] !== slug).map(x => '<li><a href="/browse/' + x[0] + '">' + x[1] + '</a></li>').join('') + '</ul>';
-    writeHub('browse/' + slug + '.html', { title, description: desc, canonical: '/browse/' + slug, ogPath: '/browse/' + slug, route: 'browse', body,
+    // All movies lists the same films as /movies, so search engines are pointed there (as in app/main.js listCanonical).
+    const canon = slug === 'movies' ? '/movies' : '/browse/' + slug;
+    writeHub('browse/' + slug + '.html', { title, description: desc, canonical: canon, ogPath: canon, route: 'browse', body,
       jsonld: [crumbLd(['Home', '/'], ['Browse', '/browse'], [name, '/browse/' + slug]), listLd(name, list.map(movieUrl))] });
-    sitemap.push({ loc: '/browse/' + slug, pri: '0.7' });
+    if (canon === '/browse/' + slug) sitemap.push({ loc: canon, pri: '0.7' });
   }
 
   // Movies (/movies) and TV Shows (/tv-shows): Browse split by kind. Titles match app/main.js MOVIES_TITLE / TV_TITLE.
-  // /movies/<section> is app-only (vercel.json rewrite) and points its canonical at /browse/<section>.
+  // Old /movies/<section> addresses are 301s to /browse/<section> (vercel.json).
   {
-    const MOVIE_HUBS = HUBS.filter(h => h[1] !== 'TV shows');
+    const MOVIE_HUBS = HUBS.filter(h => h[1] !== 'TV shows' && h[1] !== 'All movies');
     const films = movies.filter(m => !isTv(m.data)), shows = movies.filter(m => isTv(m.data)).sort(newest);
     let mBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Movies</nav><h1>Indian movies</h1><p>' + films.length + ' Bollywood and regional Indian films, with verdicts on whether each is worth the theatre, OTT or a skip.</p>';
     MOVIE_HUBS.forEach(h => { mBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
+    mBody += block('Recently released', (bySection['Older releases'] || []).filter(released).slice(0, 12).map(titleLi), ['/browse/movies', 'See all ' + films.length + ' movies →']);
     mBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a></li>').join('') + '</ul>';
     writeHub('movies.html', { title: 'Indian Movies – Reviews, Verdicts & OTT | Reelscore', description: clip('Browse ' + films.length + ' Bollywood and regional Indian movies: in theatres, coming soon, on OTT and older releases, with verdicts on each.', 158),
       canonical: '/movies', ogPath: '/movies', route: 'movies', body: mBody,
@@ -1448,7 +1453,7 @@ async function main() {
   write('page-dates.json', JSON.stringify(PAGE_DATES));
 
   // /llms.txt: a short Markdown guide to the site for AI tools (llmstxt.org format).
-  const sections = [['In theatres', '/browse/movies-in-theatres'], ['Coming soon', '/browse/movies-coming-soon'], ['On OTT', '/browse/movies-on-ott'], ['TV shows', '/browse/tv-shows'], ['Older releases', '/browse/older-movies']];
+  const sections = [['In theatres', '/browse/movies-in-theatres'], ['Coming soon', '/browse/movies-coming-soon'], ['On OTT', '/browse/movies-on-ott'], ['TV shows', '/browse/tv-shows'], ['All movies', '/movies']];
   const recent = movies.filter(m => isTv(m.data) || (m.data.releaseDate || '') <= new Date().toISOString().slice(0, 10)).sort((a, b) => String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || ''))).slice(0, 25);
   const busiest = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a)).slice(0, 25);
   write('llms.txt', [
