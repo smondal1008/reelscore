@@ -432,6 +432,7 @@
     if (o.genre) q.push('genre=' + encodeURIComponent(o.genre));
     if (o.year) q.push('year=' + o.year);
     if (o.ott) q.push('ott=' + encodeURIComponent(o.ott));
+    if (o.q && String(o.q).trim()) q.push('q=' + encodeURIComponent(String(o.q).trim()));
     if (page > 1) q.push('page=' + page);
     var sec = sectionSlug(o.status);
     return '/browse' + (sec ? '/' + sec : '') + (q.length ? '?' + q.join('&') : '');
@@ -439,7 +440,7 @@
   // Filtered lists point search engines at the plain list; plain pages 2+ keep their own URL.
   function listCanonical() {
     var page = qPage(), qs = new URLSearchParams(location.search);
-    var filtered = qs.get('lang') || qs.get('genre') || qs.get('year') || qs.get('ott');
+    var filtered = qs.get('lang') || qs.get('genre') || qs.get('year') || qs.get('ott') || qs.get('q');
     return location.pathname + (page > 1 && !filtered ? '?page=' + page : '');
   }
   function syncListUrl(href) {
@@ -539,12 +540,12 @@
     }
     else if ((mm = parseLanding(path)) && !(window.RS_404 || document.querySelector('meta[name="rs-404"]'))) {
       S.route = 'browse'; S.param = null;
-      S.browse = { status: mm.status, lang: mm.lang, genre: '', year: mm.year || '', ott: '', sort: (S.browse && S.browse.sort) || 'new', page: qPage(), landing: mm };
+      S.browse = { status: mm.status, lang: mm.lang, genre: '', year: mm.year || '', ott: '', q: '', sort: (S.browse && S.browse.sort) || 'new', page: qPage(), landing: mm };
     }
     else if ((mm = path.match(/^\/browse(?:\/([a-z-]+))?$/))) {
       S.route = 'browse'; S.param = null; S.browse.status = (mm[1] && BROWSE_SECTIONS[mm[1]]) || 'All';
       var qs = new URLSearchParams(location.search);
-      S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.ott = ottName(qs.get('ott') || '') ? qs.get('ott') : ''; S.browse.page = qPage();
+      S.browse.lang = qs.get('lang') || ''; S.browse.genre = qs.get('genre') || ''; S.browse.year = /^\d{4}(-\d{4})?$/.test(qs.get('year') || '') ? qs.get('year') : ''; S.browse.ott = bVals(qs.get('ott')).filter(function (o) { return ottName(o); }).join(','); S.browse.q = qs.get('q') || ''; S.browse.page = qPage();
     }
     else if ((mm = path.match(/^\/movies(?:\/([a-z-]+))?$/)) && (!mm[1] || MOVIE_SECTIONS[mm[1]])) {
       S.route = 'movies'; S.param = null; catFromUrl(S.cat.movies, mm[1] ? MOVIE_SECTIONS[mm[1]] : 'All');
@@ -3136,7 +3137,7 @@
   }
   // ---------- title page blocks (2026 redesign) ----------
   // Small inline icons; static markup only.
-  var ICONS = {
+  var ICONS = { sliders: '<path d="M4 6h16M7 12h10M10 18h4"/>',
     pip: '<rect x="2.5" y="4.5" width="19" height="15" rx="2"/><rect x="11.5" y="11.5" width="8" height="6" rx="1" fill="currentColor"/>',
     home: '<path d="M3 10.5 12 3l9 7.5"/><path d="M5 9.5V20h14V9.5"/><path d="M10 20v-6h4v6"/>',
     ticket: '<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h15A1.5 1.5 0 0 1 21 7.5V10a2 2 0 0 0 0 4v2.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 16.5V14a2 2 0 0 0 0-4z"/><path d="M14 6v2.5M14 11v2M14 15.5V18"/>',
@@ -4482,73 +4483,207 @@
     if (!released(m)) return { dateBadge: true, remind: true, book: sec === 'Coming soon' || sec === 'In theatres' };
     return sec === 'In theatres' ? { book: true, inTheatresList: inTh } : { stream: true };
   }
+  // ---------- Browse: status tabs with counts, a filter column (a sheet on phones), active filters as chips ----------
+  // Language, Streaming on and Genre take several values (comma-separated in the URL; any of them matches); Released takes one.
+  // Each group's counts apply every other filter, so a count is what ticking it would add.
+  function bVals(s) { return String(s || '').split(',').map(function (x) { return x.trim(); }).filter(Boolean); }
+  function bToggle(s, v) { var a = bVals(s), i = a.indexOf(v); if (i === -1) a.push(v); else a.splice(i, 1); return a.join(','); }
+  function ottsOf(d) { var p = String(d.platform || ''); if (!p) return []; return OTTS.filter(function (o) { return o[2].test(p); }).map(function (o) { return o[0]; }); }
+  function bYears() {
+    var y = new Date().getFullYear(), d0 = Math.floor((y - 2) / 10) * 10;
+    var out = [[String(y), String(y)], [String(y - 1), String(y - 1)]];
+    if (y - 2 >= d0) out.push([d0 + '-' + (y - 2), d0 + '–' + String(y - 2).slice(2)]);
+    for (var d = d0 - 10; d >= 2000; d -= 10) out.push([d + '-' + (d + 9), d + 's']);
+    out.push(['1900-1999', 'Before 2000']);
+    return out;
+  }
+  function bYearOk(d, v) {
+    if (!v) return true;
+    var y = +(d.releaseDate || '').slice(0, 4); if (!y) return false;
+    var m = String(v).match(/^(\d{4})(?:-(\d{4}))?$/); if (!m) return true;
+    return y >= +m[1] && y <= +(m[2] || m[1]);
+  }
+  function bYearLabel(v) { var hit = bYears().filter(function (o) { return o[0] === v; })[0]; return hit ? hit[1] : String(v).replace('-', '–'); }
+  var B_SORTS = [['new', 'Newest first'], ['score', 'Highest score'], ['votes', 'Most verdicts'], ['old', 'Oldest first'], ['az', 'A–Z']];
   function drawBrowse() {
     var v = $('view-browse');
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    var sheetScroll = v.querySelector('.bsheet-body') ? v.querySelector('.bsheet-body').scrollTop : 0;
     v.innerHTML = '';
-    var w = h('div', { class: 'wrapx' }); v.appendChild(w);
-    var B = S.browse;
-    var LP = B.landing;
-    w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:6px', text: LP ? LP.h1 : 'Browse' }));
-    w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:18px', text: LP ? 'Newest first, with where to watch and whether each is worth it. Change the filters below to see more.' : 'Every film and series on Reelscore, from classics to what’s coming next.' }));
-    var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
-    w.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Status', style: 'margin-bottom:14px' }, statuses.map(function (st) {
-      return h('a', { class: 'chip', href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year, ott: B.ott }, 1), 'aria-current': B.status === st ? 'page' : null, 'aria-pressed': String(B.status === st), text: st });
-    })));
-    var langs = {}, years = {};
-    S.movies.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = 1; if (m.data.releaseDate) years[m.data.releaseDate.slice(0, 4)] = 1; });
-    function sel(id, label, val, opts, onc) {
-      var e = h('select', { class: 'in', id: id }, opts.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === val }); }));
-      e.addEventListener('change', function () { onc(e.value); B.page = 1; B.landing = null; e.blur(); render(true); });
-      return h('div', { class: 'field', style: 'min-width:160px;flex:1 1 160px' }, [h('label', { class: 'l', for: id, text: label }), e]);
-    }
-    w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;gap:12px;margin-bottom:22px' }, [
-      sel('bLang', 'Language', B.lang, [['', 'All languages']].concat(Object.keys(langs).sort().map(function (l) { return [l, l]; })), function (x) { B.lang = x; }),
-      sel('bGenre', 'Genre', B.genre, [['', 'All genres']].concat(GENRES.map(function (g) { return [g, g]; })), function (x) { B.genre = x; }),
-      sel('bYear', 'Year', B.year, [['', 'Any year']].concat(Object.keys(years).sort().reverse().map(function (y) { return [y, y]; })), function (x) { B.year = x; }),
-      sel('bOtt', 'Streaming on', B.ott, [['', 'Any service']].concat(ottOptions(S.movies, B.ott)), function (x) { B.ott = x; }),
-      sel('bSort', 'Sort by', B.sort, [['new', 'Newest first'], ['old', 'Oldest first'], ['score', 'Highest score'], ['votes', 'Most verdicts'], ['az', 'A–Z']], function (x) { B.sort = x; })
-    ]));
-    // Quick links to the language pages (languages with 5+ films)
-    var fl = {}; S.movies.forEach(function (m) { if (isTv(m)) return; var l = langOf(m.data); if (/^[A-Za-z]+$/.test(l)) fl[l] = (fl[l] || 0) + 1; });
-    var top = Object.keys(fl).filter(function (l) { return fl[l] >= 5; }).sort(function (a, b) { return fl[b] - fl[a]; }).slice(0, 10);
-    if (top.length && S.loaded) w.appendChild(h('div', { class: 'sub', style: 'margin:-10px 0 20px' }, [h('span', { text: 'By language: ' })].concat(top.map(function (l, i) {
-      return [i ? ' · ' : '', h('a', { href: '/' + l.toLowerCase() + '-movies', text: l, 'aria-current': LP && LP.lang === l && !LP.year && LP.status === 'All' ? 'page' : null })];
-    }).reduce(function (a, b) { return a.concat(b); }, []))));
-    var list = S.movies.filter(function (m) {
+    var w = h('div', { class: 'wrapx bpage' }); v.appendChild(w);
+    var B = S.browse, LP = B.landing;
+    B.q = B.q || '';
+    var fold = function (t) { return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, ''); };
+    var langs = bVals(B.lang), otts = bVals(B.ott), gens = bVals(B.genre), words = fold(B.q).split(/\s+/).filter(Boolean);
+    // One test per filter; `skip` leaves one out, for that group's counts.
+    function pass(m, skip) {
       var d = m.data;
-      if (B.status !== 'All' && d.section !== B.status) return false;
-      if (B.lang && langOf(d) !== B.lang) return false;
-      if (LP && LP.kind === 'movies' && isTv(m)) return false;
       if (!inNavLang(m)) return false;
-      if (B.genre && genreTags(d).indexOf(B.genre) === -1) return false;
-      if (B.year && (d.releaseDate || '').slice(0, 4) !== B.year) return false;
-      if (B.ott && ottOf(d) !== B.ott) return false;
+      if (LP && LP.kind === 'movies' && isTv(m)) return false;
+      if (skip !== 'status' && B.status !== 'All' && d.section !== B.status) return false;
+      if (skip !== 'lang' && langs.length && langs.indexOf(langOf(d)) === -1) return false;
+      if (skip !== 'ott' && otts.length && !ottsOf(d).some(function (o) { return otts.indexOf(o) !== -1; })) return false;
+      if (skip !== 'genre' && gens.length && !genreTags(d).some(function (g) { return gens.indexOf(g) !== -1; })) return false;
+      if (skip !== 'year' && !bYearOk(d, B.year)) return false;
+      if (words.length) {
+        var hay = m._bhay || (m._bhay = fold([d.title, d.director, (d.cast || []).slice(0, 10).map(function (c) { return c.name; }).join(' ')].join(' ')));
+        if (!words.every(function (wd) { return hay.indexOf(wd) !== -1; })) return false;
+      }
       return true;
-    });
-    var sc = {}; list.forEach(function (m) { sc[m.id] = score(m.id); });
+    }
+    function counts(skip, keyOf) {
+      var c = {}; if (!S.loaded) return c;
+      S.movies.forEach(function (m) { if (!pass(m, skip)) return; [].concat(keyOf(m.data)).forEach(function (k) { if (k) c[k] = (c[k] || 0) + 1; }); });
+      return c;
+    }
+    var go = function (patch, focusKey) {
+      Object.keys(patch).forEach(function (k) { B[k] = patch[k]; });
+      B.page = 1; B.landing = null; S.bFocus = focusKey || null; render(true);
+    };
+    var nf = function (n) { return Number(n || 0).toLocaleString('en-IN'); };
+
+    // Title, count line and search
+    var all = S.loaded ? S.movies.filter(function (m) { return pass(m); }) : [];
+    var head = h('div', { class: 'bhead' }, [
+      h('div', {}, [h('h1', { class: 'display', style: 'font-size:44px;margin:0', text: LP ? LP.h1 : 'Browse' }),
+        h('p', { class: 'sub', style: 'margin:8px 0 0', text: LP ? 'Newest first, with where to watch and whether each is worth it. Change the filters to see more.' : 'Every film and series on Reelscore, from classics to what’s coming next.' })])
+    ]);
+    var qIn = h('input', { class: 'in', id: 'bQ', type: 'search', placeholder: 'Titles, cast or directors', autocomplete: 'off' }); qIn.value = B.q;
+    var qt = null;
+    qIn.addEventListener('input', function () { clearTimeout(qt); qt = setTimeout(function () { go({ q: qIn.value }, 'q'); }, 250); });
+    head.appendChild(h('div', { class: 'field bq' }, [h('label', { class: 'l', for: 'bQ', text: 'Search in Browse' }), qIn]));
+    w.appendChild(head);
+
+    // Status tabs, with counts under the other filters
+    var sc = counts('status', function (d) { return d.section; }), tot = 0; Object.keys(sc).forEach(function (k) { tot += sc[k]; });
+    var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
+    w.appendChild(h('nav', { class: 'btabs', 'aria-label': 'What to show' }, statuses.map(function (st) {
+      var n = st === 'All' ? tot : sc[st] || 0, on = B.status === st;
+      return h('a', { class: 'btab' + (on ? ' on' : '') + (S.loaded && !n ? ' zero' : ''), href: browseHref({ status: st, lang: B.lang, genre: B.genre, year: B.year, ott: B.ott }, 1), 'aria-current': on ? 'page' : null,
+        on: { click: function (e) { if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return; e.preventDefault(); go({ status: st }); } } },
+        [h('span', { text: st }), S.loaded ? h('span', { class: 'bn', text: nf(n) }) : null]);
+    })));
+
+    // Filter groups (the same for the column and the phone sheet)
+    S.bMore = S.bMore || {};
+    function groups(where) {
+      var box = h('div', { class: 'bgroups' });
+      var row = function (grp, key, label, n, on, icon) {
+        var id = 'bf-' + where + '-' + grp + '-' + String(key).replace(/[^a-z0-9]+/gi, '-');
+        var cb = h('input', { type: 'checkbox', id: id, 'data-fk': where + ':' + grp + ':' + key }); cb.checked = on;
+        cb.addEventListener('change', function () { var p = {}; p[grp] = bToggle(B[grp], key); go(p, where + ':' + grp + ':' + key); });
+        return h('label', { class: 'brow' + (!n && !on ? ' zero' : ''), for: id }, [cb, icon || null, h('span', { class: 'brl', text: label }), h('span', { class: 'bn', text: nf(n) })]);
+      };
+      var chip = function (grp, key, label, n, on) {
+        return h('button', { type: 'button', class: 'chip bchip' + (on ? ' on' : ''), 'aria-pressed': String(on), 'data-fk': where + ':' + grp + ':' + key,
+          on: { click: function () { var p = {}; p[grp] = grp === 'year' ? (on ? '' : key) : bToggle(B[grp], key); go(p, where + ':' + grp + ':' + key); } } },
+          [label, n != null ? h('span', { class: 'bn', text: nf(n) }) : null]);
+      };
+      var group = function (title, kids, more) { return h('fieldset', { class: 'bgroup' }, [h('legend', { text: title })].concat(kids, more ? [more] : [])); };
+      var list = function (grp, cnt, picked, label, icon, top) {
+        var keys = Object.keys(cnt).sort(function (a, b) { return cnt[b] - cnt[a] || a.localeCompare(b); });
+        picked.forEach(function (k) { if (keys.indexOf(k) === -1) keys.unshift(k); });
+        var open = S.bMore[grp], shown = open ? keys : keys.slice(0, top).concat(picked.filter(function (k) { return keys.indexOf(k) >= top; }));
+        var more = keys.length > shown.length || open ? h('button', { type: 'button', class: 'bmore', 'aria-expanded': String(!!open), text: open ? 'Show fewer' : '+ ' + (keys.length - shown.length) + ' more',
+          on: { click: function () { S.bMore[grp] = !open; S.bFocus = null; render(true); } } }) : null;
+        var kids = shown.map(function (k) { return where === 'sheet' ? chip(grp, k, label(k), cnt[k] || 0, picked.indexOf(k) !== -1) : row(grp, k, label(k), cnt[k] || 0, picked.indexOf(k) !== -1, icon ? icon(k) : null); });
+        return { kids: where === 'sheet' ? [h('div', { class: 'chips' }, kids)] : kids, more: more };
+      };
+      var L = list('lang', counts('lang', function (d) { return langOf(d); }), langs, function (k) { return k; }, null, 8);
+      box.appendChild(group('Language', L.kids, L.more));
+      var O = list('ott', counts('ott', ottsOf), otts, ottName, function (k) { return svcIcon(ottName(k)); }, 6);
+      box.appendChild(group('Streaming on', O.kids, O.more));
+      var gc = counts('genre', genreTags);
+      box.appendChild(group('Genre', [h('div', { class: 'chips' }, GENRES.filter(function (g) { return gc[g] || gens.indexOf(g) !== -1; }).map(function (g) { return chip('genre', g, g, null, gens.indexOf(g) !== -1); }))]));
+      var yc = {}; if (S.loaded) S.movies.forEach(function (m) { if (!pass(m, 'year')) return; bYears().forEach(function (o) { if (bYearOk(m.data, o[0])) yc[o[0]] = (yc[o[0]] || 0) + 1; }); });
+      var yrs = bYears().filter(function (o) { return yc[o[0]] || o[0] === B.year; });
+      if (B.year && !bYears().some(function (o) { return o[0] === B.year; })) yrs.unshift([B.year, bYearLabel(B.year)]);
+      box.appendChild(group('Released', [h('div', { class: 'chips' }, yrs.map(function (o) { return chip('year', o[0], o[1], yc[o[0]] || 0, B.year === o[0]); }))]));
+      return box;
+    }
+    function svcIcon(name) { var lg = platLogo(name); if (lg) return lg; var hit = PLAT.filter(function (p) { return p[0].test(name); })[0]; return h('span', { class: 'ctalogo svcini', 'aria-hidden': 'true', style: 'background:' + (hit ? hit[2] : '#2B2F3D'), text: String(name).charAt(0).toUpperCase() }); }
+    var active = (B.status !== 'All') + langs.length + otts.length + gens.length + !!B.year + !!B.q.trim();
+    var nFilters = langs.length + otts.length + gens.length + !!B.year;
+    var clearAll = function () { go({ status: 'All', lang: '', genre: '', year: '', ott: '', q: '' }); };
+
+    // Popular pages: the language pages (as links, for people and search engines alike)
+    var fl = {}; S.movies.forEach(function (m) { if (isTv(m)) return; var l = langOf(m.data); if (/^[A-Za-z]+$/.test(l)) fl[l] = (fl[l] || 0) + 1; });
+    var topL = Object.keys(fl).filter(function (l) { return fl[l] >= 5; }).sort(function (a, b) { return fl[b] - fl[a]; });
+    var pages = h('nav', { class: 'bpages', 'aria-label': 'Popular pages' }, [h('span', { class: 'bpl', text: 'Popular pages' })].concat(
+      topL.slice(0, 1).map(function (l) { return h('a', { href: '/new-' + l.toLowerCase() + '-movies-on-ott', text: 'New ' + l + ' movies on OTT →' }); }),
+      topL.slice(0, 5).map(function (l) { return h('a', { href: '/' + l.toLowerCase() + '-movies', text: l + ' movies →', 'aria-current': LP && LP.lang === l && !LP.year && LP.status === 'All' ? 'page' : null }); }),
+      [h('a', { href: '/year/' + new Date().getFullYear(), text: 'Movies of ' + new Date().getFullYear() + ' →' }), h('a', { href: '/lists', text: 'Lists →' })]));
+
+    var body = h('div', { class: 'bbody' }); w.appendChild(body);
+    var rail = h('aside', { class: 'brail', 'aria-label': 'Filters' }, [
+      h('div', { class: 'brail-h' }, [h('h2', { text: 'Filters' }), nFilters ? h('button', { type: 'button', class: 'bclear', text: 'Clear all', on: { click: clearAll } }) : null]),
+      groups('rail'), pages]);
+    body.appendChild(rail);
+    var main = h('section', { class: 'bmain', 'aria-label': 'Results' }); body.appendChild(main);
+
+    // Results bar: phone Filters button, the active filters as chips, the count and Sort
+    var pills = [];
+    langs.forEach(function (k) { pills.push([k, function () { go({ lang: bToggle(B.lang, k) }); }]); });
+    otts.forEach(function (k) { pills.push([ottName(k), function () { go({ ott: bToggle(B.ott, k) }); }]); });
+    gens.forEach(function (k) { pills.push([k, function () { go({ genre: bToggle(B.genre, k) }); }]); });
+    if (B.year) pills.push([bYearLabel(B.year), function () { go({ year: '' }); }]);
+    if (B.q.trim()) pills.push(['“' + B.q.trim() + '”', function () { go({ q: '' }); }]);
+    var so = h('select', { class: 'in', id: 'bSort' }, B_SORTS.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === B.sort }); }));
+    so.addEventListener('change', function () { B.sort = so.value; B.page = 1; so.blur(); render(true); });
+    main.appendChild(h('div', { class: 'bbar' }, [
+      h('div', { class: 'bbar-l' }, [
+        h('button', { type: 'button', class: 'bfbtn', 'aria-haspopup': 'dialog', on: { click: function () { S.bSheet = true; render(true); } } }, [icon('sliders', 16), 'Filters' + (nFilters ? ' · ' + nFilters : '')]),
+        h('span', { class: 'bcount', role: 'status' }, S.loaded ? [h('b', { text: nf(all.length) }), all.length === 1 ? ' title' : ' titles'] : ['Loading…'])
+      ].concat(pills.map(function (p) { return h('button', { type: 'button', class: 'bpill', 'aria-label': 'Remove filter: ' + p[0], on: { click: p[1] } }, [p[0], h('span', { 'aria-hidden': 'true', text: '✕' })]); }),
+        active ? [h('button', { type: 'button', class: 'bclear', text: 'Clear all', on: { click: clearAll } })] : [])),
+      h('div', { class: 'bsort' }, [h('label', { for: 'bSort', text: 'Sort' }), so])
+    ]));
+
+    if (!S.loaded) { main.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+    var list = all, scm = {}; list.forEach(function (m) { scm[m.id] = score(m.id); });
     list.sort(function (a, b) {
       var A = a.data, Bd = b.data;
       if (B.sort === 'old') return (A.releaseDate || '9').localeCompare(Bd.releaseDate || '9');
-      if (B.sort === 'score') return (sc[b.id].pct === null ? -1 : sc[b.id].pct) - (sc[a.id].pct === null ? -1 : sc[a.id].pct) || sc[b.id].tot - sc[a.id].tot;
-      if (B.sort === 'votes') return sc[b.id].tot - sc[a.id].tot;
+      if (B.sort === 'score') return (scm[b.id].pct === null ? -1 : scm[b.id].pct) - (scm[a.id].pct === null ? -1 : scm[a.id].pct) || scm[b.id].tot - scm[a.id].tot;
+      if (B.sort === 'votes') return scm[b.id].tot - scm[a.id].tot;
       if (B.sort === 'az') return (A.title || '').localeCompare(Bd.title || '');
       if (LP && B.sort === 'new' && B.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999');
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
-    if (B.sort === 'new') list = pinFirst(list, rowPins(B.status));
-    var active = (B.status !== 'All') + !!B.lang + !!B.genre + !!B.year + !!B.ott;
-    w.appendChild(h('div', { style: 'display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-bottom:16px' }, [
-      h('span', { class: 'sub', text: list.length > 60 ? 'Showing ' + ((Math.min(B.page || 1, Math.ceil(list.length / 60)) - 1) * 60 + 1) + '–' + Math.min(Math.min(B.page || 1, Math.ceil(list.length / 60)) * 60, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }),
-      active ? h('button', { type: 'button', class: 'btn small ghost', text: 'Clear filters', on: { click: function () { S.browse = { status: 'All', lang: '', genre: '', year: '', ott: '', sort: B.sort, page: 1 }; render(true); } } }) : null
-    ]));
-    if (!S.loaded) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
-    if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'Nothing matches these filters.' })); return; }
-    var PER = 60, pages = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages);
-    syncListUrl(bHref(B, B.page));
-    var from = (B.page - 1) * PER;
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
-    if (pages > 1) w.appendChild(pagerNav(B.page, pages, function (n) { return bHref(B, n); }));
+    if (B.sort === 'new' && !B.q.trim()) list = pinFirst(list, rowPins(B.status));
+    if (!list.length) main.appendChild(h('div', { class: 'empty' }, ['Nothing matches these filters. ', active ? h('button', { type: 'button', class: 'btn small', text: 'Clear all', on: { click: clearAll } }) : null]));
+    else {
+      var PER = 60, pages2 = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages2);
+      syncListUrl(bHref(B, B.page));
+      var from = (B.page - 1) * PER;
+      main.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
+      if (pages2 > 1) main.appendChild(pagerNav(B.page, pages2, function (n) { return bHref(B, n); }));
+    }
+
+    // Phone: the filters in a sheet from the bottom; changes apply at once, "Show N titles" closes it.
+    if (S.bSheet) {
+      var closeSheet = function () { S.bSheet = false; S.bFocus = 'filtersbtn'; render(true); };
+      var sbody = h('div', { class: 'bsheet-body' }, [groups('sheet')]);
+      var sheet = h('div', { class: 'bsheet-wrap' }, [
+        h('div', { class: 'bsheet-bg', 'aria-hidden': 'true', on: { click: closeSheet } }),
+        h('section', { class: 'bsheet', role: 'dialog', 'aria-modal': 'true', 'aria-labelledby': 'bsh' }, [
+          h('div', { class: 'bsheet-h' }, [h('h2', { id: 'bsh', text: 'Filters' }), h('span', { style: 'flex:1' }), nFilters ? h('button', { type: 'button', class: 'bclear', text: 'Clear all', on: { click: function () { S.bFocus = 'sheetclose'; go({ lang: '', genre: '', year: '', ott: '' }, 'sheetclose'); } } }) : null,
+            h('button', { type: 'button', class: 'bsheet-x', 'aria-label': 'Close filters', 'data-fk': 'sheetclose', text: '✕', on: { click: closeSheet } })]),
+          sbody,
+          h('div', { class: 'bsheet-f' }, [h('button', { type: 'button', class: 'btn primary', text: all.length ? 'Show ' + nf(all.length) + (all.length === 1 ? ' title' : ' titles') : 'No titles match', on: { click: closeSheet } })])
+        ])]);
+      sheet.addEventListener('keydown', function (e) { if (e.key === 'Escape') { e.stopPropagation(); closeSheet(); } });
+      v.appendChild(sheet); document.body.classList.add('bsheet-open');
+      requestAnimationFrame(function () { sbody.scrollTop = sheetScroll; });
+    } else document.body.classList.remove('bsheet-open');
+
+    // Put focus back on the control that was used, after the redraw.
+    var fk = S.bFocus; S.bFocus = null;
+    if (fk) requestAnimationFrame(function () {
+      var el = fk === 'q' ? $('bQ') : fk === 'filtersbtn' ? v.querySelector('.bfbtn') : v.querySelector('[data-fk="' + (fk.indexOf(':') === -1 ? fk : fk) + '"]');
+      if (!el && fk.indexOf(':') !== -1) { var alt = fk.replace(/^(rail|sheet):/, S.bSheet ? 'sheet:' : 'rail:'); el = v.querySelector('[data-fk="' + alt + '"]'); }
+      if (el) { el.focus({ preventScroll: true }); if (fk === 'q') { var n = el.value.length; try { el.setSelectionRange(n, n); } catch (e) {} } }
+    });
   }
   // ---------- Movies (/movies) and TV Shows (/tv-shows): Browse split by kind; Browse itself is unchanged ----------
   function catFromUrl(C, status) {
