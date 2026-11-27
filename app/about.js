@@ -103,5 +103,51 @@
     return (a.length ? a : ok).slice(0, 3).map(function (t) { return { t: t, line: clip(t.synopsis, 170) }; });
   }
 
-  root.RS_ABOUT = { title: title, person: person, collaborators: collaborators, knownFor: knownFor };
+
+  // Search title and description for a person page, shared by the build and the app (seo/README.md, "Reelscore SEO
+  // reference" section 4). Only words the page can back up: "Upcoming" with a published coming-soon title, "Where to
+  // Watch" when a title has a platform on file. Facts first in the description; the bio only if a sentence of it fits.
+  // p: { name, gender, bio, total, tvOnly, upcoming: [{title, date}], latest: {title, year, theatres, platform},
+  //      streaming: n, services: [names, most titles first], picks: [titles to name], famous: [latest released titles] }
+  function personSeo(p) {
+    var N = p.name, up = (p.upcoming || []).length > 0, plat = p.streaming > 0 || !!(p.latest && p.latest.theatres);
+    var tails = p.tvOnly ? [plat ? ' TV Shows & Where to Watch' : ' TV Shows & Filmography']
+      : [up && plat ? ' Movies: Upcoming, Latest & Where to Watch' : plat ? ' Movies: Latest & Where to Watch' : up ? ' Movies: Upcoming & Latest' : ' Movies & Filmography'];
+    tails = tails.concat(up && plat ? [' Movies: Latest & Where to Watch'] : [], [' Movies & Filmography', ' – Filmography']);
+    var title = '', lims = [60, 65];
+    for (var j = 0; j < lims.length && !title; j++) for (var i = 0; i < tails.length; i++) if ((N + tails[i]).length <= lims[j]) { title = N + tails[i]; break; }
+    if (!title) title = N;
+    var pron = p.gender === 'Male' ? 'his' : p.gender === 'Female' ? 'her' : 'their', s = [];
+    if (up) { var u = p.upcoming[0]; s.push('Next: ' + u.title + (/^\d{4}-\d{2}-\d{2}$/.test(u.date || '') ? ', releasing ' + fmt(u.date) : ', release date not announced') + '.'); }
+    var L = p.latest;
+    // Latest only when it says where to watch it; it is the first sentence dropped when the description runs long.
+    var li = -1;
+    if (L && (L.theatres || L.platform)) li = s.push('Latest: ' + L.title + (L.year ? ' (' + L.year + ')' : '') + (L.theatres ? ', in theatres now' : L.platform ? ', on ' + String(L.platform).split('/')[0].trim() : '') + '.');
+    var n = p.streaming || 0, T = p.total || 0;
+    if (n) {
+      var head = (n === T ? (n === 1 ? 'It is' : 'All ' + n + ' of ' + pron + ' titles are') : n + ' of ' + pron + ' ' + T + ' titles ' + (n === 1 ? 'is' : 'are')) + ' streaming';
+      var sv = p.services || [], pk = (p.picks || []).filter(function (x) { return !L || x !== L.title; });
+      var more = n >= 10 && sv.length ? ', on ' + (sv.length > 3 ? sv.slice(0, 3).join(', ') + ' and more' : list(sv)) : pk.length ? ', including ' + list(pk.slice(0, 3)) : sv.length ? ', on ' + list(sv.slice(0, 3)) : '';
+      s.push(head + more + '.');
+      // Too long: name fewer services, then none, rather than cutting a sentence off mid-way.
+      var lead = N + (p.tvOnly ? ' TV shows. ' : ' movies. ');
+      if ((lead + s.join(' ')).length > 158 && sv.length > 1 && n >= 10) s[s.length - 1] = head + ', on ' + sv[0] + ' and more.';
+      if ((lead + s.join(' ')).length > 158) s[s.length - 1] = head + '.';
+    }
+    var lead2 = N + (p.tvOnly ? ' TV shows. ' : ' movies. ');
+    if (li > 0 && s.length > 1 && (lead2 + s.join(' ')).length > 158) s.splice(li - 1, 1);
+    while (s.length > 1 && (lead2 + s.join(' ')).length > 158) s.pop();
+    var desc = s.length ? lead2 + s.join(' ') : '';
+    var bio = String(p.bio || '').replace(/\s+/g, ' ').trim(), bs = bio.split(/([.!?])\s+(?=[A-Z])/), first = bs[0] + (bs[1] || '');
+    // No facts to lead with: the bio, cut at the end of a sentence where it can be.
+    var bt = '';
+    for (var k = 0; k < bs.length; k += 2) { var nx = (bt ? bt + ' ' : '') + bs[k] + (bs[k + 1] || ''); if (nx.length > 158) break; bt = nx; }
+    if (!desc) desc = bt.trim() || bio || N + ' filmography: ' + T + ' title' + (T === 1 ? '' : 's') + ' on Reelscore.';
+    else if (first && (desc + ' ' + first).length <= 158) desc += ' ' + first;
+    // Short on facts: add a few of the latest titles, so the description says what the page lists.
+    var fm = (p.famous || []).filter(function (x) { return desc.indexOf(x) === -1; }).slice(0, 3);
+    if (desc && desc.length < 100) for (var q = fm.length; q > 0; q--) { var add = (p.tvOnly ? ' Shows include ' : ' Films include ') + list(fm.slice(0, q)) + '.'; if ((desc + add).length <= 158) { desc += add; break; } }
+    return { title: title, description: clip(desc, 158) };
+  }
+  root.RS_ABOUT = { title: title, person: person, collaborators: collaborators, knownFor: knownFor, personSeo: personSeo };
 })(typeof window !== 'undefined' ? window : this);

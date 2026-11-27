@@ -852,10 +852,21 @@ async function main() {
     const famous = (acting.length ? acting : crewT).filter(t => t.when && t.when <= new Date().toISOString().slice(0, 10)).slice(0, 4).map(t => t.m.data.title);
     const photo = cld(safeUrl(st.photoUrl), 400);
 
-    const title = personTitleTag(name);
-    const description = clip(st.bio ? st.bio : name + ' filmography: ' + titles.length + ' title' + (titles.length === 1 ? '' : 's') + (span ? ' (' + span + ')' : '') +
-      (famous.length ? ', including ' + list(famous) : '') + '. Roles, verdicts and reviews on Reelscore.', 158);
-    const li = t => '<li>' + tLink(t.m) + ' <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', ')].filter(Boolean).join(' · ')) + '</span></li>';
+    // Where each title can be watched: in theatres, or the services named in "Now streaming on" (released titles only).
+    const upc = t => !isTv(t.m.data) && (t.m.data.releaseDate ? t.m.data.releaseDate > TODAY : t.m.data.section === 'Coming soon');
+    const inTh = t => !upc(t) && t.m.data.section === 'In theatres';
+    const svcs = t => upc(t) || inTh(t) ? [] : String(t.m.data.platform || '').split('/').map(x => x.trim()).filter(Boolean);
+    const comingUp = titles.filter(upc).sort((a, b) => (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'));
+    const theatres = titles.filter(inTh), streams = titles.filter(t => svcs(t).length);
+    const bySvc = {}; streams.forEach(t => svcs(t).forEach(x => { (bySvc[x] = bySvc[x] || []).push(t); }));
+    const svcNames = Object.keys(bySvc).sort((a, b) => bySvc[b].length - bySvc[a].length || a.localeCompare(b));
+    const latest = titles.find(t => !upc(t) && t.when);
+    const seo = ABOUT.personSeo({ name, gender: st.gender, bio: st.bio, total: titles.length, tvOnly: titles.every(t => isTv(t.m.data)),
+      upcoming: comingUp.map(t => ({ title: t.m.data.title, date: t.m.data.releaseDate || '' })),
+      latest: latest && { title: latest.m.data.title, year: latest.when.slice(0, 4), theatres: inTh(latest), platform: svcs(latest).join(' / ') },
+      streaming: streams.length, services: svcNames, picks: streams.filter(t => t.acting || !acting.length).slice(0, 4).map(t => t.m.data.title), famous });
+    const title = seo.title, description = seo.description;
+    const li = t => '<li>' + tLink(t.m) + ' <span class="note">' + esc([isTv(t.m.data) ? 'TV' : '', t.when.slice(0, 4), t.roles.join(', '), inTh(t) ? 'In theatres' : svcs(t).length ? 'On ' + svcs(t).join(', ') : ''].filter(Boolean).join(' · ')) + '</span></li>';
     let body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/people">People</a> › ' + esc(name) + '</nav>';
     body += '<div class="pr-top">' + (photo ? '<img class="pr-photo" src="' + esc(photo) + '" alt="' + esc(name) + '" width="160" height="160" fetchpriority="high">' : '') + '<div>';
     body += '<h1>' + esc(name) + '</h1><div class="pr-meta">' + esc([known, titles.length + ' title' + (titles.length === 1 ? '' : 's'), span].filter(Boolean).join(' · ')) + '</div>';
@@ -873,15 +884,23 @@ async function main() {
     if (kf.length) body += '<h2>Known for</h2><ul>' + kf.map(k => '<li>' + tLink(k.t.m) + ' <span class="note">' + esc(k.t.year) + '</span> – ' + esc(k.line) + '</li>').join('') + '</ul>';
     const cw = [...collab.directors.map(x => [x, 'director']), ...collab.costars.slice(0, 6).map(x => [x, 'co-star'])];
     if (cw.length) body += '<h2>Frequent collaborators</h2><ul>' + cw.map(([x, r]) => '<li>' + personLink(x.name) + ' <span class="note">' + r + ' · ' + x.n + ' shared title' + (x.n === 1 ? '' : 's') + '</span></li>').join('') + '</ul>';
-    if (acting.length) body += '<h2>Acting</h2><ul>' + acting.map(li).join('') + '</ul>';
-    if (crewT.length) body += '<h2>Behind the camera</h2><ul>' + crewT.map(li).join('') + '</ul>';
+    if (comingUp.length) body += '<h2>Coming up</h2><ul>' + comingUp.map(t => '<li>' + tLink(t.m) + ' <span class="note">' + esc(/^\d{4}-\d{2}-\d{2}$/.test(t.m.data.releaseDate || '') ? 'Releasing ' + fmtDate(t.m.data.releaseDate) : 'Release date not announced') + '</span></li>').join('') + '</ul>';
+    if (theatres.length || svcNames.length) {
+      body += '<h2>Where to watch</h2>';
+      if (latest && (inTh(latest) || svcs(latest).length)) body += '<p>Latest: ' + tLink(latest.m) + ' (' + esc(latest.when.slice(0, 4)) + '), ' + esc(inTh(latest) ? 'in theatres now' : 'on ' + svcs(latest).join(', ')) + '.</p>';
+      if (theatres.length) body += '<h3>In theatres</h3><ul>' + theatres.map(t => '<li>' + tLink(t.m) + '</li>').join('') + '</ul>';
+      svcNames.forEach(x => { body += '<h3>On ' + esc(x) + ' <span class="note">' + bySvc[x].length + ' title' + (bySvc[x].length === 1 ? '' : 's') + '</span></h3><ul>' + bySvc[x].map(t => '<li>' + tLink(t.m) + ' <span class="note">' + esc(t.when.slice(0, 4)) + '</span></li>').join('') + '</ul>'; });
+    }
+    if (acting.length || crewT.length) body += '<h2>Filmography</h2>';
+    if (acting.length) body += '<h3>Acting</h3><ul>' + acting.map(li).join('') + '</ul>';
+    if (crewT.length) body += '<h3>Behind the camera</h3><ul>' + crewT.map(li).join('') + '</ul>';
 
     const node = { '@context': 'https://schema.org', '@type': 'Person', name, url: SITE + url, image: photo || undefined,
       description: st.bio ? clip(st.bio, 300) : undefined, jobTitle: known,
       alternateName: (st.aka || []).filter(Boolean).length ? st.aka.filter(Boolean) : undefined,
       birthDate: /^\d{4}-\d{2}-\d{2}$/.test(st.birthday || '') ? st.birthday : undefined,
       gender: /^(Male|Female)$/.test(st.gender || '') ? st.gender : undefined };
-    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: 'profile', image: photo, wide: false, jsonld: [node], route: 'person', body }));
+    write(url.slice(1) + '.html', page(shell, { title, description, canonical: url, ogType: 'profile', image: photo, wide: false, jsonld: [node, { '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [['Home', '/'], ['People', '/people'], [name, url]].map(([n, u], i) => ({ '@type': 'ListItem', position: i + 1, name: n, item: SITE + u })) }], route: 'person', body }));
     sitemap.push({ loc: url, lastmod: pageDate(url, title + '\n' + description + '\n' + body), pri: '0.6' });
     nPeople++;
   }

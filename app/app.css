@@ -1198,6 +1198,22 @@ a.lead:hover .ln { text-decoration: underline; }
 .pnb .cta.watch { background: var(--text); border-color: var(--text); color: #0B0A0F; font-weight: 700; }
 .pnb .cta.book { background: var(--accent); border-color: var(--accent); color: #0B0A0F; font-weight: 700; }
 .pnb .cta .ctalogo { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; flex: none; }
+.psech { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.psech h2 { margin: 0; }
+.psecl { color: var(--accent); font-weight: 600; font-size: 14px; text-decoration: none; }
+.psecl:hover { text-decoration: underline; }
+.pnd { font-size: 12px; font-weight: 700; }
+.pnb .cta.static { cursor: default; gap: 6px; }
+.pnb .cta.static .ctalogo, .pnb .cta .svcini { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; flex: none; }
+.psvc { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.psvcl { font-size: 13px; color: var(--muted); margin-right: 2px; }
+.psvc .chip { display: inline-flex; align-items: center; gap: 6px; }
+.psvc .ctalogo { width: 18px; height: 18px; border-radius: 4px; object-fit: contain; flex: none; }
+.svcini { display: inline-flex; align-items: center; justify-content: center; color: #fff; font-size: 11px; font-weight: 800; line-height: 1; }
+.psvcn { opacity: .7; font-weight: 500; }
+.psvcon { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 12px; background: var(--panel); border: 1px solid var(--accent); font-size: 14px; }
+.prw { display: inline-flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.prw .ctalogo { width: 16px; height: 16px; border-radius: 4px; object-fit: contain; flex: none; }
 .pkf { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 16px; }
 .pkc { display: flex; flex-direction: column; gap: 6px; color: var(--text); text-decoration: none; }
 .pkp { position: relative; aspect-ratio: 2 / 3; border-radius: 10px; background-size: cover; background-position: center; overflow: hidden; }

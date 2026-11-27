@@ -3762,7 +3762,6 @@
     }
     setNoindex(false);
     var name = (credits[0] && credits[0].name) || (stored && stored.name) || slug;
-    document.title = personTitleTag(name);
     var photo = personPhotoUrl(name, 480);
     // group: one entry per title, roles joined
     var byTitle = {}, order = [];
@@ -3779,21 +3778,42 @@
     var known = acting.length >= crew.length ? 'Acting' : (crew[0] && /direct/i.test(crew[0].roles.join(' ')) ? 'Directing' : 'Crew');
     var upcoming = titles.filter(function (t) { return !t.tv && isUpcoming(t.m); }).length;
     var years = []; titles.forEach(function (t) { (t.tv && t.yrs.length ? t.yrs : [(t.m.data.releaseDate || '').slice(0, 4)]).forEach(function (y) { if (y) years.push(y); }); }); years.sort();
-    if (!S.pf || S.pf.slug !== slug) S.pf = { slug: slug, tab: 'all', lang: '', asc: false, all: false, about: false };
+    if (!S.pf || S.pf.slug !== slug) S.pf = { slug: slug, tab: 'all', lang: '', svc: '', svcAll: false, asc: false, all: false, about: false };
     var PF = S.pf;
-    // Where a title can be seen right now: in theatres with tickets, or on a streaming app.
+    // Where a title can be seen right now: in theatres (with tickets when we have them), or on the services named in
+    // "Now streaming on", with or without a link. The built page uses the same rules (scripts/build.mjs, person pages).
     function whereOf(t) {
       var m = t.m, d = m.data, np = nowPlayingOf(d);
       if (!t.tv && isUpcoming(m)) return { up: true, text: d.releaseDate ? 'Coming ' + fmtDate(d.releaseDate, true) : 'Coming soon' };
-      if (!t.tv && np === 'theatres' && released(m)) return { text: 'In theatres', book: hasBooking(d) };
-      if (safeUrl(d.platformUrl)) return { text: 'On ' + (d.platform || 'streaming'), url: d.platformUrl };
-      if (d.platform && (t.tv || np === 'ott' || np === 'direct' || isOtt(m))) return { text: 'On ' + d.platform };
+      if (!t.tv && (np === 'theatres' || d.section === 'In theatres')) return { text: 'In theatres', th: true, book: hasBooking(d) };
+      if (d.platform) return { text: 'On ' + d.platform, url: safeUrl(d.platformUrl) || '' };
       return { text: '' };
     }
-    titles.forEach(function (t) { t.w = whereOf(t); t.lang = langOf(t.m.data); t.key = t.w.up && !t.m.data.releaseDate ? '9999' : when(t); });
+    titles.forEach(function (t) {
+      t.w = whereOf(t); t.lang = langOf(t.m.data); t.key = t.w.up && !t.m.data.releaseDate ? '9999' : when(t);
+      t.svc = !t.w.up && !t.w.th ? String(t.m.data.platform || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean) : [];
+    });
+    var comingUp = titles.filter(function (t) { return t.w.up; }).sort(function (a, b) { return (a.m.data.releaseDate || '9999').localeCompare(b.m.data.releaseDate || '9999'); });
+    var theatres = titles.filter(function (t) { return t.w.th; }), streams = titles.filter(function (t) { return t.svc.length; });
+    var bySvc = {}; streams.forEach(function (t) { t.svc.forEach(function (x) { (bySvc[x] = bySvc[x] || []).push(t); }); });
+    var svcNames = Object.keys(bySvc).sort(function (a, b) { return bySvc[b].length - bySvc[a].length || a.localeCompare(b); });
+    var latest = titles.filter(function (t) { return !t.w.up && when(t); })[0];
+    var pron = stored && stored.gender === 'Male' ? 'his' : stored && stored.gender === 'Female' ? 'her' : 'their';
+    if (window.RS_ABOUT && RS_ABOUT.personSeo) {
+      var seo = RS_ABOUT.personSeo({ name: name, gender: stored && stored.gender, bio: stored && stored.bio, total: titles.length, tvOnly: titles.every(function (t) { return t.tv; }),
+        upcoming: comingUp.map(function (t) { return { title: t.m.data.title, date: t.m.data.releaseDate || '' }; }),
+        latest: latest && { title: latest.m.data.title, year: when(latest).slice(0, 4), theatres: !!latest.w.th, platform: latest.svc.join(' / ') },
+        streaming: streams.length, services: svcNames, picks: streams.filter(function (t) { return t.acting || !acting.length; }).slice(0, 4).map(function (t) { return t.m.data.title; }),
+        famous: (acting.length ? acting : crew).filter(function (t) { return !t.w.up && when(t) && when(t) <= today(); }).slice(0, 4).map(function (t) { return t.m.data.title; }) });
+      document.title = builtHead && builtHead.title && location.pathname.replace(/\/+$/, '') === builtHead.path ? builtHead.title : seo.title;
+    } else document.title = personTitleTag(name);
     var langCount = {}; titles.forEach(function (t) { if (t.lang) langCount[t.lang] = (langCount[t.lang] || 0) + 1; });
     var langList = Object.keys(langCount).sort(function (a, b) { return langCount[b] - langCount[a] || a.localeCompare(b); });
-    var nowList = titles.filter(function (t) { return t.w.book || t.w.url; }).slice(0, 4);
+    // Where to watch: the latest title first if it can be watched, then the most-rated of the rest (theatres, then streaming).
+    var watchable = theatres.concat(streams);
+    var nowList = watchable.filter(function (t) { return t === latest; }).concat(watchable.filter(function (t) { return t !== latest; }).sort(function (a, b) {
+      return ((b.w.th ? 1 : 0) - (a.w.th ? 1 : 0)) || (score(b.m.id).tot - score(a.m.id).tot) || ((safeUrl(b.m.data.posterUrl) ? 1 : 0) - (safeUrl(a.m.data.posterUrl) ? 1 : 0)) || b.key.localeCompare(a.key);
+    })).slice(0, 4);
     var roleWords = []; if (acting.length) roleWords.push('Actor'); crew.forEach(function (t) { t.roles.forEach(function (r) { if (CREW_RE.test(r)) { var w = r.replace(/^(co-|executive )/i, ''); w = w.charAt(0).toUpperCase() + w.slice(1).toLowerCase(); if (roleWords.indexOf(w) === -1) roleWords.push(w); } }); });
     function stat(n, l) { return h('div', { class: 'pstat' }, [h('b', { text: String(n) }), h('span', { text: l })]); }
     v.appendChild(h('nav', { class: 'pcrumb', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › ', h('a', { href: '/people', text: 'People' }), ' › ', h('span', { 'aria-current': 'page', text: name })]));
@@ -3809,23 +3829,43 @@
           years.length ? stat(years[0] === years[years.length - 1] ? years[0] : years[0] + '–' + years[years.length - 1], 'years listed') : null,
           langList.length > 1 ? stat(langList.length, 'languages') : null,
           upcoming ? stat(upcoming, 'upcoming') : null,
-          nowList.length ? stat(nowList.length, 'to watch now') : null
+          watchable.length ? stat(watchable.length, 'to watch now') : null
         ])
       ])
     ]));
     var main = h('div', { class: 'wrapx pwrap' }); v.appendChild(main);
-    // Watch now: in theatres with tickets, or streaming with a link.
-    if (nowList.length) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pnow' }, [
-      h('h2', { id: 'pnow', text: 'Watch now' }),
-      h('div', { class: 'pnow' }, nowList.map(function (t) {
-        var d = t.m.data, pa = artLazy(t.m, 'poster');
-        var cta = t.w.book ? bookBtn(t.m, 'btn small cta book') : h('a', { class: 'btn small cta watch', href: t.w.url, target: '_blank', rel: 'noopener', 'aria-label': 'Watch ' + d.title + ' on ' + (d.platform || 'streaming') }, [platLogo(d.platform), h('span', { text: 'Watch on ' + (d.platform || 'streaming') })]);
+    // Coming up: published coming-soon titles, soonest first; Remind me works as on title pages.
+    if (comingUp.length) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pup' }, [
+      h('h2', { id: 'pup', text: 'Coming up' }),
+      h('div', { class: 'pnow' }, comingUp.slice(0, 4).map(function (t) {
+        var d = t.m.data, pa = artLazy(t.m, 'poster'), on = hasReminder(t.m.id);
         return h('article', { class: 'pnc' }, [
           h('a', { class: 'pnp art', href: movieUrl(t.m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }),
           h('div', { class: 'pnb' }, [
-            h('span', { class: 'pntag' + (t.w.book ? ' th' : ''), text: t.w.book ? 'In theatres' : 'Streaming' }),
+            h('span', { class: 'pntag th', text: 'Coming soon' }),
             h('a', { class: 'pnt', href: movieUrl(t.m), text: d.title }),
-            h('span', { class: 'pnm', text: [t.lang, d.genre, d.runtime].filter(Boolean).join(' · ') }),
+            h('span', { class: 'pnm', text: [t.lang, d.genre].filter(Boolean).join(' · ') }),
+            h('span', { class: 'pnd', text: d.releaseDate ? 'Releasing ' + fmtDate(d.releaseDate) : 'Release date not announced' }),
+            h('button', { type: 'button', class: 'btn small cta', 'aria-pressed': String(on), title: on ? 'Tap to cancel the reminder' : 'Get a reminder on release day', on: { click: function () { toggleRemind(t.m.id); } } }, [icon('bell', 15), on ? 'Reminder set' : 'Remind me'])
+          ])
+        ]);
+      }))
+    ]));
+    // Where to watch: in theatres (tickets when we have them) or streaming (a link when we have one, else the service name).
+    if (nowList.length) main.appendChild(h('section', { class: 'psec', 'aria-labelledby': 'pnow' }, [
+      h('div', { class: 'psech' }, [h('h2', { id: 'pnow', text: 'Where to watch' }),
+        svcNames.length && watchable.length > nowList.length ? h('a', { class: 'psecl', href: '#pfsvc', text: 'All ' + streams.length + ' by service ↓', on: { click: function (e) { e.preventDefault(); var g = $('pfsvc'); if (g) { g.scrollIntoView({ behavior: 'smooth', block: 'center' }); var b = g.querySelector('button'); if (b) b.focus({ preventScroll: true }); } } } }) : null]),
+      h('div', { class: 'pnow' }, nowList.map(function (t) {
+        var d = t.m.data, pa = artLazy(t.m, 'poster'), sv = t.svc.join(' / ') || d.platform || 'streaming';
+        var cta = t.w.th ? (t.w.book ? bookBtn(t.m, 'btn small cta book') : h('span', { class: 'btn small cta static', text: 'In theatres now' }))
+          : t.w.url ? h('a', { class: 'btn small cta watch', href: t.w.url, target: '_blank', rel: 'noopener', 'aria-label': 'Watch ' + d.title + ' on ' + sv }, [platLogo(sv), h('span', { text: 'Watch on ' + t.svc[0] })])
+          : h('span', { class: 'btn small cta static' }, [platLogo(sv), h('span', { text: 'On ' + t.svc.join(', ') })]);
+        return h('article', { class: 'pnc' }, [
+          h('a', { class: 'pnp art', href: movieUrl(t.m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title }),
+          h('div', { class: 'pnb' }, [
+            h('span', { class: 'pntag' + (t.w.th ? ' th' : ''), text: (t === latest ? 'Latest · ' : '') + (t.w.th ? 'In theatres' : 'Streaming') }),
+            h('a', { class: 'pnt', href: movieUrl(t.m), text: d.title }),
+            h('span', { class: 'pnm', text: [t.lang, d.genre, t.tv ? 'TV' : d.runtime].filter(Boolean).join(' · ') }),
             cta
           ])
         ]);
@@ -3852,11 +3892,21 @@
     var TABS = [['all', 'All credits', titles], ['act', 'Acting', titles.filter(function (t) { return t.acting && !t.tv; })], ['tv', 'TV shows', titles.filter(function (t) { return t.tv; })], ['crew', 'Behind the camera', titles.filter(function (t) { return t.crew && !t.tv; })]].filter(function (x) { return x[0] === 'all' || x[2].length; });
     if (!TABS.some(function (x) { return x[0] === PF.tab; })) PF.tab = 'all';
     if (PF.lang && !langCount[PF.lang]) PF.lang = '';
+    if (PF.svc && !bySvc[PF.svc]) PF.svc = '';
+    // A service's tile: its logo when we have one, else its first letter on its colour.
+    function svcIcon(x) {
+      var lg = platLogo(x); if (lg) return lg;
+      var hit = PLAT.filter(function (p) { return p[0].test(x); })[0];
+      return h('span', { class: 'ctalogo svcini', 'aria-hidden': 'true', style: 'background:' + (hit ? hit[2] : '#2B2F3D'), text: x.charAt(0).toUpperCase() });
+    }
     var film = h('section', { class: 'pfilm', 'aria-labelledby': 'pfh' }); cols.appendChild(film);
     function drawFilm(focusSel) {
       film.innerHTML = '';
       var base = TABS.filter(function (x) { return x[0] === PF.tab; })[0][2];
-      var list = base.filter(function (t) { return !PF.lang || t.lang === PF.lang; }).slice().sort(function (a, b) { return PF.asc ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key); });
+      var pre = base.filter(function (t) { return !PF.lang || t.lang === PF.lang; });
+      var svcN = {}; pre.forEach(function (t) { t.svc.forEach(function (x) { svcN[x] = (svcN[x] || 0) + 1; }); });
+      var svcShow = svcNames.filter(function (x) { return svcN[x] || x === PF.svc; });
+      var list = pre.filter(function (t) { return !PF.svc || t.svc.indexOf(PF.svc) !== -1; }).slice().sort(function (a, b) { return PF.asc ? a.key.localeCompare(b.key) : b.key.localeCompare(a.key); });
       var LIM = 14, shown = PF.all ? list : list.slice(0, LIM);
       function upd(ch, sel) { return function () { Object.keys(ch).forEach(function (k) { PF[k] = ch[k]; }); drawFilm(sel); }; }
       film.appendChild(h('div', { class: 'pfhd' }, [
@@ -3869,6 +3919,15 @@
       if (langList.length > 1) film.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'Language' }, [['', 'Any language']].concat(langList.map(function (l) { return [l, l]; })).map(function (x) {
         return h('button', { type: 'button', class: 'chip', 'data-l': x[0], 'aria-pressed': String(PF.lang === x[0]), text: x[1], on: { click: upd({ lang: x[0], all: false }, '[data-l="' + x[0] + '"]') } });
       })));
+      if (svcShow.length) {
+        var SV = 6, svs = PF.svcAll ? svcShow : svcShow.slice(0, SV);
+        if (PF.svc && svs.indexOf(PF.svc) === -1) svs = svs.concat([PF.svc]);
+        film.appendChild(h('div', { class: 'chips psvc', id: 'pfsvc', role: 'group', 'aria-label': 'Streaming on' }, [h('span', { class: 'psvcl', text: 'Streaming on' })].concat(svs.map(function (x) {
+          return h('button', { type: 'button', class: 'chip', 'data-s': x, 'aria-pressed': String(PF.svc === x), on: { click: upd({ svc: PF.svc === x ? '' : x, all: false }, '[data-s="' + x.replace(/"/g, '') + '"]') } }, [svcIcon(x), h('span', { text: x }), h('span', { class: 'psvcn', text: String(svcN[x] || 0) })]);
+        }), svcShow.length > SV && !PF.svcAll ? [h('button', { type: 'button', class: 'chip', id: 'pfsvcm', text: '+' + (svcShow.length - SV) + ' more', on: { click: upd({ svcAll: true }, '[data-s="' + svcShow[SV].replace(/"/g, '') + '"]') } })] : [])));
+      }
+      if (PF.svc) film.appendChild(h('div', { class: 'psvcon', role: 'status' }, [h('span', {}, ['Showing ' + pron + ' ', h('b', { text: String(list.length) }), ' on ', h('b', { text: PF.svc })]),
+        h('button', { type: 'button', class: 'linkbtn', text: 'Show all credits', on: { click: upd({ svc: '', all: false }, '#pfsort') } })]));
       if (!list.length) film.appendChild(h('div', { class: 'empty', text: 'Nothing matches. Try another language or All credits.' }));
       var box = h('div', { class: 'pyl' }), cur = null;
       shown.forEach(function (t) {
@@ -3884,7 +3943,7 @@
             h('span', { class: 'prm', text: [t.lang, d.genre, t.tv ? 'TV' : d.runtime, d.certificate].filter(Boolean).join(' · ') }),
             role ? h('span', { class: 'prr', text: role }) : null
           ]),
-          t.w.text ? h('span', { class: 'prw' + (t.w.up ? ' up' : ''), text: t.w.text }) : null
+          t.w.text ? h('span', { class: 'prw' + (t.w.up ? ' up' : '') }, [t.svc.length ? platLogo(t.svc.join(' / ')) : null, h('span', { text: t.w.text })]) : null
         ]));
       });
       if (shown.length) film.appendChild(box);
