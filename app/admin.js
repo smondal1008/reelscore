@@ -2911,10 +2911,11 @@ window.ReelAdmin = function (env) {
   function normT(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
   // ---------- YouTube dates: each song's upload date from YouTube, stored on the song as publishedAt ----------
   // Uses /api/views, so the key stays on Vercel (YT_API_KEY). 50 songs per request, 1 of the 10,000 daily units each.
-  // YouTube asks that stored API data be refreshed within 30 days: a song is due again 25 days after it was checked (ytCheckedAt).
+  // YouTube asks that stored API data be refreshed within 30 days: a song is due again 13 days after it was checked (ytCheckedAt),
+  // so a run on the 1st and 15th of each month (the reminder's schedule) keeps every date under about 17 days old.
   // Saves only the videos list; the title's "last updated" date is left alone.
   function ytDates() {
-    var day = todayStr(), due = new Date(Date.now() - 25 * 864e5).toLocaleDateString('en-CA');
+    var day = todayStr(), due = new Date(Date.now() - 13 * 864e5).toLocaleDateString('en-CA');
     var songs = [], byM = {};
     movies.forEach(function (m) { (m.data.videos || []).forEach(function (v, i) {
       if (!/song/i.test(v.kind || '')) return; var id = ytIdOf(v.url); if (!id) return;
