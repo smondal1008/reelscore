@@ -578,7 +578,9 @@ async function main() {
   const nUnpub = data.movies.filter(m => m.data && m.data.published === false).length;
   // Now playing decides a film's section (see npSection).
   const movies = data.movies.filter(m => m.data && m.data.title && m.data.published !== false)
-    .map(m => m.data.nowPlaying && m.data.section !== 'TV shows' && npSection(m.data, TODAY) !== m.data.section ? { ...m, data: { ...m.data, section: npSection(m.data, TODAY) } } : m);
+    .map(m => m.data.nowPlaying && m.data.section !== 'TV shows' && npSection(m.data, TODAY) !== m.data.section ? { ...m, data: { ...m.data, section: npSection(m.data, TODAY) } } : m)
+    // Coming soon titles with no Now playing move to In theatres on their release date (as in app/main.js).
+    .map(m => !m.data.nowPlaying && m.data.section === 'Coming soon' && /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate <= TODAY ? { ...m, data: { ...m.data, section: 'In theatres' } } : m);
   if (nUnpub) console.log('[seo] unpublished titles left out: ' + nUnpub);
 
   // credits per person (cast entries, plus the director field when that person isn't already in the cast)

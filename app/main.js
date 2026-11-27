@@ -5219,9 +5219,12 @@
     var from = d.ottReleaseDate || d.releaseDate || '', ago = new Date(); ago.setFullYear(ago.getFullYear() - 1);
     return !from || from >= ago.toISOString().slice(0, 10) ? 'On OTT' : 'Older releases';
   }
+  // Coming soon titles with no Now playing set move to In theatres on their release date (same rule in scripts/build.mjs and app/admin.js).
+  function outToday(d, today) { return !d.nowPlaying && d.section === 'Coming soon' && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '') && d.releaseDate <= (today || npToday()); }
   function fixSection(d) {
     if (d.section === 'Releasing this week') { d = clone(d); d.section = 'In theatres'; }
     if (d.nowPlaying) { var s2 = npSection(d); if (s2 !== d.section) { d = clone(d); d.section = s2; } }
+    if (outToday(d)) { d = clone(d); d.section = 'In theatres'; }
     return d;
   }
   // Unpublished titles (published === false) are left out of every list, search and page for visitors.

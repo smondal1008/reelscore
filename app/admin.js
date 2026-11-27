@@ -1133,10 +1133,12 @@ window.ReelAdmin = function (env) {
     return (d.videos || []).some(function (x) { return ytOk(safeUrl(x.url)) && (cat === 'any' || vidKind(x.kind) === cat); });
   }
   var ROW_SEC = { theatres: 'In theatres', coming: 'Coming soon', ott: 'On OTT' };
+  // The section the site shows: Coming soon titles with no Now playing move to In theatres on their release date (as in app/main.js).
+  function secNow(d) { return !d.nowPlaying && d.section === 'Coming soon' && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '') && d.releaseDate <= todayStr() ? 'In theatres' : d.section; }
   function rowFilms(key) {
     return movies.filter(function (m) {
       var d = m.data; if (d.published === false) return false;
-      if (ROW_SEC[key]) return d.section === ROW_SEC[key];
+      if (ROW_SEC[key]) return secNow(d) === ROW_SEC[key];
       if (key === 'tvpromos') return d.section === 'TV shows' && hasVid(d, 'any');
       return d.section !== 'TV shows' && hasVid(d, key);
     });
