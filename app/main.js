@@ -235,6 +235,23 @@
   // A score is shown only once a title has this many verdicts; until then posters say "New".
   var MIN_SHOW = 3;
   function shownPct(sc) { return sc.tot >= MIN_SHOW ? sc.pct : null; }
+  // Poster badge: the Reelscore % once a title has MIN_SHOW verdicts; before release, the release date; "New" for the first
+  // NEW_DAYS days after release (release day is day 1); after that, with no score yet, no badge. Null means no badge.
+  var NEW_DAYS = 14;
+  // On streaming rows and pages (ott), a theatre film that came to OTT later counts its days from the streaming date.
+  function badgeText(m, sc, noNew, ott) {
+    var pct = shownPct(sc || score(m.id));
+    if (pct !== null) return pct + '%';
+    if (!released(m)) return m.data.releaseDate ? fmtDate(m.data.releaseDate) : null;
+    if (noNew) return null;
+    var from = m.data.releaseDate, st = ott && !isTv(m) ? streamDate(m.data) : '';
+    if (st && st > from && st <= today()) from = st;
+    return daysSince(from) < NEW_DAYS ? 'New' : null;
+  }
+  // Streaming pages: Browse or Movies showing On OTT, or Browse filtered to streaming services.
+  function streamingPage() {
+    return (S.route === 'browse' && S.browse && (S.browse.status === 'On OTT' || !!S.browse.ott)) || (S.route === 'movies' && S.cat && S.cat.movies && S.cat.movies.status === 'On OTT');
+  }
   function myVerdict(mid) { return S.uid && S.verdicts[S.uid] ? (S.verdicts[S.uid].v || {})[mid] : null; }
 
   // ---------- writes ----------
@@ -270,7 +287,8 @@
       pc.querySelectorAll('.qb[data-v]').forEach(function (q) { q.setAttribute('aria-pressed', String(my === q.getAttribute('data-v'))); });
       if (b && b.lastChild && b.lastChild.nodeType === 3) {
         var m = S.byId[id], sc = score(id);
-        if (m) b.lastChild.nodeValue = shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(m.data.releaseDate)) : sc.pct + '%';
+        var rs = pc.closest('section[aria-label]'), rl = rs ? rs.getAttribute('aria-label') : '';
+        var bt = m ? badgeText(m, sc, false, rl === 'Released recently on OTT' || rl === 'Streaming this year' || /^New on /.test(rl)) : null; if (bt) b.lastChild.nodeValue = bt;
       }
     });
     var sub = v.querySelector('section[aria-label="Seen these? Give your verdict"] .sect-h .sub .rnote');
@@ -1015,8 +1033,9 @@
     } else if (opts.dateBadge && d.releaseDate) {
       var p = d.releaseDate.split('-');
       top = h('span', { class: 'datebadge' }, [h('b', { text: String(+p[2]) }), h('small', { text: MONTHS[+p[1] - 1].toUpperCase() })]);
-    } else if (!(opts.noNew && shownPct(sc) === null && released(m))) {
-      top = h('span', { class: 'badge' }, [h('i'), shownPct(sc) === null ? (released(m) ? 'New' : fmtDate(d.releaseDate)) : sc.pct + '%']);
+    } else {
+      var bt = badgeText(m, sc, opts.noNew, opts.ottNew || streamingPage());
+      if (bt) top = h('span', { class: 'badge' }, [h('i'), bt]);
     }
     var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + (streamDate(d) ? ' · ' + fmtDate(streamDate(d)) : '') : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
     // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me or Tickets / Not for me icons.
@@ -1741,7 +1760,7 @@
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottMeta: streamingYearMeta }, allStreamingLink()); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta }, allStreamingLink()); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
@@ -2655,7 +2674,7 @@
     if (list.length < 4) return null;
     list.sort(function (a, b) { return b.date.localeCompare(a.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     var when = {}; list.forEach(function (e) { when[e.m.id] = e; });
-    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottMeta: function (m) { var e = when[m.id]; return (e.platName || 'OTT') + ' · ' + (e.date === td ? 'Today' : fmtDate(e.date)); } }, seeAll('/ott-release-dates'));
+    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return (e.platName || 'OTT') + ' · ' + (e.date === td ? 'Today' : fmtDate(e.date)); } }, seeAll('/ott-release-dates'));
   }
   function drawOttDates() {
     var v = $('view-ottdates');
@@ -5494,7 +5513,7 @@
     // New on a service: on it in the last 12 months (its OTT date, else its release date).
     var ottDate = function (m) { return m.data.ottReleaseDate || m.data.releaseDate || ''; };
     [['netflix', 'Netflix'], ['prime-video', 'Prime Video'], ['zee5', 'ZEE5'], ['jiohotstar', 'JioHotstar'], ['sonyliv', 'SonyLIV']].forEach(function (o) {
-      add('New on ' + o[1], out.filter(function (m) { var t = ottDate(m); return ottOf(m.data) === o[0] && t >= yAgo && t <= td; }).sort(function (a, b) { return ottDate(b).localeCompare(ottDate(a)); }), null, '/browse?ott=' + o[0]);
+      add('New on ' + o[1], out.filter(function (m) { var t = ottDate(m); return ottOf(m.data) === o[0] && t >= yAgo && t <= td; }).sort(function (a, b) { return ottDate(b).localeCompare(ottDate(a)); }), { ottNew: true }, '/browse?ott=' + o[0]);
     });
     // Latest in each language: released in the last 12 months, busiest languages first.
     var recent = out.filter(function (m) { return (m.data.releaseDate || '') >= yAgo; }), lc = {};
