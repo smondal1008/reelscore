@@ -900,6 +900,8 @@
     if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
     if (up) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
+    // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
+    if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta && released(m)) {
@@ -1980,10 +1982,14 @@
             if (!tr) { toast('No trailer for ' + m.data.title + ' yet'); return; }
             if (tovMiniOk()) toMini(m, tr); else openTrailerOverlay(m, tr, trB, titleQueue(m, tr));
           } } }, [icon('play', 18), tip(tr ? 'Trailer' : 'No trailer yet')]);
-        face = h('div', { class: 'qv icons up seenrow' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + m.data.title + '?' }, [
-          h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + m.data.title, on: { click: function () {
+        var seB = h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + m.data.title, on: { click: function () {
             markOn(); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
-          } } }, [icon('eye', 18), tip('Seen it')]),
+          } } }, [icon('eye', 18), tip('Seen it')]);
+        // Booking open: Trailer, Tickets, Seen it. Otherwise: Seen it, Trailer, Haven't seen.
+        var tk = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
+        if (tk) { tk.textContent = ''; tk.appendChild(icon('ticket', 18)); tk.appendChild(tip('Tickets')); }
+        face = h('div', { class: 'qv icons up seenrow' + (tk ? ' bk' : '') + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + m.data.title + '?' }, tk ? [trB, tk, seB] : [
+          seB,
           trB,
           h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + m.data.title, on: { click: function () {
             if (no) { rateDelUnseen(m.id); show(true); toast('Cleared “haven’t seen” for ' + m.data.title); return; }

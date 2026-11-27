@@ -603,6 +603,9 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .qv.icons.up.seenrow .qb.se .qtip { --tx: 0; left: 0; }
   .qv.icons.up.seenrow .qb.tr .qtip { --tx: -50%; left: 50%; }
   .qv.icons.up.seenrow .qb.nv .qtip { --tx: 0; left: auto; right: 0; }
+  .qv.icons.up.seenrow.bk .qb.tr .qtip { --tx: 0; left: 0; }
+  .qv.icons.up.seenrow.bk .qb.tk .qtip { --tx: -50%; left: 50%; right: auto; }
+  .qv.icons.up.seenrow.bk .qb.se .qtip { --tx: 0; left: auto; right: 0; }
   @media (hover: hover) {
     .qv.icons.up.seenrow .qb.se:hover svg { animation: upblink .45s ease; }
     .qv.icons.up.seenrow .qb.nv:hover svg { animation: upshake .45s ease; }
