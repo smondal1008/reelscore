@@ -440,10 +440,11 @@
     if (!needUser()) return;
     S.mine.reminders = S.mine.reminders || [];
     var i = S.mine.reminders.indexOf(id), w = S.mine.watchlist.indexOf(id);
-    // A reminder also puts the title on the watchlist; removing the reminder takes it off again.
+    // Setting a reminder also puts the title on the watchlist. Removing the reminder leaves the watchlist alone: the two
+    // are separate choices (take it off the watchlist with the ✓ button).
     if (i === -1) { S.mine.reminders.push(id); if (w === -1) S.mine.watchlist.push(id); }
-    else { S.mine.reminders.splice(i, 1); if (w !== -1) S.mine.watchlist.splice(w, 1); }
-    render(); saveMine(i === -1 ? 'Reminder set and added to your watchlist' : 'Reminder removed and taken off your watchlist');
+    else S.mine.reminders.splice(i, 1);
+    render(); saveMine(i === -1 ? (w === -1 ? 'Reminder set and added to your watchlist' : 'Reminder set') : 'Reminder removed. It’s still on your watchlist');
   }
   function toggleList(id) {
     if (!needUser()) return;
