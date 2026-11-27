@@ -149,6 +149,14 @@ function boOf(d) {
   const o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
   return o.gross || o.nett || o.world || o.day ? o : null;
 }
+// Every box office tile filled (app/main.js boFull): India gross, nett, worldwide, and the latest day's nett while in
+// theatres (or when entered), else overseas (worldwide above India gross). Partial figures get no section and no
+// "Box Office" in the title.
+function boFullOf(d) {
+  const b = boOf(d); if (!b) return null;
+  const fourth = d.section === 'In theatres' || b.day ? b.day : (b.world && b.gross && b.world > b.gross ? b.world - b.gross : null);
+  return b.gross && b.nett && b.world && fourth ? b : null;
+}
 // Ticket partners with at least one working link: [{ platform, url }] (first city's link for each).
 function ticketsOf(d) {
   const first = urls => { const u = Object.values(urls || {}).map(x => safeUrl(String(x || '').trim())).find(Boolean); return u || ''; };
@@ -663,7 +671,7 @@ async function main() {
     const short = isTv(d) && tvYears(d) ? d.title + ' (' + ['TV series ' + String(tvYears(d)).slice(0, 4)].concat(p.slice(1)).join(', ') + ')' : null;
     const tail = b => titleTail(b, { tv: isTv(d), upcoming: d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon', theatres: d.section === 'In theatres',
       platform: !!String(d.platform || '').trim(), verdicts: tot, popular: d.popular === true || tot >= 20,
-      songs: ytVideos(d).some(v => v.cat === 'songs' && v.yt), boxOffice: !!boOf(d), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= TODAY,
+      songs: ytVideos(d).some(v => v.cat === 'songs' && v.yt), boxOffice: !isTv(d) && !!boFullOf(d), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= TODAY,
       tickets: !(data.buttons && data.buttons.title && data.buttons.title.book === false) && ticketsOf(d).length > 0 });
     const full = tail(base);
     if (full.length <= 60 || !short) return full;
@@ -740,7 +748,7 @@ async function main() {
     if (directors.length) body += '<div class="pr-meta">Directed by ' + directors.map(personLink).join(', ') + '</div>';
     body += '</div></div>';
     if (d.synopsis) body += '<h2>Story</h2><p>' + esc(d.synopsis) + '</p>';
-    const bo = tv ? null : boOf(d);
+    const bo = tv ? null : boFullOf(d);
     if (bo) {
       const cr = x => '₹' + (Math.round(x * 100) / 100).toLocaleString('en-IN') + ' crore';
       const fig = [['India nett', bo.nett], ['India gross', bo.gross], ['Worldwide gross', bo.world], ['Latest day, India nett', bo.day]].filter(x => x[1]).map(x => x[0] + ': ' + cr(x[1]));

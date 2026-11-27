@@ -365,7 +365,7 @@
     var tail = function (b) { return titleTail(b, { tv: isTv(m), upcoming: isUpcoming(m), theatres: d.section === 'In theatres', platform: !!String(d.platform || '').trim(),
       verdicts: tot, popular: d.popular === true || tot >= 20,
       songs: (d.videos || []).some(function (v) { return vidCat(v.kind) === 'songs' && !!ytId(safeUrl(v.url)); }),
-      boxOffice: !!boData(m), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= today(), tickets: btnOn('title', 'book') && hasBooking(d) }); };
+      boxOffice: !isTv(m) && !!boFull(m), ottDate: !!d.ottReleaseDate && d.ottReleaseDate >= today(), tickets: btnOn('title', 'book') && hasBooking(d) }); };
     var full = tail(base);
     if (full.length <= 60 || !short) return full;
     var alt = tail(short);
@@ -3119,6 +3119,14 @@
     var o = { gross: n(d.boGross), nett: n(d.boNett), world: n(d.boWorld), day: n(d.boDay), chg: isFinite(chg) ? chg : null, updated: /^\d{4}-\d{2}-\d{2}$/.test(d.boUpdated || '') ? d.boUpdated : '', source: String(d.boSource || '').trim(), url: safeUrl(d.boUrl) };
     return o.gross || o.nett || o.world || o.day ? o : null;
   }
+  // The figures with every tile filled: India gross, India nett, worldwide gross, and the fourth tile (the latest day's
+  // nett while it runs in theatres or when one is entered, else overseas = worldwide minus India gross). null otherwise,
+  // so the section, and "Box Office" in the page title, only appear with the full set. Same rule in scripts/build.mjs.
+  function boFull(m) {
+    var b = boData(m); if (!b) return null;
+    var fourth = m.data.section === 'In theatres' || b.day ? b.day : (b.world && b.gross && b.world > b.gross ? b.world - b.gross : null);
+    return b.gross && b.nett && b.world && fourth ? b : null;
+  }
   function crore(x) { return x == null ? '₹ — Cr' : '₹' + (Math.round(x * 100) / 100).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' Cr'; }
   var CLUBS = [100, 250, 500, 1000, 1500, 2000];
   function boSourceLine(bo) {
@@ -3263,13 +3271,12 @@
         ov ? h('div', { class: 'bl-ov note' }, ['India gross / overseas', h('b', { text: ov })]) : null])]);
   }
 
-  // Box office: tiles from the Admin figures; "Coming soon" until there are some.
+  // Box office: tiles from the Admin figures, shown only when every tile has a figure (boFull).
   function boxOfficeBlock(m) {
     if (isTv(m) || isOtt(m) || !released(m)) return null;
-    var bo = boData(m), live = m.data.section === 'In theatres', dt = String(m.data.releaseDate || '');
-    // Without figures: shown while it runs, and for a year after release.
-    if (!bo && !live && !(/^\d{4}-\d{2}-\d{2}$/.test(dt) && (new Date(today()) - new Date(dt)) / 864e5 <= 365)) return null;
-    var b = bo || {};
+    var bo = boFull(m), live = m.data.section === 'In theatres', dt = String(m.data.releaseDate || '');
+    if (!bo) return null;
+    var b = bo;
     // Which day the latest figure is for: days from release to "Figures as of", counting release day as Day 1.
     var dayN = b.updated && /^\d{4}-\d{2}-\d{2}$/.test(dt) ? Math.round((new Date(b.updated + 'T00:00:00') - new Date(dt + 'T00:00:00')) / 864e5) + 1 : 0;
     var dayLab = dayN > 0 ? 'Day ' + dayN + ' · nett' : 'Latest day · nett';
