@@ -2866,8 +2866,93 @@
     if (/^Q\d+$/.test(d.wikidata || '')) return h('p', { class: 'note', style: 'margin:6px 0 0;font-size:12px;color:var(--muted)' }, ['Film facts from ', h('a', { href: 'https://www.wikidata.org/wiki/' + d.wikidata, rel: 'noopener', target: '_blank', text: 'Wikidata' })]);
     return null;
   }
+  // ---------- Send feedback ----------
+  // One form for every entry point (footer, account menu, phone menu, title and person pages, search with no results).
+  // Messages go to the contact collection (firestore.rules) and show in Admin > Messages: Wrong info = correction,
+  // Missing film = add, the rest = other with the kind at the start of the message.
+  var FB_TYPES = [['correction', 'Wrong info'], ['add', 'Missing film or show'], ['broken', 'Something\u2019s broken'], ['idea', 'An idea'], ['other', 'Other']];
+  function fixRow(o) {
+    return h('div', { class: 'fixrow' }, [h('button', { type: 'button', class: 'linkbtn', on: { click: function () { openFeedback({ type: 'correction', m: o.m, person: o.person, path: o.path }); } } },
+      [icon('flag', 15), h('span', { text: 'Something wrong here? Suggest a fix' })])]);
+  }
+  function openFeedback(o) {
+    o = o || {};
+    var me = S.uid && S.user ? S.user : null, type = o.type || '';
+    var path = o.path || (o.m ? movieUrl(o.m) : o.q ? '' : location.pathname + location.search);
+    var about = o.m ? o.m.data.title : o.person ? o.person : o.filters ? 'Browse: ' + o.filters : o.q ? 'Searched: \u201c' + o.q + '\u201d' : (path && path !== '/' ? document.title.replace(/\s*\|\s*Reelscore$/, '') : '');
+    var keepCtx = !!about;
+    modal('Send feedback', function (close) {
+      var chips = h('div', { class: 'fbchips', role: 'group', 'aria-label': 'What\u2019s it about?' });
+      var lab = h('label', { class: 'fblab', for: 'fbMsg' });
+      var msg = h('textarea', { id: 'fbMsg', class: 'fbin', rows: 4, maxlength: 1800 });
+      if (o.q) msg.value = o.q;
+      var mail = h('input', { id: 'fbMail', class: 'fbin', type: 'email', maxlength: 120, autocomplete: 'email', placeholder: 'you@example.com' });
+      if (me && me.email) mail.value = me.email;
+      var trap = h('input', { type: 'text', name: 'website', tabindex: '-1', autocomplete: 'off', 'aria-hidden': 'true', class: 'ctrap' });
+      var out = h('p', { class: 'cout', role: 'status' });
+      var send = h('button', { type: 'submit', class: 'btn primary', text: 'Send' });
+      var ctx = keepCtx ? h('div', { class: 'fbctx' }, [h('span', { text: about }), h('button', { type: 'button', class: 'linkbtn', text: 'Remove', on: { click: function () { keepCtx = false; ctx.remove(); } } })]) : null;
+      function drawChips() {
+        chips.innerHTML = '';
+        FB_TYPES.forEach(function (t) { chips.appendChild(h('button', { type: 'button', class: 'chip fbchip' + (type === t[0] ? ' on' : ''), 'aria-pressed': String(type === t[0]), text: t[1], on: { click: function () { type = t[0]; drawChips(); msg.focus(); } } })); });
+        lab.textContent = type === 'correction' ? 'What\u2019s wrong, and what should it say?' : type === 'add' ? 'Which film or show? Add the year or language if you know it.' : type === 'broken' ? 'What went wrong?' : 'Your message';
+      }
+      drawChips();
+      var form = h('form', { class: 'fbform', novalidate: true }, [
+        h('div', { class: 'fbhead' }, [h('h2', { text: 'Send feedback' }), h('button', { type: 'button', class: 'fbx', 'aria-label': 'Close', text: '\u2715', on: { click: function () { close(); } } })]),
+        h('div', {}, [h('span', { class: 'fblab', text: 'What\u2019s it about?' }), chips]),
+        h('div', {}, [lab, msg]), ctx,
+        h('div', {}, [h('label', { class: 'fblab', for: 'fbMail', text: me && me.email ? 'Your email (we\u2019ll reply here)' : 'Your email, so we can reply' }), mail]),
+        trap, h('div', { class: 'fbact' }, [send, h('span', { class: 'note', text: 'We read every message.' })]), out]);
+      form.addEventListener('submit', function (e) {
+        e.preventDefault(); out.className = 'cout';
+        var problem = !type ? [chips.querySelector('button'), 'Pick what it\u2019s about.'] : !msg.value.trim() ? [msg, 'Write a line or two.'] : !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail.value.trim()) ? [mail, 'Enter an email address we can reply to.'] : null;
+        if (problem) { out.className = 'cout err'; out.textContent = problem[1]; problem[0].focus(); return; }
+        var box = form.parentNode;
+        function thanks() {
+          box.innerHTML = '';
+          var done = h('button', { type: 'button', class: 'btn', text: 'Done', on: { click: function () { close(); } } });
+          box.appendChild(h('div', { class: 'fbdone', role: 'status' }, [h('span', { class: 'fbok', 'aria-hidden': 'true' }, [icon('check', 22)]), h('h2', { text: 'Thanks, got it' }),
+            h('p', { class: 'note', text: 'We read every message and will write back to ' + mail.value.trim() + ' if we need more or once it\u2019s fixed.' }), done]));
+          done.focus();
+        }
+        if (trap.value) { thanks(); return; }
+        send.disabled = true; send.textContent = 'Sending\u2026';
+        var kind = FB_TYPES.filter(function (t) { return t[0] === type; })[0];
+        var topic = type === 'correction' || type === 'add' ? type : 'other';
+        var text = (topic === 'other' ? '[' + kind[1] + '] ' : '') + msg.value.trim() + (keepCtx && o.q && !o.filters ? '\n\nSearched for: ' + o.q : '') + (keepCtx && about && (o.filters || !o.q) ? '\n\nAbout: ' + about : '');
+        var body = { topic: topic, name: String((me && me.displayName) || '').slice(0, 80), email: mail.value.trim().slice(0, 120), message: text.slice(0, 2000),
+          page: keepCtx && path ? (location.origin + path).slice(0, 300) : '', at: new Date().toISOString() };
+        if (S.uid) body.uid = S.uid;
+        var id = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+        if (window.__reelStartFirebase) window.__reelStartFirebase();
+        (S.db ? Promise.resolve(S.db) : window.claude.use('db')).then(function (db) {
+          if (!db) throw new Error('offline');
+          return db.doc('contact/' + id).set(body);
+        }).then(thanks).catch(function () {
+          send.disabled = false; send.textContent = 'Send';
+          out.className = 'cout err'; out.textContent = 'It couldn\u2019t be sent. Check your connection and try again.';
+        });
+      });
+      setTimeout(function () { (type ? msg : chips.querySelector('button')).focus(); }, 0);
+      return [form];
+    });
+  }
+  // Floating "Feedback" tab on the right edge (desktop with a mouse only, see app.css). Not on admin pages.
+  (function () {
+    var tab = h('button', { type: 'button', class: 'fbtab', 'data-feedback': '', 'aria-label': 'Send feedback', text: 'Feedback' });
+    document.body.appendChild(tab);
+  })();
+  // Any element with data-feedback opens the form (footer link, account menu, phone menu); its value picks the type.
+  document.addEventListener('click', function (e) {
+    var el = e.target.closest && e.target.closest('[data-feedback]'); if (!el) return;
+    e.preventDefault(); e.stopPropagation();
+    var mm = $('meMenu'); if (mm && !mm.hidden) { mm.hidden = true; var mb = $('meBtn'); if (mb) mb.setAttribute('aria-expanded', 'false'); }
+    var hd = document.querySelector('header.nav.open'); if (hd) { hd.classList.remove('open'); var bt = $('menuBtn'); if (bt) bt.setAttribute('aria-expanded', 'false'); }
+    openFeedback({ type: el.getAttribute('data-feedback') || '' });
+  }, true);
   function footer() {
-    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('a', { href: '/news', text: 'News' }), h('a', { href: '/lists', text: 'Lists' }), h('a', { href: '/blog', text: 'Blog' }), h('a', { href: '/privacy', text: 'Privacy' }), h('a', { href: '/contact', text: 'Contact' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
+    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('a', { href: '/news', text: 'News' }), h('a', { href: '/lists', text: 'Lists' }), h('a', { href: '/blog', text: 'Blog' }), h('a', { href: '/privacy', text: 'Privacy' }), h('a', { href: '/contact', text: 'Contact' }), h('a', { href: '/contact', 'data-feedback': '', text: 'Send feedback' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
   }
 
   // ---------- title ----------
@@ -2965,6 +3050,7 @@
     if (rs) put(rs);
     if (rc) put(rc);
     if (r) put(r);
+    put(fixRow({ m: m }));
     put(footer());
     S.titleDrawnId = m.id; v.style.minHeight = '';
     if (prevTitle === m.id && Math.abs(window.scrollY - sy) > 2) window.scrollTo(0, sy);
@@ -3316,6 +3402,8 @@
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
     play: '<path d="M7 4.5l12.5 7.5L7 19.5z"/>',
+    flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
+    check: '<path d="M5 12l5 5 9-10"/>',
     moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
     eye: '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
     eyeoff: '<path d="M10.7 5.1A10.7 10.7 0 0 1 12 5c7 0 10 7 10 7a13 13 0 0 1-1.7 2.7"/><path d="M14.1 14.2a3 3 0 0 1-4.2-4.2"/><path d="M17.5 17.5A10.7 10.7 0 0 1 12 19c-7 0-10-7-10-7a13 13 0 0 1 4.7-5.2"/><path d="M2 2l20 20"/>',
@@ -4526,6 +4614,7 @@
           ]);
         }))]));
     }
+    side.appendChild(fixRow({ person: name, path: '/person/' + slug }));
     if (langList.length > 1) side.appendChild(h('section', { class: 'pbox', 'aria-labelledby': 'plg' }, [h('h2', { id: 'plg', text: 'By language' })].concat(langList.slice(0, 6).map(function (l) {
       return h('div', { class: 'plb' }, [h('div', { class: 'plbt' }, [h('span', { text: l }), h('span', { class: 'note', text: String(langCount[l]) })]),
         h('div', { class: 'plbb', 'aria-hidden': 'true' }, [h('i', { style: 'width:' + Math.max(2, Math.round(langCount[l] / langCount[langList[0]] * 100)) + '%' })])]);
@@ -4821,7 +4910,12 @@
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
     if (B.sort === 'new' && !B.q.trim()) list = pinFirst(list, rowPins(B.status));
-    if (!list.length) main.appendChild(h('div', { class: 'empty' }, ['Nothing matches these filters. ', active ? h('button', { type: 'button', class: 'btn small', text: 'Clear all', on: { click: clearAll } }) : null]));
+    if (!list.length) {
+      // What was asked for, sent with a "Missing film" message: the search words and the filters picked.
+      var askedFor = [B.q.trim() ? '\u201c' + B.q.trim() + '\u201d' : '', B.status !== 'All' ? B.status : '', bVals(B.lang).join(', '), bVals(B.ott).join(', '), bVals(B.genre).join(', '), B.year].filter(Boolean).join(' \u00b7 ');
+      main.appendChild(h('div', { class: 'empty' }, ['Nothing matches these filters. ', active ? h('button', { type: 'button', class: 'btn small', text: 'Clear all', on: { click: clearAll } }) : null,
+        h('div', { style: 'margin-top:12px' }, [h('button', { type: 'button', class: 'linkbtn fbmiss2', text: 'Missing a film? Tell us', on: { click: function () { openFeedback({ type: 'add', q: B.q.trim(), filters: askedFor, path: location.pathname + location.search }); } } })])]));
+    }
     else {
       var PER = gridPer(main), pages2 = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages2);
       syncListUrl(bHref(B, B.page));
@@ -5287,7 +5381,11 @@
     var hit = S.movies.filter(function (m) { var d = m.data; return [d.title, d.subtitle, d.director, (d.cast || []).map(function (c) { return c.name; }).join(' ')].join(' ').toLowerCase().indexOf(q) !== -1; }).slice(0, 8);
     var idx = allPeopleIndex(), ppl = Object.keys(idx).map(function (k) { return idx[k]; }).filter(function (p) { var st = S.people[p.slug]; return (p.name + ' ' + ((st && st.aka) || []).join(' ')).toLowerCase().indexOf(q) !== -1; }).sort(function (a, b) { return b.n - a.n; }).slice(0, 4);
     res.classList.add('presults');
-    if (!hit.length && !ppl.length) res.appendChild(h('div', { class: 'note', style: 'padding:10px', text: 'No titles or people match.' }));
+    if (!hit.length && !ppl.length) {
+      var said = sq.value.trim();
+      res.appendChild(h('div', { class: 'note', style: 'padding:10px 10px 4px', text: 'No titles or people match.' }));
+      res.appendChild(h('button', { type: 'button', class: 'linkbtn fbmiss', text: 'Can\u2019t find it? Tell us and we\u2019ll add it', on: { click: function () { res.hidden = true; openFeedback({ type: 'add', q: said }); } } }));
+    }
     if (ppl.length) {
       res.appendChild(h('div', { class: 'lbl', text: 'People' }));
       ppl.forEach(function (p) {

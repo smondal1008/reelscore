@@ -122,6 +122,8 @@ async function start() {
   }
   const profileCache = {};
   const userNs = !user ? null : Object.freeze({
+    // Used only to fill in the email box of the feedback form (the person can change it before sending).
+    email: user.email || '', displayName: user.displayName || '',
     me: async () => ({ id: user.uid, name: user.displayName || 'You', avatarUrl: user.photoURL || '', canEdit: isAdmin }),
     canEdit: async () => isAdmin,
     can: async (what) => (what === 'data.write' ? true : isAdmin),

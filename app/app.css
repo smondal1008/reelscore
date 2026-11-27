@@ -1565,3 +1565,44 @@ body.r-lists .pr .crumbs { display: block; }
   .nav .search:hover:not(:focus-within):not(:has(input:not(:placeholder-shown))) input { flex: 0 0 0; opacity: 0; }
   .results { position: fixed; top: 62px; left: 12px; right: 12px; width: auto; max-height: 70vh; overflow: auto; z-index: 50; }
 }
+
+/* ---------- Send feedback (footer, account menu, phone menu, title and person pages, search with no results) ---------- */
+.nav .lnk.fbl { display: none; }
+@media (max-width: 760px) { .nav.open .lnk.fbl { display: block; border-top: 1px solid var(--line); margin-top: 6px; padding-top: 14px; } }
+.citybox:has(.fbform), .citybox:has(.fbdone) { width: min(540px, 100%); padding: 24px; }
+.fbform { display: flex; flex-direction: column; gap: 16px; }
+.fbhead { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.fbhead h2 { margin: 0; font-size: 22px; }
+.fbx { width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line2); background: transparent; color: var(--text); font-size: 15px; cursor: pointer; flex: none; }
+.fblab { display: block; font-size: 13px; font-weight: 700; color: var(--muted); margin-bottom: 7px; }
+.fbin { box-sizing: border-box; width: 100%; border-radius: 12px; border: 1px solid var(--line2); background: var(--bg); color: var(--text); font: inherit; font-size: 15px; line-height: 1.5; padding: 11px 13px; }
+textarea.fbin { resize: vertical; min-height: 96px; }
+.fbin:focus { outline: 2px solid var(--accent); outline-offset: 1px; border-color: transparent; }
+.fbchips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip.fbchip { min-height: 36px; }
+.chip.fbchip.on { background: var(--accent); border-color: var(--accent); color: #0B0A0F; font-weight: 700; }
+.fbctx { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--panel2); font-size: 13px; color: var(--muted); }
+.fbctx span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--text); font-weight: 600; }
+.fbctx .linkbtn { margin-left: auto; flex: none; }
+.fbact { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.fbdone { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+.fbdone h2 { margin: 0; font-size: 22px; }
+.fbdone p { margin: 0 0 6px; }
+.fbok { width: 44px; height: 44px; border-radius: 50%; background: rgba(143,214,168,.16); color: var(--ok); display: flex; align-items: center; justify-content: center; }
+.fixrow { margin: 18px 0 6px; }
+.fixrow .linkbtn { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); font-size: 14px; }
+.fixrow .linkbtn:hover { color: var(--text); }
+.tpage > .fixrow { max-width: 1280px; margin: 28px auto 0; padding: 0 24px; box-sizing: border-box; }
+.results .fbmiss { display: block; margin: 0 10px 10px; text-align: left; color: var(--accent); font-weight: 600; }
+@media (max-width: 760px) {
+  .cityov:has(.fbform), .cityov:has(.fbdone) { align-items: flex-end; padding: 0; }
+  .citybox:has(.fbform), .citybox:has(.fbdone) { width: 100%; border-radius: 22px 22px 0 0; max-height: 92vh; padding: 20px 18px 24px; }
+}
+/* Floating Feedback tab: right edge, desktop with a mouse only; hidden on admin pages and while a video is open */
+.fbtab { display: none; }
+@media (min-width: 900px) and (hover: hover) {
+  .fbtab { display: block; position: fixed; right: 0; top: 46%; z-index: 30; writing-mode: vertical-rl; transform: rotate(180deg); padding: 14px 8px; border: 0; border-radius: 0 10px 10px 0; background: var(--accent); color: #0B0A0F; font: inherit; font-size: 13px; font-weight: 800; letter-spacing: .4px; cursor: pointer; box-shadow: 0 6px 18px rgba(0,0,0,.4); opacity: .92; }
+  .fbtab:hover, .fbtab:focus-visible { opacity: 1; padding-left: 11px; }
+  body.r-admin .fbtab, body.tov-open .fbtab { display: none; }
+}
+.empty .fbmiss2 { color: var(--accent); font-weight: 600; }
