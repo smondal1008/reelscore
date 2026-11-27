@@ -253,6 +253,9 @@
     if (cur.v[mid] === val) delete cur.v[mid]; else cur.v[mid] = val;
     cur.at = new Date().toISOString();
     S.verdicts[S.uid] = cur;
+    // When each title was rated (for My List > Your verdicts, newest first). Kept in your private list document, one
+    // key per title (merged in, never rewriting the rest); the public verdicts document stays as it is.
+    if (cur.v[mid]) { S.ratedAt = S.ratedAt || {}; S.ratedAt[mid] = cur.at; var ra = {}; ra[mid] = cur.at; S.db.doc('data/users/' + S.uid + '/profile').edit([{ field: 'ratedAt', value: ra }]).catch(function () {}); }
     if (S.route === 'tonight') { /* the Tonight page redraws itself */ }
     else if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else if (!patchTitleBits()) render();
     writing.v = true;
@@ -5705,9 +5708,24 @@
     if (seenNR.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'You said you\u2019ve seen these. One tap each to give your verdict.' }),
       h('div', { class: 'grid-posters' }, seenNR.map(function (m) { return posterCard(m, { seenRate: true }); }))]));
-    var myV = S.verdicts[S.uid] ? Object.keys(S.verdicts[S.uid].v || {}).filter(function (id) { return S.byId[id]; }) : [];
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }),
-      myV.length ? h('div', { class: 'grid-posters' }, myV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
+    // Your verdicts: most recently rated first (titles rated before rating dates were kept follow, newest release first),
+    // with chips to show one verdict.
+    var vmap = S.verdicts[S.uid] ? (S.verdicts[S.uid].v || {}) : {}, rAt = S.ratedAt || {};
+    var myV = Object.keys(vmap).filter(function (id) { return S.byId[id]; });
+    myV.sort(function (a, b) {
+      var ta = rAt[a] || '', tb = rAt[b] || '';
+      if (ta || tb) return tb.localeCompare(ta);
+      return String(S.byId[b].data.releaseDate || '').localeCompare(String(S.byId[a].data.releaseDate || ''));
+    });
+    var VF = [['all', 'All'], ['a', 'Theatre / Must watch'], ['b', 'OTT / Watch'], ['c', 'Skip']], vCount = { all: myV.length, a: 0, b: 0, c: 0 };
+    myV.forEach(function (id) { if (vCount[vmap[id]] != null) vCount[vmap[id]]++; });
+    var vf = S.vFilter && vCount[S.vFilter] ? S.vFilter : 'all';
+    var shownV = vf === 'all' ? myV : myV.filter(function (id) { return vmap[id] === vf; });
+    var vChips = myV.length ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter your verdicts', style: 'margin:-2px 0 14px' }, VF.filter(function (x) { return x[0] === 'all' || vCount[x[0]]; }).map(function (x) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === x[0]), text: x[1] + ' (' + vCount[x[0]] + ')', on: { click: function () { var y = window.scrollY; S.vFilter = x[0]; drawList(); window.scrollTo(0, y); } } });
+    })) : null;
+    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }), vChips,
+      myV.length ? h('div', { class: 'grid-posters' }, shownV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
         : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
 
     // People you follow and Find people are hidden until following is ready; set SHOW_PEOPLE to true to bring them back.
@@ -6106,6 +6124,7 @@
     if (S.uid) db.doc('data/users/' + S.uid + '/profile').onSnapshot(function (snap) {
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
+      if (d.ratedAt && typeof d.ratedAt === 'object') S.ratedAt = Object.assign({}, d.ratedAt, S.ratedAt || {});
       var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || [], o.seen || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
