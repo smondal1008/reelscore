@@ -1730,6 +1730,51 @@ window.ReelAdmin = function (env) {
   }
   var KIND_PICKED = typeof WeakSet === 'function' ? new WeakSet() : { add: function () {}, has: function () { return true; } };
   function extraKindOf(t) { return /post[- ]?credits?/i.test(t) ? (/compil|all post|every post/i.test(t) ? 'Post-credit scenes compilation' : 'Post-credit scene breakdown') : /breakdown|explained|hidden details|easter eggs?/i.test(t) ? 'Trailer breakdown' : /announce/i.test(t) ? 'Announcement' : ''; }
+  // YouTube upload dates (publishedAt) through /api/views, so the API key stays on Vercel. Up to 50 ids a call.
+  // Resolves to { <id>: <ISO time> } for the ids YouTube knows; null when the request failed.
+  function ytDatesOf(ids) {
+    ids = ids.filter(function (id, k) { return id && ids.indexOf(id) === k; }).slice(0, 50);
+    if (!ids.length) return Promise.resolve({});
+    return fetch('/api/views?ids=' + ids.join(',')).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) { return j ? (j.dates || {}) : null; }).catch(function () { return null; });
+  }
+  // Which video id a row's stored date belongs to, when it was fetched in this editor (see listEditor).
+  var DATE_FOR = typeof WeakMap === 'function' ? new WeakMap() : null;
+  // Videos rows: the YouTube upload date under the link. New or changed links get it at once; "Get it" fills an older row.
+  function ytDateNote(item, rowsEl, key, i) {
+    var note = h('div', { class: 'note ytdate', style: 'font-size:12px;margin-top:4px' });
+    function draw(msg) {
+      note.innerHTML = '';
+      var id = ytIdOf(item.url);
+      if (msg) { note.textContent = msg; return; }
+      if (!id) return;
+      if (/^\d{4}-\d{2}-\d{2}/.test(item.publishedAt || '')) { note.textContent = 'YouTube date: ' + fmtDate(item.publishedAt.slice(0, 10)); return; }
+      note.appendChild(document.createTextNode('No YouTube date yet'));
+      if (canWrite) { note.appendChild(document.createTextNode(' · ')); note.appendChild(h('button', { type: 'button', class: 'linkbtn', text: 'Get it', on: { click: function () { fetchFor(id); } } })); }
+    }
+    function fetchFor(id) {
+      draw('Getting the date from YouTube…');
+      ytDatesOf([id]).then(function (d) {
+        if (ytIdOf(item.url) !== id) return draw();
+        if (d === null) return draw('Couldn’t reach YouTube. Try “Get it” again later.');
+        if (!d[id]) { draw('YouTube has no date for this video (private or removed?)'); return; }
+        item.publishedAt = d[id]; item.ytCheckedAt = todayStr(); if (DATE_FOR) DATE_FOR.set(item, id); touch(); draw();
+      });
+    }
+    note._fetch = fetchFor; draw();
+    return note;
+  }
+  // On save: any video still without a YouTube date (and not already looked up today) gets one, so nothing waits for the dates tool.
+  function fillDates(vs) {
+    var day = todayStr(), need = (vs || []).filter(function (v) { return v && ytIdOf(v.url) && !v.publishedAt && v.ytCheckedAt !== day; });
+    if (!need.length) return Promise.resolve();
+    var ids = need.map(function (v) { return ytIdOf(v.url); }), chunks = [];
+    for (var k = 0; k < ids.length; k += 50) chunks.push(ids.slice(k, k + 50));
+    return Promise.all(chunks.map(ytDatesOf)).then(function (res) {
+      var all = {}, asked = {};
+      res.forEach(function (d, n) { if (!d) return; Object.assign(all, d); chunks[n].forEach(function (id) { asked[id] = 1; }); });
+      need.forEach(function (v) { var id = ytIdOf(v.url); if (!asked[id]) return; if (all[id]) v.publishedAt = all[id]; v.ytCheckedAt = day; }); // a failed request leaves the row to try again
+    });
+  }
   function ytPrefill(el, key, i, item, rows) {
     var last = ytIdOf(item.url), fresh = !String(item.url || '').trim();
     el.addEventListener('input', function () {
@@ -2270,7 +2315,7 @@ window.ReelAdmin = function (env) {
     if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
-    if (canWrite && movies.length) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every song on the site: its upload date from YouTube, for ordering the Songs page', text: '📅 YouTube dates', on: { click: ytDates } }));
+    if (canWrite && movies.length) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every video on the site (songs, trailers, teasers…): its upload date from YouTube', text: '📅 YouTube dates', on: { click: ytDates } }));
     if (canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Update box office figures for many films from a CSV file', text: '⬆ Import box office CSV', on: { click: importBoCsv } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Search YouTube for an official trailer for titles in this list that have none', text: '🔎 Find trailers', on: { click: function () { findTrailers(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Find songs on official music-label channels for films in this list that have none', text: '♪ Find songs', on: { click: function () { findSongs(vis); } } }));
@@ -3035,16 +3080,17 @@ window.ReelAdmin = function (env) {
   }
   var MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   function normT(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
-  // ---------- YouTube dates: each song's upload date from YouTube, stored on the song as publishedAt ----------
-  // Uses /api/views, so the key stays on Vercel (YT_API_KEY). 50 songs per request, 1 of the 10,000 daily units each.
-  // YouTube asks that stored API data be refreshed within 30 days: a song is due again 13 days after it was checked (ytCheckedAt),
+  // ---------- YouTube dates: each video's upload date from YouTube (songs, trailers, teasers, promos…), stored as publishedAt ----------
+  // Uses /api/views, so the key stays on Vercel (YT_API_KEY). 50 videos per request, 1 of the 10,000 daily units each.
+  // New links get their date in the title editor at once (ytDateNote); this tool fills older ones and keeps them fresh.
+  // YouTube asks that stored API data be refreshed within 30 days: a video is due again 13 days after it was checked (ytCheckedAt),
   // so a run on the 1st and 15th of each month (the reminder's schedule) keeps every date under about 17 days old.
   // Saves only the videos list; the title's "last updated" date is left alone.
   function ytDates() {
     var day = todayStr(), due = new Date(Date.now() - 13 * 864e5).toLocaleDateString('en-CA');
     var songs = [], byM = {};
     movies.forEach(function (m) { (m.data.videos || []).forEach(function (v, i) {
-      if (!/song/i.test(v.kind || '')) return; var id = ytIdOf(v.url); if (!id) return;
+      var id = ytIdOf(v.url); if (!id) return;
       songs.push({ m: m, i: i, id: id, has: !!v.publishedAt, fresh: !!v.ytCheckedAt && v.ytCheckedAt >= due });
     }); });
     var todo = songs.filter(function (s) { return !s.fresh; });
@@ -3053,9 +3099,9 @@ window.ReelAdmin = function (env) {
     function onKey(e) { if (e.key === 'Escape') close(); }
     document.addEventListener('keydown', onKey);
     box.addEventListener('click', function (e) { if (e.target === box) close(); });
-    panel.appendChild(h('div', { class: 'head' }, [h('h2', { text: 'YouTube dates for songs' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]));
+    panel.appendChild(h('div', { class: 'head' }, [h('h2', { text: 'YouTube dates for videos' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]));
     var dated = songs.filter(function (s) { return s.has; }).length;
-    panel.appendChild(h('p', { class: 'note', text: songs.length.toLocaleString('en-IN') + ' songs · ' + dated.toLocaleString('en-IN') + ' have a YouTube date · ' + todo.length.toLocaleString('en-IN') + ' need one or are due a refresh (YouTube asks for stored data to be refreshed within 30 days).' }));
+    panel.appendChild(h('p', { class: 'note', text: songs.length.toLocaleString('en-IN') + ' videos (songs, trailers, teasers and more) · ' + dated.toLocaleString('en-IN') + ' have a YouTube date · ' + todo.length.toLocaleString('en-IN') + ' need one or are due a refresh (YouTube asks for stored data to be refreshed within 30 days).' }));
     var ids = []; todo.forEach(function (s) { if (ids.indexOf(s.id) === -1) ids.push(s.id); });
     var calls = Math.ceil(ids.length / 50), msg = h('p', { class: 'note', role: 'status', 'aria-live': 'polite' });
     var go = h('button', { type: 'button', class: 'btn primary', disabled: !todo.length, text: todo.length ? 'Fetch dates (' + calls + ' YouTube request' + (calls === 1 ? '' : 's') + ')' : 'All dates are up to date', on: { click: start } });
@@ -3082,12 +3128,12 @@ window.ReelAdmin = function (env) {
           if (stop) return;
           if (k >= list.length) {
             var miss = Object.keys(missing).length;
-            msg.textContent = (failed ? 'Stopped early: ' + failed + ' ' : '') + 'Saved dates for ' + wrote.toLocaleString('en-IN') + ' songs across ' + done.toLocaleString('en-IN') + ' titles.' + (miss ? ' ' + miss + ' songs weren’t found on YouTube (removed or private); they keep no date.' : '') + (errs ? ' ' + errs + ' titles couldn’t be saved; run it again.' : '');
+            msg.textContent = (failed ? 'Stopped early: ' + failed + ' ' : '') + 'Saved dates for ' + wrote.toLocaleString('en-IN') + ' videos across ' + done.toLocaleString('en-IN') + ' titles.' + (miss ? ' ' + miss + ' videos weren’t found on YouTube (removed or private); they keep no date.' : '') + (errs ? ' ' + errs + ' titles couldn’t be saved; run it again.' : '');
             return;
           }
           var id = list[k++], m = movies.find(function (x) { return x.id === id; }); if (!m) return next();
           var vs = (m.data.videos || []).map(function (v) {
-            if (!/song/i.test(v.kind || '')) return v; var yt = ytIdOf(v.url);
+            var yt = ytIdOf(v.url); if (!yt) return v;
             if (got[yt]) { wrote++; return Object.assign({}, v, { publishedAt: got[yt], ytCheckedAt: day }); }
             if (missing[yt]) { var o = Object.assign({}, v, { ytCheckedAt: day }); delete o.publishedAt; return o; }
             return v;
@@ -3187,7 +3233,7 @@ window.ReelAdmin = function (env) {
               var cur = movies.find(function (m) { return m.id === x.m.id; }) || x.m, d = cur.data;
               var v = { kind: r.kind, title: 'Official ' + r.kind.toLowerCase(), url: 'https://www.youtube.com/watch?v=' + r.id, channel: r.ch, addedAt: day };
               var du = isoDur(it.contentDetails && it.contentDetails.duration); if (du) v.dur = du;
-              if (it.snippet && it.snippet.publishedAt) v.publishedAt = it.snippet.publishedAt;
+              if (it.snippet && it.snippet.publishedAt) { v.publishedAt = it.snippet.publishedAt; v.ytCheckedAt = day; }
               if (hd) { v.thumbUrl = 'https://i.ytimg.com/vi/' + r.id + '/maxresdefault.jpg'; v.thumbHd = true; }
               var up = { videos: (d.videos || []).concat([v]), updatedAt: new Date().toISOString() };
               if (!safeUrl(d.bannerUrl) && hd) up.bannerUrl = v.thumbUrl;
@@ -3308,7 +3354,11 @@ window.ReelAdmin = function (env) {
             (cur.data.videos || []).forEach(function (v) { var id = ytIdOf(v.url); if (id) have[id] = 1; });
             var add = r.songs.filter(function (s) { return s.on && !have[s.id]; }).map(function (s) { return { kind: 'Song', title: s.name, url: 'https://www.youtube.com/watch?v=' + s.id, channel: s.ch, addedAt: day }; });
             apply.textContent = 'Saving ' + i + ' of ' + pick.length + '…';
-            (add.length ? db.doc('movies/' + r.m.id).update({ videos: (cur.data.videos || []).concat(add), updatedAt: new Date().toISOString() }).then(function () { ok++; }) : Promise.resolve())
+            // Each new song's upload date from YouTube (the playlist's date is when it was added there, not uploaded).
+            (add.length ? ytDatesOf(add.map(function (v) { return ytIdOf(v.url); })).then(function (dt) {
+              if (dt) add.forEach(function (v) { var id = ytIdOf(v.url); if (dt[id]) { v.publishedAt = dt[id]; v.ytCheckedAt = day; } });
+              return db.doc('movies/' + r.m.id).update({ videos: (cur.data.videos || []).concat(add), updatedAt: new Date().toISOString() }).then(function () { ok++; });
+            }) : Promise.resolve())
               .catch(function (e) { setStatus('Saving ' + r.m.data.title + ' failed: ' + (e && e.message || 'error')); }).then(next);
           };
           next();
@@ -3429,8 +3479,11 @@ window.ReelAdmin = function (env) {
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); if (c.k === 'kind') KIND_PICKED.add(item); });
           if (c.k === 'url' && (key === 'videos' || key === 'interviews' || key === 'extras')) ytPrefill(el, key, i, item, rows);
           // A different YouTube link means the stored upload date belonged to the old video.
-          if (c.k === 'url' && key === 'videos') el.addEventListener('change', function () { if (item.publishedAt && ytIdOf(item.url) !== item._ytWas) { delete item.publishedAt; delete item.ytCheckedAt; } });
+          if (c.k === 'url' && key === 'videos') el.addEventListener('change', function () { var src = DATE_FOR && DATE_FOR.has(item) ? DATE_FOR.get(item) : item._ytWas; if (item.publishedAt && ytIdOf(item.url) !== src) { delete item.publishedAt; delete item.ytCheckedAt; if (dn) dn._fetch && ytIdOf(item.url) && dn._fetch(ytIdOf(item.url)); } });
           if (c.k === 'url' && key === 'videos' && item._ytWas === undefined) Object.defineProperty(item, '_ytWas', { value: ytIdOf(item.url), enumerable: false });
+          var dn = c.k === 'url' && key === 'videos' ? ytDateNote(item, rows, key, i) : null;
+          if (dn) { var dnLast = ytIdOf(item.url); el.addEventListener('input', function () { var id = ytIdOf(el.value); if (!id || id === dnLast) return; dnLast = id; item.url = el.value; delete item.publishedAt; delete item.ytCheckedAt; dn._fetch(id); }); }
+          if (dn) return h('span', { style: 'min-width:0' }, [lab, el, dn]);
           if (c.k === 'url' && key === 'watch') el.addEventListener('change', function () { if (String(item.platform || '').trim()) return; var pf = platformFromUrl(el.value); if (pf) { item.platform = pf; touch(); var pe = rows.querySelector('#' + key + i + 'platform'); if (pe) pe.value = pf; } });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
@@ -4077,7 +4130,7 @@ window.ReelAdmin = function (env) {
     if (!body.posters.length) delete body.posters;
     if (!body.extras.length) delete body.extras;
     var prevStar = (movies.filter(function (m) { return m.id === currentId; })[0] || { data: {} }).data.bannerVideo || '';
-    return fillThumbs(body.videos).then(function () { return fillThumbs(body.extras || []); }).then(function () { return fillThumbs(body.interviews || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).then(function () { return fillYt(body.interviews || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
+    return fillDates(body.videos).then(function () { return fillThumbs(body.videos); }).then(function () { return fillThumbs(body.extras || []); }).then(function () { return fillThumbs(body.interviews || []); }).then(function () { var k = ytKey(false); return k ? fillYt(body.videos, k).then(function () { return fillYt(body.extras || [], k); }).then(function () { return fillYt(body.interviews || [], k); }).catch(function () {}) : null; }).then(function () { return db.doc('movies/' + currentId).set(body); }).then(function () {
       saving = false; remoteChanged = false; draft = clone(body); setDirty(false); setStatus('Saved ' + body.title);
       if (page === 'title') { wantSlug = slug || currentId; var want = '/admin/titles/' + (slug || currentId); if (location.pathname !== want) history.replaceState(null, '', want); }
       renderEditor();
