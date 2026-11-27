@@ -2266,13 +2266,29 @@ window.ReelAdmin = function (env) {
     return movies.find(function (m) { return m.id === k || slugOf(m) === k; }) ||
       movies.find(function (m) { return (m.data.slugHistory || []).indexOf(k) !== -1; }) || null;
   }
+  var PAGE_GROUP = { titles: 'titles', people: 'people', popular: 'people', banner: 'home', moviesbanner: 'home', tvbanner: 'home', rows: 'home', buttons: 'home',
+    news: 'writing', blog: 'writing', lists: 'writing', messages: 'messages' }, LAST_IN_GROUP = {};
+  // Writing tab: drafts waiting across News, Blog and Lists.
+  function writeCountEl() {
+    var el = $('writeCount'); if (!el) return;
+    var d = newsDocs.filter(function (x) { return x.data.status !== 'published'; }).length;
+    el.textContent = newsLoaded && d ? d + ' draft' + (d === 1 ? '' : 's') : '';
+  }
   function showPage() {
     $('titlesPage').hidden = page !== 'titles';
     $('editPage').hidden = page === 'titles';
-    document.querySelectorAll('.atabs a').forEach(function (a) {
-      var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title') || (p === 'people' && page === 'person');
+    // Five sections in the top bar; the section you're in shows its own pages in a second row. A section's tab goes
+    // back to the page you last used in it.
+    var sub = page === 'title' ? 'titles' : page === 'person' ? 'people' : page, grp = PAGE_GROUP[sub] || 'titles';
+    LAST_IN_GROUP[grp] = location.pathname;
+    document.querySelectorAll('.atabs a[data-g]').forEach(function (a) {
+      var g = a.getAttribute('data-g'), on = g === grp;
       a.setAttribute('aria-current', on ? 'page' : 'false');
+      if (LAST_IN_GROUP[g] && g !== 'titles') a.setAttribute('href', LAST_IN_GROUP[g].replace(/^(\/admin\/(?:people|lists|news|blog))\/.+$/, '$1'));
     });
+    document.querySelectorAll('#asub .asubg').forEach(function (d) { d.hidden = d.getAttribute('data-g') !== grp; });
+    var asub = $('asub'); if (asub) asub.hidden = !document.querySelector('#asub .asubg:not([hidden])');
+    document.querySelectorAll('#asub a[data-p]').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-p') === sub ? 'page' : 'false'); });
     var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', lists: 'Lists', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
@@ -3815,7 +3831,7 @@ window.ReelAdmin = function (env) {
   }, function () { msgLoaded = true; msgErr = 'Messages can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; if (msgMode) renderMessages(); });
   db.collection('news').onSnapshot(function (snap) {
     newsDocs = snap.docs.map(function (x) { return { id: x.id, data: x.data() || {} }; }); newsLoaded = true; newsErr = '';
-    newsCountEl(); lsCountEl(); if (newsMode && !newsDirty) renderNews();
+    newsCountEl(); lsCountEl(); writeCountEl(); if (newsMode && !newsDirty) renderNews();
     if (listsMode && !lsDirty) renderLists();
   }, function () { newsLoaded = true; newsErr = 'Stories can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; newsCountEl(); if (newsMode) renderNews(); });
   db.doc('settings/buttons').onSnapshot(function (snap) {

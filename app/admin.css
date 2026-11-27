@@ -6,6 +6,16 @@
   .atabs a:hover { color: var(--text); }
   .atabs a[aria-current="page"] { background: var(--panel2); color: var(--text); box-shadow: inset 0 0 0 1px var(--line2); }
   .atabs .cnt { font-size: 12px; font-weight: 700; color: var(--dim); }
+  .asub { flex-basis: 100%; display: flex; }
+  .asub[hidden] { display: none; }
+  .asubg { display: flex; flex-wrap: wrap; gap: 2px 22px; border-bottom: 1px solid var(--line); width: 100%; }
+  .asubg[hidden] { display: none; }
+  .asubg a { display: inline-flex; align-items: center; gap: 8px; height: 42px; margin-bottom: -1px; border-bottom: 2px solid transparent; font-size: 14px; font-weight: 600; color: var(--muted); text-decoration: none; }
+  .asubg a:hover { color: var(--text); }
+  .asubg a[aria-current="page"] { color: var(--text); border-bottom-color: var(--accent); }
+  .asubg .cnt { font-size: 12px; font-weight: 700; color: var(--dim); }
+  .asubg a[aria-current="page"] .cnt { color: var(--accent); }
+  .atabs a:focus-visible, .asubg a:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
   .atabs a[aria-current="page"] .cnt { color: var(--accent); }
   .apage { padding: 20px 28px 120px; }
   .apage[hidden] { display: none; }
