@@ -308,8 +308,27 @@
     var i = S.mine.watchlist.indexOf(id);
     if (i === -1) S.mine.watchlist.push(id); else S.mine.watchlist.splice(i, 1);
     // On home, flip the + / ✓ buttons in place rather than redrawing every row (which made the page flicker).
-    if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); else render();
+    if (S.route === 'home' && S.lastDrawn === 'home:') { patchListButtons(); if (i !== -1) myListSwap(id); } else render();
     saveMine(i === -1 ? 'Added to your watchlist' : 'Removed from your watchlist');
+  }
+  // Home: a title taken off the watchlist (from any row) flips, in the My List row, to the next watchlist title not shown there yet.
+  // With none left, the card fades out (and the row goes when it is empty).
+  function myListSwap(id) {
+    var sec = Array.prototype.filter.call(document.querySelectorAll('#view-home section.sect'), function (x) { return x.getAttribute('aria-label') === 'My List'; })[0];
+    if (!sec) return;
+    var cards = Array.prototype.slice.call(sec.querySelectorAll('.pc[data-id]'));
+    var card = cards.filter(function (c) { return c.getAttribute('data-id') === id; })[0]; if (!card) return;
+    var shown = cards.map(function (c) { return c.getAttribute('data-id'); });
+    var next = S.movies.filter(function (m) { return inNavLang(m) && inList(m.id) && shown.indexOf(m.id) === -1; })[0];
+    if (!next) {
+      card.classList.add('pcgone');
+      setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); if (!sec.querySelector('.pc')) sec.remove(); }, 320);
+      return;
+    }
+    var nc = posterCard(next); nc.classList.add('pcflip');
+    var had = card.contains(document.activeElement);
+    card.parentNode.replaceChild(nc, card);
+    if (had) { var b = nc.querySelector('.addl'); if (b) b.focus({ preventScroll: true }); }
   }
   function patchListButtons() {
     var v = $('view-home'); if (!v) return;
