@@ -1102,6 +1102,10 @@
     var play = h('button', { type: 'button', class: 'tnplay', 'aria-label': 'Play the ' + label.split(' ·')[0].toLowerCase() + ' of ' + m.data.title, on: { click: start } },
       [h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]);
     box.appendChild(play);
+    // A click anywhere on the art plays the trailer too (the title under it goes to the page). The art keeps its link for
+    // search engines and for opening in a new tab (Cmd/Ctrl-click, middle-click); the ▶ button is the keyboard stop.
+    art.setAttribute('tabindex', '-1'); art.setAttribute('aria-hidden', 'true');
+    art.addEventListener('click', function (e) { if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.button) return; e.preventDefault(); start(); });
     function onKey(e) { if (e.key === 'Escape') stopIt(); }
     function stopIt() {
       if (tnStopPlaying === stopIt) tnStopPlaying = null;
