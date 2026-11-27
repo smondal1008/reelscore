@@ -319,6 +319,9 @@
     if (S.route === 'home' && S.lastDrawn === 'home:') { patchListButtons(); if (i !== -1) myListSwap(id); } else render();
     saveMine(i === -1 ? 'Added to your watchlist' : 'Removed from your watchlist');
   }
+  // Home "My List" row: the whole watchlist, newest addition first. It is the visitor's own list, so the language
+  // picker (which narrows the other rows) does not apply here, as on the My List page.
+  function myListRow() { return S.mine.watchlist.slice().reverse().map(function (id) { return S.byId[id]; }).filter(Boolean); }
   // Home: a title taken off the watchlist (from any row) flips, in the My List row, to the next watchlist title not shown there yet.
   // With none left, the card fades out (and the row goes when it is empty).
   function myListSwap(id) {
@@ -327,7 +330,7 @@
     var cards = Array.prototype.slice.call(sec.querySelectorAll('.pc[data-id]'));
     var card = cards.filter(function (c) { return c.getAttribute('data-id') === id; })[0]; if (!card) return;
     var shown = cards.map(function (c) { return c.getAttribute('data-id'); });
-    var next = S.movies.filter(function (m) { return inNavLang(m) && inList(m.id) && shown.indexOf(m.id) === -1; })[0];
+    var next = myListRow().filter(function (m) { return shown.indexOf(m.id) === -1; })[0];
     if (!next) {
       card.classList.add('pcgone');
       setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); if (!sec.querySelector('.pc')) sec.remove(); }, 320);
@@ -1579,7 +1582,7 @@
     if (S.seedOnly) { v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'Loading titles…' })])); return; }
 
     var friendPicks = S.movies.filter(function (x) { return inNavLang(x) && S.mine.following.length && score(x.id, S.mine.following).tot > 0; });
-    var mine = S.movies.filter(function (x) { return inNavLang(x) && inList(x.id); });
+    var mine = myListRow();
     var langNote = S.navLang ? h('div', { class: 'sect-h', style: 'margin-top:18px' }, [h('span', { class: 'sub' }, ['Showing ' + S.navLang + ' titles · ', h('a', { href: '#', on: { click: function (e) { e.preventDefault(); setNavLang(''); } }, text: 'Show all languages' })])]) : null;
     var none = S.navLang && !S.movies.some(inNavLang) ? h('div', { class: 'wrapx' }, [h('div', { class: 'empty', text: 'No ' + S.navLang + ' titles yet.' })]) : null;
     // Rows below the first screen are built as they come near it (lazySection): the home page holds thousands of
