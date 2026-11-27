@@ -1002,7 +1002,8 @@ async function main() {
   let homeBody = '<h1>Verdicts on Indian movies and series</h1><p>Reelscore tracks ' + movies.length + ' Bollywood and regional Indian films and shows. ' +
     'For each one, people say whether it is worth the theatre, worth streaming on OTT, or worth skipping.</p>';
   homeBody += block('In theatres now', bySection['In theatres'].slice(0, 18).map(titleLi), ['/browse/in-theatres', 'All ' + bySection['In theatres'].length + ' in theatres →']);
-  homeBody += block('Coming soon', bySection['Coming soon'].slice(0, 18).map(titleLi), ['/browse/coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
+  // As on the site: the home row lists titles with a release date (TBA ones only when pinned); the link counts them all.
+  homeBody += block('Coming soon', bySection['Coming soon'].filter(m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id)).slice(0, 18).map(titleLi), ['/browse/coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
   homeBody += block('On OTT', bySection['On OTT'].slice(0, 18).map(titleLi), ['/browse/on-ott', 'All ' + bySection['On OTT'].length + ' on OTT →']);
   homeBody += block('Recently released', movies.filter(released).filter(m => sectionOf(m) === 'Older releases').sort(newest).slice(0, 18).map(titleLi), ['/browse/older-releases', 'All older releases →']);
   homeBody += block('Popular people', hubPeople.slice(0, 24).map(personLi), ['/people', 'All ' + hubPeople.length + ' people →']);

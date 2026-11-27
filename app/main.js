@@ -1443,6 +1443,8 @@
     var a = [], b = []; picks.forEach(function (p) { (p.m.id in pos ? a : b).push(p); });
     return a.sort(function (x, y) { return pos[x.m.id] - pos[y.m.id]; }).concat(b);
   }
+  // Coming soon rows show titles with a release date; ones still TBA stay on Browse > Coming soon (last), unless pinned in Admin.
+  function withDate(list, sec) { var pins = rowPins(sec); return list.filter(function (m) { return /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || pins.indexOf(m.id) !== -1; }); }
   function pinFirst(list, ids) {
     if (!ids || !ids.length) return list;
     var pos = Object.create(null); ids.forEach(function (id, i) { if (!(id in pos)) pos[id] = i; });
@@ -1515,7 +1517,7 @@
       lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return rateSection(); }, 4),
       lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
-      lazySection(function () { return rowSection('Coming soon', pinFirst(homeSection('Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
+      lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon'), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
       lazySection(function () { return rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
@@ -4877,7 +4879,7 @@
     var rows = [];
     var add = function (title, items, opts, href) { if (items.length >= 6) rows.push([title, items, opts, href]); };
     add('In theatres now', pinFirst(all.filter(function (m) { return m.data.section === 'In theatres'; }).sort(newest), rowPins('In theatres')), { book: true, inTheatresList: true }, '/browse/in-theatres');
-    add('Coming soon', pinFirst(all.filter(function (m) { return m.data.section === 'Coming soon'; }).sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true }, '/browse/coming-soon');
+    add('Coming soon', pinFirst(withDate(all.filter(function (m) { return m.data.section === 'Coming soon'; }), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, remind: true, book: true }, '/browse/coming-soon');
     // New on a service: on it in the last 12 months (its OTT date, else its release date).
     var ottDate = function (m) { return m.data.ottReleaseDate || m.data.releaseDate || ''; };
     [['netflix', 'Netflix'], ['prime-video', 'Prime Video'], ['zee5', 'ZEE5'], ['jiohotstar', 'JioHotstar'], ['sonyliv', 'SonyLIV']].forEach(function (o) {
