@@ -1382,11 +1382,12 @@ body.r-lists .pr .crumbs { display: block; }
 .tp .tp-mini { position: absolute; top: 24px; right: 76px; z-index: 3; gap: 6px; background: rgba(11,10,15,.75); }
 .btn .ico, .tp-mini svg, .vp-mini svg { flex: none; }
 /* Songs / Trailers pages: search and language */
-.vtools { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: flex-end; flex: 0 1 560px; min-width: 0; }
+.vtools { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; justify-content: flex-end; flex: 0 1 760px; min-width: 0; }
 .vtools .field { margin: 0; }
 .vtools .vq { flex: 1 1 260px; max-width: 320px; }
 .vtools .vl { flex: 0 0 220px; }
-@media (max-width: 640px) { .vtools { flex: 1 1 100%; justify-content: flex-start; } .vtools .vq, .vtools .vl { flex: 1 1 100%; max-width: none; } }
+.vtools .vs { flex: 0 0 170px; }
+@media (max-width: 640px) { .vtools { flex: 1 1 100%; justify-content: flex-start; } .vtools .vq { flex: 1 1 100%; max-width: none; } .vtools .vl, .vtools .vs { flex: 1 1 calc(50% - 6px); max-width: none; } }
 
 /* Where to watch: service logo tile on the title page */
 #watch .wtile { width: 44px; height: 44px; border-radius: 10px; background: var(--accent); color: #0B0A0F; display: flex; align-items: center; justify-content: center; font-weight: 800; flex: none; overflow: hidden; }

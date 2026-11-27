@@ -526,7 +526,7 @@
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if (path === '/tonight') { S.route = 'tonight'; S.param = null; }
-    else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48, q: '' }; }
+    else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48, q: '', sort: /[?&]sort=views\b/.test(location.search) && path === '/songs' ? 'views' : '' }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
       S.route = 'genre'; S.param = mm[1].toLowerCase();
@@ -1936,7 +1936,7 @@
         if (S.viewsAsked[k]) return; S.viewsAsked[k] = 1;
         fetch('/api/views?ids=' + k).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
           if (!j || !j.counts) return;
-          Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; });
+          Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; }); S.viewsAsked[k] = 2;
           done();
         }).catch(function () {});
       })(b.join(','));
@@ -2238,11 +2238,35 @@
     var hay = function (p) { var d = p.m.data; return fold([p.x.title, p.x.kind, p.x.artists, d.title, d.director, (d.cast || []).slice(0, 8).map(function (c) { return c.name; }).join(' ')].join(' ')); };
     var filtered = function () {
       var words = fold(S.vids.q).split(/\s+/).filter(Boolean);
-      return all.filter(function (p) { return (!S.vids.lang || langOf(p.m.data) === S.vids.lang) && (!words.length || (function (t) { return words.every(function (wd) { return t.indexOf(wd) !== -1; }); })(hay(p))); });
+      var out = all.filter(function (p) { return (!S.vids.lang || langOf(p.m.data) === S.vids.lang) && (!words.length || (function (t) { return words.every(function (wd) { return t.indexOf(wd) !== -1; }); })(hay(p))); });
+      // Most viewed: YouTube views, highest first; songs without a count keep their place after the counted ones.
+      if (S.vids.sort === 'views' && S.views) {
+        var vw = function (p) { var n = S.views[p.x.yt]; return typeof n === 'number' ? n : -1; };
+        out = out.map(function (p, i) { return [p, vw(p), i]; }).sort(function (a, b) { return b[1] - a[1] || a[2] - b[2]; }).map(function (x) { return x[0]; });
+      }
+      return out;
     };
     var allYt = S.param === 'songs' ? all.map(function (p) { return p.x.yt; }) : [];
+    var allViews = false;
+    // Most viewed needs every song's count: the same fixed 50-id batches as the page uses, 6 at a time, cached by the CDN.
+    var wantAllViews = function () {
+      var ids = allYt.filter(function (id, i) { return id && allYt.indexOf(id) === i; }), batches = [], left;
+      for (var i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50).join(','));
+      S.views = S.views || {}; S.viewsAsked = S.viewsAsked || {};
+      var todo = batches.filter(function (k) { return S.viewsAsked[k] !== 2; }); left = todo.length;
+      if (!left) { allViews = true; list = filtered(); drawRes(); return; }
+      var q = todo.slice(), finish = function () { left--; if (left > 0) { countEl.textContent = countText().replace('loading view counts…', 'loading view counts… ' + Math.round(100 * (todo.length - left) / todo.length) + '%'); return; } allViews = true; if (S.vids.sort === 'views' && res.isConnected) { list = filtered(); drawRes(); } };
+      var pump = function () {
+        var k = q.shift(); if (!k) return;
+        S.viewsAsked[k] = 1;
+        fetch('/api/views?ids=' + k).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+          if (j && j.counts) { Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; }); S.viewsAsked[k] = 2; }
+        }).catch(function () {}).then(function () { finish(); pump(); });
+      };
+      for (var c = 0; c < 6; c++) pump();
+    };
     var list = filtered(), countEl = h('p', { class: 'note', style: 'margin:0' }), res = h('div', {});
-    var countText = function () { return list.length + ' ' + P.what + (S.vids.q.trim() ? ' matching “' + S.vids.q.trim() + '”' : ', newest first') + (S.navLang ? ' · ' + S.navLang + ' only' : ''); };
+    var countText = function () { return list.length + ' ' + P.what + (S.vids.q.trim() ? ' matching “' + S.vids.q.trim() + '”' : '') + (S.vids.sort === 'views' ? (allViews ? ', most viewed first' : ' · loading view counts…') : S.vids.q.trim() ? '' : ', newest first') + (S.navLang ? ' · ' + S.navLang + ' only' : ''); };
     var drawRes = function () {
       res.innerHTML = ''; countEl.textContent = countText();
       res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
@@ -2265,7 +2289,18 @@
       e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); list = filtered(); drawRes(); });
       tools.appendChild(h('div', { class: 'field vl' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
+    if (S.param === 'songs') {
+      var so = h('select', { class: 'in', id: 'vSort' }, [['', 'Latest'], ['views', 'Most viewed']].map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === S.vids.sort }); }));
+      so.addEventListener('change', function () {
+        S.vids.sort = so.value; S.vids.n = 48; so.blur();
+        try { var u = new URL(location.href); if (so.value) u.searchParams.set('sort', so.value); else u.searchParams.delete('sort'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) {}
+        if (so.value === 'views') wantAllViews();
+        list = filtered(); drawRes();
+      });
+      tools.appendChild(h('div', { class: 'field vs' }, [h('label', { class: 'l', for: 'vSort', text: 'Sort' }), so]));
+    }
     w.appendChild(res); drawRes();
+    if (S.vids.sort === 'views') wantAllViews();
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
