@@ -1602,7 +1602,7 @@
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottMeta: streamingYearMeta }, seeAll('/browse/on-ott')); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottMeta: streamingYearMeta }, allStreamingLink()); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
@@ -2491,6 +2491,18 @@
     var list = homeSection('On OTT').concat(series).filter(function (m) { return !recent(m); });
     list.sort(function (a, b) { return (when(b) || '0').localeCompare(when(a) || '0') || (a.data.title || '').localeCompare(b.data.title || ''); });
     return pinFirst(list, pins);
+  }
+  // See all from Streaming this year: Browse with every "Streaming on" service ticked (the ones any title is on).
+  function allStreamingHref() {
+    var on = {}; S.movies.forEach(function (m) { ottsOf(m.data).forEach(function (k) { on[k] = (on[k] || 0) + 1; }); });
+    var keys = Object.keys(on).sort(function (a, b) { return on[b] - on[a] || a.localeCompare(b); });
+    return keys.length ? browseHref({ ott: keys.join(',') }, 1) : '/browse';
+  }
+  // The older part of the catalogue can arrive after the row is drawn, so the link is refreshed just before it is used.
+  function allStreamingLink() {
+    var el = seeAll(allStreamingHref()), a = el.querySelector('a'), upd = function () { a.setAttribute('href', allStreamingHref()); };
+    a.addEventListener('pointerdown', upd); a.addEventListener('focus', upd); a.addEventListener('mouseenter', upd);
+    return el;
   }
   // Card line in Streaming this year: service, Series for shows, and the day it started streaming.
   function streamingYearMeta(m) {
