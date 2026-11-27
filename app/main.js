@@ -1906,8 +1906,39 @@
     } } }, [
       h('span', { class: 'th' }, [th, h('span', { class: 'kb', text: String(p.x.kind).toUpperCase() }), h('span', { class: 'pb', 'aria-hidden': 'true', text: '▶' })]),
       h('span', { class: 'tt', text: p.x.title }),
-      h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') })
+      h('span', { class: 'note', text: [d.title, langOf(d)].filter(Boolean).join(' · ') }),
+      p.x.yt ? h('span', { class: 'note vviews', 'data-yt': p.x.yt }) : null
     ]);
+  }
+  // YouTube view counts under each song on /songs, from /api/views (cached by the CDN for 6 hours).
+  // Asks for the whole list in the same 50-id batches for every visitor, so searching and filtering reuse the cache.
+  function fmtViews(n) {
+    var u = [[1e9, 'B'], [1e6, 'M'], [1e3, 'K']], t = String(n);
+    for (var i = 0; i < u.length; i++) {
+      var x = n / u[i][0], r = x < 10 ? Math.round(x * 10) / 10 : Math.round(x);
+      if (x >= 1) { t = r >= 1000 && i ? '1' + u[i - 1][1] : String(r) + u[i][1]; break; }
+    }
+    return t + (n === 1 ? ' view' : ' views');
+  }
+  function loadViews(ids, done) {
+    S.views = S.views || {}; S.viewsAsked = S.viewsAsked || {};
+    ids = ids.filter(function (id, i) { return id && ids.indexOf(id) === i; }).sort();
+    var batches = []; for (var i = 0; i < ids.length; i += 50) batches.push(ids.slice(i, i + 50));
+    batches.forEach(function (b) {
+      var k = b.join(','); if (S.viewsAsked[k]) return; S.viewsAsked[k] = 1;
+      fetch('/api/views?ids=' + k).then(function (r) { return r.ok ? r.json() : null; }).then(function (j) {
+        if (!j || !j.counts) return;
+        Object.keys(j.counts).forEach(function (id) { S.views[id] = j.counts[id]; });
+        done();
+      }).catch(function () {});
+    });
+  }
+  function fillViews(root) {
+    if (!S.views) return;
+    Array.prototype.forEach.call(root.querySelectorAll('.vviews[data-yt]'), function (el) {
+      var n = S.views[el.getAttribute('data-yt')];
+      if (typeof n === 'number' && !el.textContent) el.textContent = fmtViews(n);
+    });
   }
   function songSection() {
     var picks = songPicks(false).slice(0, 20);
@@ -2206,6 +2237,7 @@
       res.innerHTML = ''; countEl.textContent = countText();
       res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
       if (list.length > S.vids.n) res.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; drawRes(); } } })]));
+      fillViews(res);
       if (!list.length) res.appendChild(h('p', { class: 'note', text: S.vids.q.trim() ? 'No ' + P.what + ' match “' + S.vids.q.trim() + '”. Try a film, a singer or fewer words.' : 'Nothing here yet.' }));
     };
     head.appendChild(countEl);
@@ -2223,6 +2255,7 @@
       tools.appendChild(h('div', { class: 'field vl' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
     w.appendChild(res); drawRes();
+    if (S.param === 'songs') loadViews(all.map(function (p) { return p.x.yt; }), function () { if (res.isConnected) fillViews(res); });
   }
 
   // ---------- New TV promotionals: trailers, teasers, promos and full episodes of TV shows, played in the overlay ----------
