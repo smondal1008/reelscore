@@ -3798,15 +3798,23 @@
     var u = safeUrl(d.platformUrl);
     return u && !off ? h('a', { class: 'btn primary', href: u, target: '_blank', rel: 'noopener', text: label + ' ↗' }) : h('button', { type: 'button', class: 'btn primary', disabled: true, text: label });
   }
+  // Where to watch tile: the service's own logo when we have one, else its initials on its colour.
+  function watchTile(p) {
+    var parts = String(p || '').split('/').map(function (x) { return x.trim(); }), hit = null;
+    parts.some(function (part) { hit = PLAT.filter(function (x) { return x[3] && x[0].test(part); })[0] || null; return !!hit; });
+    if (hit) return h('span', { class: 'c wtile logo', role: 'img', 'aria-label': hit[1] }, [h('img', { src: hit[3], alt: '', width: 44, height: 44, decoding: 'async' })]);
+    var any = PLAT.filter(function (x) { return x[0].test(parts[0]); })[0];
+    return h('span', { class: 'c wtile', 'aria-hidden': 'true', style: any ? 'background:' + any[2] + ';color:#fff' : '', text: (parts[0] || 'OTT').slice(0, 2).toUpperCase() });
+  }
   function actionBlock(m, rel, ott) {
     var d = m.data;
     if (ott) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
-      h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: (d.platform || 'OTT').slice(0, 2).toUpperCase() }),
+      h('div', { class: 'person' }, [watchTile(d.platform || 'OTT'),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform || 'Streaming service' }), h('div', { class: 'note', text: rel ? 'Streaming now · included with subscription' : 'Streams from ' + fmtDate(d.releaseDate, true) })])]),
       watchBtn(d, rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet', !rel),
       safeUrl(d.platformUrl) ? null : h('div', { class: 'note', text: 'A link to watch it will show here once it’s added.' })]);
     if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
-      d.platform ? h('div', { class: 'person' }, [h('span', { class: 'c', style: 'width:44px;height:44px;border-radius:10px;background:var(--accent);color:#0B0A0F;display:flex;align-items:center;justify-content:center;font-weight:800', text: d.platform.slice(0, 2).toUpperCase() }),
+      d.platform ? h('div', { class: 'person' }, [watchTile(d.platform),
         h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
       d.platform || safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
     // In theatres / coming soon: Book tickets, when a booking link has been added in Admin
