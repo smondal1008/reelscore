@@ -5569,6 +5569,8 @@
           S.justRated = S.justRated || {}; S.justRated[m.id] = 1;
           S.qvFlash = setting ? { id: m.id, v: x[0], t: Date.now() } : null;
           setVerdict(m.id, x[0]);
+          // My List: a title just rated in Seen and Not Rated leaves that section once its verdict has shown.
+          if (S.route === 'list') setTimeout(function () { if (S.route === 'list') render(); }, 1700);
           // The home page keeps the same buttons (no redraw): flash the word on this one.
           if (setting && btn && btn.isConnected) { btn.classList.remove('flash'); void btn.offsetWidth; btn.classList.add('flash'); setTimeout(function () { btn.classList.remove('flash'); }, 1700); }
           if (after) after();
@@ -5674,13 +5676,6 @@
     if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen these? Give your verdict' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Rate it. Not yet? Keep it on your watchlist.' }),
       h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { followUp: true }); }))]));
-    // Titles you said you've seen but haven't rated yet (newest first). Ones rated this visit stay, showing the verdict.
-    var jrS = S.justRated || {};
-    var seenNR = (S.mine.seen || []).slice().reverse().map(function (id) { return S.byId[id]; })
-      .filter(function (m) { return m && released(m) && (!myVerdict(m.id) || jrS[m.id]) && fuIds.indexOf(m.id) === -1; });
-    if (seenNR.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
-      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'You said you\u2019ve seen these. One tap each to give your verdict.' }),
-      h('div', { class: 'grid-posters' }, seenNR.map(function (m) { return posterCard(m, { seenRate: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
@@ -5702,6 +5697,14 @@
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
       rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true, book: m.data.section === 'In theatres' || m.data.section === 'Coming soon' }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
+    // Titles you said you've seen but haven't rated yet (newest first). One you rate shows its verdict for a moment, then
+    // leaves the section (it is in Your verdicts below).
+    var fl = S.qvFlash, justNow = function (id) { return fl && fl.id === id && Date.now() - fl.t < 1600; };
+    var seenNR = (S.mine.seen || []).slice().reverse().map(function (id) { return S.byId[id]; })
+      .filter(function (m) { return m && released(m) && (!myVerdict(m.id) || justNow(m.id)) && fuIds.indexOf(m.id) === -1; });
+    if (seenNR.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
+      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'You said you\u2019ve seen these. One tap each to give your verdict.' }),
+      h('div', { class: 'grid-posters' }, seenNR.map(function (m) { return posterCard(m, { seenRate: true }); }))]));
     var myV = S.verdicts[S.uid] ? Object.keys(S.verdicts[S.uid].v || {}).filter(function (id) { return S.byId[id]; }) : [];
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }),
       myV.length ? h('div', { class: 'grid-posters' }, myV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
