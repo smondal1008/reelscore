@@ -1567,8 +1567,9 @@
         var sec = opener.closest('.view section[aria-label]'), row = sec && sec.querySelector('.rowx');
         S.homeSpot = sec ? { label: sec.getAttribute('aria-label'), left: row ? row.scrollLeft : 0 } : null;
       }
-      // In the mini player the video keeps playing while you go to the page.
-      if (!S.tovMini) { S.tov && (S.tov.opener = null); closeTrailerOverlay(); }
+      // The video keeps playing while you go to the page: the full player shrinks to the mini player (desktop).
+      // Phones have no mini player, so there the player closes.
+      if (!S.tovMini) { if (S.tov && tovMiniOk()) setTovMini(true, true); else { S.tov && (S.tov.opener = null); closeTrailerOverlay(); } }
       if (S.route === 'title' && location.pathname === href) return;
       go(href);
     };
