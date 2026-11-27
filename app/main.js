@@ -561,7 +561,7 @@
     if (S.route !== (S.heroCtx || 'home') && S.play) leaveHero();
     document.body.className = 'r-' + S.route;
     stopHiddenMedia();
-    document.querySelectorAll('.nav a.lnk').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-r') === S.route && !(S.route === 'news' && S.newsKind === 'blog') ? 'page' : 'false'); });
+    document.querySelectorAll('.nav a.lnk').forEach(function (a) { var v = a.getAttribute('data-v'); a.setAttribute('aria-current', a.getAttribute('data-r') === S.route && (!v || v === S.param) && !(S.route === 'news' && S.newsKind === 'blog') ? 'page' : 'false'); });
     if (S.route === 'browse') document.title = S.browse.landing ? S.browse.landing.title : (BROWSE_TITLES[S.browse.status] || BROWSE_TITLES.All);
     else if (S.route === 'movies') document.title = S.cat.movies.status === 'All' ? MOVIES_TITLE : (BROWSE_TITLES[S.cat.movies.status] || MOVIES_TITLE);
     else if (S.route === 'tvshows') document.title = TV_TITLE;
@@ -1580,15 +1580,28 @@
     // Mini player (desktop): the video shrinks to a corner and keeps playing while you browse. The player itself is never
     // moved in the page, so it doesn't restart.
     var miniB = tovMiniOk() ? h('button', { type: 'button', class: 'tov-mn', on: { click: function () { setTovMini(!S.tovMini); } } }, [icon('pip', 18), h('span', { class: 'tov-mnl' })]) : null;
+    // Previous / next in the row the video was opened from (Songs, Trailers, the home rows). Shift+P and Shift+N too.
+    var what = x.cat === 'songs' ? 'song' : x.cat === 'trailers' ? 'trailer' : 'video';
+    var qPrev = queue && queue.list && queue.i > 0 ? queue.list[queue.i - 1] : null, qNext = queue && queue.list ? queue.list[queue.i + 1] : null;
+    var step = function (d2) { var q = d2 < 0 ? qPrev : qNext; if (q && q.m && q.x) openTrailerOverlay(q.m, q.x, opener, { list: queue.list, i: queue.i + d2 }, true); };
+    var navB = function (d2) {
+      var q = d2 < 0 ? qPrev : qNext, lab = (d2 < 0 ? 'Previous ' : 'Next ') + what;
+      return h('button', { type: 'button', class: 'tov-nav', disabled: !q, 'aria-label': q ? lab + ': ' + q.m.data.title + (q.x.title ? ' · ' + q.x.title : '') : lab, title: q ? lab + ' (Shift+' + (d2 < 0 ? 'P' : 'N') + ')' : 'No ' + lab.toLowerCase(), on: { click: function () { step(d2); } } },
+        d2 < 0 ? [h('span', { 'aria-hidden': 'true', text: '‹' }), h('span', { class: 'tov-nl', text: lab })] : [h('span', { class: 'tov-nl', text: lab }), h('span', { 'aria-hidden': 'true', text: '›' })]);
+    };
+    var navs = qPrev || qNext ? h('div', { class: 'tov-navs', role: 'group', 'aria-label': 'Previous and next ' + what }, [navB(-1), navB(1)]) : null;
     var box = h('div', { class: 'tov', role: 'dialog', 'aria-modal': 'true', 'aria-label': d.title + ' · ' + x.title }, [
       h('div', { class: 'tov-bar' }, [
         h('div', { class: 'tov-t' }, [h('a', { class: 'tov-tl', href: movieUrl(m), text: d.title, on: { click: toPage } }), h('span', { class: 'note', text: ' · ' + x.title })]),
-        h('div', { class: 'tov-acts' }, [auto, shareB, more, miniB, close])
+        h('div', { class: 'tov-acts' }, [navs, auto, shareB, more, miniB, close])
       ]),
       h('div', { class: 'tov-v' }, [media])
     ]);
     box.addEventListener('click', function (e) { if (e.target === box && !S.tovMini) closeTrailerOverlay(); });
-    S.tov = { node: box, opener: opener, miniB: miniB, key: function (e) { if (e.key === 'Escape' && !S.tovMini) closeTrailerOverlay(); } };
+    S.tov = { node: box, opener: opener, miniB: miniB, key: function (e) {
+      if (e.key === 'Escape' && !S.tovMini) closeTrailerOverlay();
+      else if (e.shiftKey && !e.metaKey && !e.ctrlKey && !e.altKey && (e.key === 'N' || e.key === 'P') && !/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName || '')) { e.preventDefault(); step(e.key === 'N' ? 1 : -1); }
+    } };
     document.addEventListener('keydown', S.tov.key);
     upNext(box, media, opener, queue);
     document.body.appendChild(box);
@@ -2127,7 +2140,7 @@
       e.addEventListener('change', function () { S.vids.lang = e.value; S.vids.n = 48; e.blur(); render(true); });
       bar.appendChild(h('div', { class: 'field', style: 'width:220px;margin:0' }, [h('label', { class: 'l', for: 'vLang', text: 'Language' }), e]));
     }
-    w.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(P.card)));
+    w.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
     if (list.length > S.vids.n) w.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; render(true); } } })]));
     if (!list.length) w.appendChild(h('p', { class: 'note', text: 'Nothing here yet.' }));
   }
