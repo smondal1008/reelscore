@@ -1363,6 +1363,14 @@ async function main() {
   for (const [slug, h1, title, desc, pickM, pickV, onePer] of vidHubs) {
     const items = [];
     pinFirst(movies.filter(pickM).sort(newest), VID_PINS[slug]).forEach(m => { const vs = ytVideos(m.data).filter(pickV); (onePer ? vs.slice(0, 1) : vs).forEach(x => items.push([m, x])); });
+    // Songs: newest first by the earlier of the YouTube upload date and the film's release (as songPicks in app/main.js);
+    // pinned films stay first.
+    if (slug === 'songs') {
+      const pins = VID_PINS.songs || [], when = ([m, x]) => { const r = /^\d{4}/.test(m.data.releaseDate || '') ? String(m.data.releaseDate) : '', u = x.publishedAt || ''; return u && r ? (u < r ? u : r) : u || r; };
+      const pinned = items.filter(([m]) => pins.includes(m.id)), rest = items.filter(([m]) => !pins.includes(m.id)).map((it, i) => [it, when(it), i]);
+      rest.sort((a, b) => b[1].localeCompare(a[1]) || a[2] - b[2]);
+      items.splice(0, items.length, ...pinned, ...rest.map(r => r[0]));
+    }
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › ' + esc(h1) + '</nav><h1>' + esc(h1) + '</h1><p>' + items.length + ' videos. ' + esc(desc) + '</p>' +
       '<ul class="pr-vids">' + items.map(([m, x]) => '<li><img src="' + ytThumb(x.yt) + '" alt="' + esc(m.data.title + ' · ' + x.title) + '" width="160" height="90" loading="lazy"> <a href="' + movieUrl(m) + ((videoPaths(m.data).find(p => p.yt === x.yt) || {}).path || '') + '">' + esc(m.data.title) + '</a> · ' + esc(x.title) + ' <span class="note">' + esc([x.kind, String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' +
       '<h2>More videos</h2><ul>' + vidHubs.filter(v => v[0] !== slug).map(v => '<li><a href="/' + v[0] + '">' + esc(v[1]) + '</a></li>').join('') + '</ul>';
