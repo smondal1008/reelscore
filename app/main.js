@@ -1142,7 +1142,8 @@
     }
     becauseListSection.ck = ck;
     becauseListSection.draw = function () {
-      var nope = tnNope(), fits = function (m) { return S.byId[m.id] && nope.indexOf(m.id) === -1 && (!inList(m.id) || mlShown[m.id]); };
+      // Left out: "Not for me" (Tonight) and "Haven't seen" on this row's cards (we said we won't ask about them here again).
+      var nope = tnNope(), fits = function (m) { var un = rateUnseen(); return S.byId[m.id] && nope.indexOf(m.id) === -1 && un.indexOf(m.id) === -1 && (!inList(m.id) || mlShown[m.id]); };
       var list = out.filter(fits).slice(0, 20);
       if (list.length < 6) return null;
       var opts = { noNew: true, rate: true, tagFor: function (m) { return why[m.id]; } };
