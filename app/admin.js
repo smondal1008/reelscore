@@ -2242,6 +2242,7 @@ window.ReelAdmin = function (env) {
     if (total) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:12px', title: 'Every title in this filtered list, not only this page',
       text: '⬇ Download list (' + total + ')', on: { click: function () { downloadList(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every title with YouTube videos: fills missing lengths, and singers for songs', text: '▶ Fill video lengths & singers', on: { click: fillYtAll } }));
+    if (canWrite && movies.length) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Every song on the site: its upload date from YouTube, for ordering the Songs page', text: '📅 YouTube dates', on: { click: ytDates } }));
     if (canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Update box office figures for many films from a CSV file', text: '⬆ Import box office CSV', on: { click: importBoCsv } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Search YouTube for an official trailer for titles in this list that have none', text: '🔎 Find trailers', on: { click: function () { findTrailers(vis); } } }));
     if (total && canWrite) sum.appendChild(h('button', { type: 'button', class: 'btn small', style: 'margin-left:8px', title: 'Find songs on official music-label channels for films in this list that have none', text: '♪ Find songs', on: { click: function () { findSongs(vis); } } }));
@@ -2908,6 +2909,71 @@ window.ReelAdmin = function (env) {
   }
   var MON = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
   function normT(t) { return String(t || '').toLowerCase().normalize('NFKD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, ''); }
+  // ---------- YouTube dates: each song's upload date from YouTube, stored on the song as publishedAt ----------
+  // Uses /api/views, so the key stays on Vercel (YT_API_KEY). 50 songs per request, 1 of the 10,000 daily units each.
+  // YouTube asks that stored API data be refreshed within 30 days: a song is due again 25 days after it was checked (ytCheckedAt).
+  // Saves only the videos list; the title's "last updated" date is left alone.
+  function ytDates() {
+    var day = todayStr(), due = new Date(Date.now() - 25 * 864e5).toLocaleDateString('en-CA');
+    var songs = [], byM = {};
+    movies.forEach(function (m) { (m.data.videos || []).forEach(function (v, i) {
+      if (!/song/i.test(v.kind || '')) return; var id = ytIdOf(v.url); if (!id) return;
+      songs.push({ m: m, i: i, id: id, has: !!v.publishedAt, fresh: !!v.ytCheckedAt && v.ytCheckedAt >= due });
+    }); });
+    var todo = songs.filter(function (s) { return !s.fresh; });
+    var box = h('div', { class: 'boimp', role: 'dialog', 'aria-modal': 'true', 'aria-label': 'YouTube dates' }), panel = h('div', { class: 'boimp-in' }); box.appendChild(panel);
+    var stop = false, close = function () { stop = true; box.remove(); document.removeEventListener('keydown', onKey); };
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    box.addEventListener('click', function (e) { if (e.target === box) close(); });
+    panel.appendChild(h('div', { class: 'head' }, [h('h2', { text: 'YouTube dates for songs' }), h('button', { type: 'button', class: 'x', 'aria-label': 'Close', text: '×', on: { click: close } })]));
+    var dated = songs.filter(function (s) { return s.has; }).length;
+    panel.appendChild(h('p', { class: 'note', text: songs.length.toLocaleString('en-IN') + ' songs · ' + dated.toLocaleString('en-IN') + ' have a YouTube date · ' + todo.length.toLocaleString('en-IN') + ' need one or are due a refresh (YouTube asks for stored data to be refreshed within 30 days).' }));
+    var ids = []; todo.forEach(function (s) { if (ids.indexOf(s.id) === -1) ids.push(s.id); });
+    var calls = Math.ceil(ids.length / 50), msg = h('p', { class: 'note', role: 'status', 'aria-live': 'polite' });
+    var go = h('button', { type: 'button', class: 'btn primary', disabled: !todo.length, text: todo.length ? 'Fetch dates (' + calls + ' YouTube request' + (calls === 1 ? '' : 's') + ')' : 'All dates are up to date', on: { click: start } });
+    panel.appendChild(h('div', {}, [go])); panel.appendChild(msg);
+    document.body.appendChild(box);
+    function start() {
+      go.disabled = true; var got = {}, missing = {}, b = 0, failed = '';
+      function batch() {
+        if (stop) return;
+        if (b >= ids.length) return save();
+        var part = ids.slice(b, b + 50); b += 50;
+        msg.textContent = 'Asking YouTube… ' + Math.min(b, ids.length).toLocaleString('en-IN') + ' of ' + ids.length.toLocaleString('en-IN');
+        fetch('/api/views?ids=' + part.join(',')).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }); }).then(function (x) {
+          if (!x.ok) { failed = (x.j && x.j.error) || 'YouTube didn’t answer.'; return save(); }
+          part.forEach(function (id) { if (x.j.dates && x.j.dates[id]) got[id] = x.j.dates[id]; else missing[id] = 1; });
+          batch();
+        }).catch(function () { failed = 'Couldn’t reach /api/views.'; save(); });
+      }
+      function save() {
+        var mids = {}; todo.forEach(function (s) { if (got[s.id] || missing[s.id]) mids[s.m.id] = 1; });
+        var list = Object.keys(mids), done = 0, wrote = 0, errs = 0, k = 0;
+        if (!list.length) { msg.textContent = failed || 'Nothing to save.'; return; }
+        function next() {
+          if (stop) return;
+          if (k >= list.length) {
+            var miss = Object.keys(missing).length;
+            msg.textContent = (failed ? 'Stopped early: ' + failed + ' ' : '') + 'Saved dates for ' + wrote.toLocaleString('en-IN') + ' songs across ' + done.toLocaleString('en-IN') + ' titles.' + (miss ? ' ' + miss + ' songs weren’t found on YouTube (removed or private); they keep no date.' : '') + (errs ? ' ' + errs + ' titles couldn’t be saved; run it again.' : '');
+            return;
+          }
+          var id = list[k++], m = movies.find(function (x) { return x.id === id; }); if (!m) return next();
+          var vs = (m.data.videos || []).map(function (v) {
+            if (!/song/i.test(v.kind || '')) return v; var yt = ytIdOf(v.url);
+            if (got[yt]) { wrote++; return Object.assign({}, v, { publishedAt: got[yt], ytCheckedAt: day }); }
+            if (missing[yt]) { var o = Object.assign({}, v, { ytCheckedAt: day }); delete o.publishedAt; return o; }
+            return v;
+          });
+          db.doc('movies/' + id).update({ videos: vs }).then(function () { done++; }).catch(function () { errs++; }).then(function () {
+            msg.textContent = 'Saving… ' + k.toLocaleString('en-IN') + ' of ' + list.length.toLocaleString('en-IN') + ' titles'; next();
+          });
+        }
+        next();
+      }
+      batch();
+    }
+  }
   // ---------- Find trailers: YouTube search for titles in the current list that have no trailer ----------
   // Runs in this browser with the YouTube key kept here. A search costs 100 of YouTube's 10,000 daily units, so one run covers up to 90 titles.
   // Matches are only suggestions: tick the ones from an official channel (the studio, TV channel or streaming service), then Apply.
@@ -3235,6 +3301,9 @@ window.ReelAdmin = function (env) {
           el.addEventListener('input', function () { item[c.k] = el.value; touch(); });
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); if (c.k === 'kind') KIND_PICKED.add(item); });
           if (c.k === 'url' && (key === 'videos' || key === 'interviews' || key === 'extras')) ytPrefill(el, key, i, item, rows);
+          // A different YouTube link means the stored upload date belonged to the old video.
+          if (c.k === 'url' && key === 'videos') el.addEventListener('change', function () { if (item.publishedAt && ytIdOf(item.url) !== item._ytWas) { delete item.publishedAt; delete item.ytCheckedAt; } });
+          if (c.k === 'url' && key === 'videos' && item._ytWas === undefined) Object.defineProperty(item, '_ytWas', { value: ytIdOf(item.url), enumerable: false });
           if (c.k === 'url' && key === 'watch') el.addEventListener('change', function () { if (String(item.platform || '').trim()) return; var pf = platformFromUrl(el.value); if (pf) { item.platform = pf; touch(); var pe = rows.querySelector('#' + key + i + 'platform'); if (pe) pe.value = pf; } });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });

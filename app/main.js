@@ -1893,7 +1893,11 @@
       var ss = vidItems(m).filter(function (x) { return x.cat === 'songs' && (x.yt || x.clip); });
       (all ? ss : ss.slice(0, 3)).forEach(function (x) { picks.push({ m: m, x: x }); });
     });
-    picks.sort(function (a, b) { return (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); });
+    // Newest first by when the song came out: its YouTube upload date or the film's release, whichever is earlier
+    // (labels often upload old film songs years later, and new songs come out before the film).
+    var when = function (p) { var r = /^\d{4}/.test(p.m.data.releaseDate || '') ? String(p.m.data.releaseDate) : '', u = p.x.pub; return u && r ? (u < r ? u : r) : u || r; };
+    picks.forEach(function (p, i) { p._w = when(p); p._i = i; });
+    picks.sort(function (a, b) { return b._w.localeCompare(a._w) || a._i - b._i; });
     return pinPicks(picks, pins);
   }
   function songCard(p, i, arr) {
@@ -2903,7 +2907,7 @@
       var u = safeUrl(x.url), id = ytId(u);
       // The catalogue leaves out a thumbnail that is the video's standard HD still (thumbHd set): rebuilt here from the id.
       var tu = x.thumbUrl || (x.thumbHd && id ? 'https://i.ytimg.com/vi/' + id + '/maxresdefault.jpg' : '');
-      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), thumb: id && safeUrl(tu) && tu.indexOf('/vi/' + id + '/') !== -1 ? tu : '', thumbHd: !!x.thumbHd,
+      out.push({ title: x.title || x.kind || 'Video', kind: x.kind || 'Video', url: u, yt: id, cat: vidCat(x.kind), pub: /^\d{4}-\d{2}-\d{2}/.test(x.publishedAt || '') ? x.publishedAt.slice(0, 10) : '', thumb: id && safeUrl(tu) && tu.indexOf('/vi/' + id + '/') !== -1 ? tu : '', thumbHd: !!x.thumbHd,
         artists: String(x.artists || '').trim().slice(0, 120), dur: /^\d{1,2}(:\d{2}){1,2}$/.test(String(x.dur || '').trim()) ? String(x.dur).trim() : '' });
     });
     // Announcements and trailer breakdowns (Admin > their own card) come after, so the indexes above stay the same.
