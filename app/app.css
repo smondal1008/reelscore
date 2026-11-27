@@ -596,6 +596,21 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   @keyframes upticket { 0%, 100% { transform: none; } 30% { transform: rotate(-14deg) translateX(-1px); } 55% { transform: rotate(6deg); } 75% { transform: rotate(-3deg); } }
   @keyframes upshake { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(-14deg); } 40% { transform: rotate(12deg); } 60% { transform: rotate(-8deg); } 80% { transform: rotate(4deg); } }
   @media (prefers-reduced-motion: reduce) { .qv.icons.up .qb svg { animation: none !important; } }
+  /* Browse, In theatres: Seen it / Trailer / Haven't seen icons */
+  .qv.icons.up.seenrow .qb.se { color: var(--accent); }
+  .qv.icons.up.seenrow .qb.nv { color: #A39FB0; }
+  .qv.icons.up.seenrow .qb.nv.on { background: #8E8899; border-color: #8E8899; color: #0B0A0F; }
+  .qv.icons.up.seenrow .qb.se .qtip { --tx: 0; left: 0; }
+  .qv.icons.up.seenrow .qb.tr .qtip { --tx: -50%; left: 50%; }
+  .qv.icons.up.seenrow .qb.nv .qtip { --tx: 0; left: auto; right: 0; }
+  @media (hover: hover) {
+    .qv.icons.up.seenrow .qb.se:hover svg { animation: upblink .45s ease; }
+    .qv.icons.up.seenrow .qb.nv:hover svg { animation: upshake .45s ease; }
+  }
+  @keyframes upblink { 0%, 100% { transform: scaleY(1); } 40% { transform: scaleY(.15); } }
+  /* Undo in the toast */
+  .toast .toast-undo { margin-left: 14px; padding: 4px 12px; border-radius: 8px; border: 0; background: #0B0A0F; color: var(--text); font: inherit; font-weight: 700; cursor: pointer; }
+  .toast .toast-undo:hover { background: #2A2633; }
 
 /* ---------- title page, 2026 redesign ---------- */
 .ic { display: inline-flex; align-items: center; justify-content: center; }

@@ -156,7 +156,12 @@
       if (n.querySelectorAll) n.querySelectorAll('[data-bg]').forEach(watchBg);
     }); });
   }).observe(document.documentElement, { childList: true, subtree: true });
-  function toast(t) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast._t); toast._t = setTimeout(function () { el.hidden = true; }, 2600); }
+  // A short message at the bottom. With undo, it carries an Undo button and stays up a little longer.
+  function toast(t, undo) {
+    var el = $('toast'); el.textContent = t; clearTimeout(toast._t);
+    if (undo) el.appendChild(h('button', { type: 'button', class: 'toast-undo', text: 'Undo', on: { click: function () { clearTimeout(toast._t); el.hidden = true; undo(); } } }));
+    el.hidden = false; toast._t = setTimeout(function () { el.hidden = true; }, undo ? 6000 : 2600);
+  }
   function safeUrl(u) { return (typeof u === 'string' && (/^\/_blob\//.test(u) || /^https:\/\//.test(u))) ? u : ''; }
   function hash(s) { var x = 0; for (var i = 0; i < s.length; i++) x = (x * 31 + s.charCodeAt(i)) >>> 0; return x; }
   // Cloudinary serves the uploaded original unless the URL asks for a size. Ask for a modern format, automatic quality and
@@ -900,6 +905,7 @@
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m));
     }
+    if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
@@ -1947,30 +1953,60 @@
   }
   // The verdict part of a "Seen these?" card: first "Seen it" / "Haven't seen". Seen it flips to the verdict icons;
   // Haven't seen flips the whole card to the next title in the row, in the same place.
-  function rateBox(m) {
+  // Seen it / Haven't seen on a card; after Seen it, the verdict icons. icons: the Browse "In theatres" look, three icons
+  // like the verdict row (Seen it, Trailer in the mini player, Haven't seen), the word popping up on hover.
+  function rateBox(m, icons) {
     var box = h('div', { class: 'rbox' });
     function show(anim) {
       box.textContent = '';
       var seen = (S.rateSeen && S.rateSeen[m.id]) || isSeen(m.id) || myVerdict(m.id), face;
+      var markOn = function () { S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); };
       if (seen) {
-        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven\u2019t seen ' + m.data.title,
-          on: { click: function () { if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact'); if (b) b.focus(); } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Haven\u2019t seen it' })]);
+        var back = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'rback', 'aria-label': 'I haven’t seen ' + m.data.title,
+          on: { click: function () {
+            if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact, .qb'); if (b) b.focus();
+            toast(m.data.title + ' marked as not seen', function () { markOn(); rateRefresh(m.id); });
+          } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Haven’t seen' })]);
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
+      } else if (icons) {
+        var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
+        var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
+        var no = rateUnseen().indexOf(m.id) !== -1;
+        var trB = h('button', { type: 'button', class: 'qb tr' + (tr ? '' : ' off'), 'aria-disabled': tr ? null : 'true',
+          'aria-label': tr ? 'Play the trailer of ' + m.data.title + (tovMiniOk() ? ' in the mini player' : '') : 'No trailer for ' + m.data.title + ' yet',
+          on: { click: function () {
+            if (!tr) { toast('No trailer for ' + m.data.title + ' yet'); return; }
+            if (tovMiniOk()) toMini(m, tr); else openTrailerOverlay(m, tr, trB, titleQueue(m, tr));
+          } } }, [icon('play', 18), tip(tr ? 'Trailer' : 'No trailer yet')]);
+        face = h('div', { class: 'qv icons up seenrow' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + m.data.title + '?' }, [
+          h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + m.data.title, on: { click: function () {
+            markOn(); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
+          } } }, [icon('eye', 18), tip('Seen it')]),
+          trB,
+          h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + m.data.title, on: { click: function () {
+            if (no) { rateDelUnseen(m.id); show(true); toast('Cleared “haven’t seen” for ' + m.data.title); return; }
+            rateAddUnseen(m.id); markSeen(m.id, false); show(true);
+            toast(m.data.title + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
+          } } }, [icon('eyeoff', 18), tip('Haven’t seen')])
+        ]);
       } else {
         face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
           h('button', { type: 'button', class: 'tnact', on: { click: function () {
-            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
+            markOn(); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
           } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
-          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Haven\u2019t seen' })])
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Haven’t seen' })])
         ]);
       }
       box.appendChild(face);
     }
+    box._show = show; box.setAttribute('data-rate', m.id);
     show(false);
     return box;
   }
+  // Redraw every Seen / Haven't seen box of a title on the page (the page may have redrawn since a toast's Undo was set up).
+  function rateRefresh(id) { Array.prototype.forEach.call(document.querySelectorAll('.rbox[data-rate]'), function (b) { if (b.getAttribute('data-rate') === id && b._show) b._show(true); }); }
   // "Haven't seen" on a card: the title leaves the "Seen these?" rows (it stays a candidate everywhere else, so it
   // can still be suggested to watch), and the card flips to the row's next title, one that isn't already in the row
   // (each row says where its next title comes from: S.rateRows).
@@ -1982,16 +2018,29 @@
     if (S.uid && S.mineLoaded) { S.mine.unseen = (S.mine.unseen || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
     else { try { var a = JSON.parse(localStorage.getItem('rs_unseen') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_unseen', JSON.stringify(a.slice(-500))); } catch (e) {} }
   }
+  function rateDelUnseen(id) {
+    if (S.uid && S.mineLoaded) { S.mine.unseen = (S.mine.unseen || []).filter(function (x) { return x !== id; }); saveMine(null); }
+    try { var a = JSON.parse(localStorage.getItem('rs_unseen') || '[]') || []; localStorage.setItem('rs_unseen', JSON.stringify(a.filter(function (x) { return x !== id; }))); } catch (e) {}
+  }
   function rateNope(m, btn) {
     var card = btn.closest('.pc'); rateAddUnseen(m.id);
     if (!card) return;
     var sec = card.closest('section[aria-label]'), R = sec && S.rateRows && S.rateRows[sec.getAttribute('aria-label')];
     var shown = sec ? Array.prototype.map.call(sec.querySelectorAll('.pc[data-id]'), function (c) { return c.getAttribute('data-id'); }) : [m.id];
-    var next = R ? R.next(shown) : null;
+    var next = R ? R.next(shown) : null, parent = card.parentNode, after = card.nextSibling, nc = null;
     if (R && R.swap) R.swap(m.id, next ? next.id : null);
-    toast('Got it. We won\u2019t ask about ' + m.data.title + ' here again');
+    // Undo (a mis-tap): the title is asked about again and its card comes back where it was.
+    toast('Got it. We won\u2019t ask about ' + m.data.title + ' here again', function () {
+      rateDelUnseen(m.id);
+      if (R && R.swap && next) R.swap(next.id, m.id);
+      var back = posterCard(m, R ? R.opts : { rate: true }); back.classList.add('pcflip');
+      if (nc && nc.parentNode) nc.parentNode.replaceChild(back, nc);
+      else if (card.parentNode) card.parentNode.replaceChild(back, card);
+      else if (parent) parent.insertBefore(back, after && after.parentNode === parent ? after : null);
+      var f = back.querySelector('.rch .tnact, .qb'); if (f) f.focus({ preventScroll: true });
+    });
     if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
-    var nc = posterCard(next, R.opts); nc.classList.add('pcflip');
+    nc = posterCard(next, R.opts); nc.classList.add('pcflip');
     card.parentNode.replaceChild(nc, card);
     var f = nc.querySelector('.rch .tnact'); if (f) f.focus({ preventScroll: true });
   }
@@ -4590,7 +4639,7 @@
   function actOpts(m) {
     var sec = m.data.section, inTh = (S.route === 'browse' && S.browse && S.browse.status === 'In theatres') || (S.route === 'movies' && S.cat.movies.status === 'In theatres');
     if (!released(m)) return { dateBadge: true, remind: true, book: sec === 'Coming soon' || sec === 'In theatres' };
-    return sec === 'In theatres' ? { book: true, inTheatresList: inTh } : { stream: true };
+    return sec === 'In theatres' ? { book: true, inTheatresList: inTh, seenIcons: S.route === 'browse' } : { stream: true };
   }
   // ---------- Browse: status tabs with counts, a filter column (a sheet on phones), active filters as chips ----------
   // Language, Streaming on and Genre take several values (comma-separated in the URL; any of them matches); Released takes one.
@@ -5059,8 +5108,14 @@
   // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
   function seenRateBox(m) {
     return h('div', { class: 'fu' }, [qvButtons(m), myVerdict(m.id) ? null : h('button', { type: 'button', class: 'linkbtn', style: 'margin-top:6px;font-size:12px', text: 'Haven\u2019t seen it', on: { click: function (e) {
-      var card = e.currentTarget.closest('.pc'); markSeen(m.id, false); toast(m.data.title + ' taken off your seen list');
-      if (card) { var sec = card.closest('section'); card.remove(); if (sec && !sec.querySelector('.pc')) sec.remove(); }
+      var card = e.currentTarget.closest('.pc'), grid = card && card.parentNode, after = card && card.nextSibling, sec = card && card.closest('section'), secParent = sec && sec.parentNode, secAfter = sec && sec.nextSibling, secGone = false;
+      markSeen(m.id, false);
+      if (card) { card.remove(); if (sec && !sec.querySelector('.pc')) { sec.remove(); secGone = true; } }
+      toast(m.data.title + ' taken off your seen list', function () {
+        markSeen(m.id, true);
+        if (secGone && secParent) secParent.insertBefore(sec, secAfter && secAfter.parentNode === secParent ? secAfter : null);
+        if (card && grid) { card.classList.add('pcflip'); grid.insertBefore(card, after && after.parentNode === grid ? after : null); }
+      });
     } } })]);
   }
   // My Watchlist filter: where you can watch a title now. Titles that fit none (older releases with no streaming
