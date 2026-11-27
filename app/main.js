@@ -503,6 +503,14 @@
       b.setAttribute('aria-label', on ? 'Remove ' + t + ' from my watchlist' : 'Add ' + t + ' to my watchlist');
       b.title = on ? 'In my watchlist' : 'Add to my watchlist';
     });
+    // The hero's round + / ✓ button (the hero isn't redrawn on a watchlist change either).
+    v.querySelectorAll('.roundadd[data-list]').forEach(function (b) {
+      var id = b.getAttribute('data-list'), m = S.byId[id]; if (!m) return;
+      var on = inList(id), t = m.data.title;
+      b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '✓' : '+';
+      b.setAttribute('aria-label', on ? 'Remove ' + t + ' from my watchlist' : 'Add ' + t + ' to my watchlist');
+      b.title = on ? 'In my watchlist' : 'Add to my watchlist';
+    });
   }
   function toggleFollow(uid) {
     if (!needUser() || uid === S.uid) return;
@@ -3124,7 +3132,7 @@
             : h('a', { class: 'pill play', href: movieUrl(m) }, [h('span', { 'aria-hidden': 'true', text: '▶' }), 'Trailer']),
           h('a', { class: 'pill info', href: movieUrl(m), text: 'View details' }),
           playing && !yt ? h('button', { type: 'button', class: 'roundadd', id: 'vMute', 'aria-label': S.play.muted ? 'Unmute' : 'Mute', text: S.play.muted ? '🔇' : '🔊', on: { click: toggleMute } }) : null,
-          playing ? null : h('button', { type: 'button', class: 'roundadd', 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist', title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
+          playing ? null : h('button', { type: 'button', class: 'roundadd', 'data-list': m.id, 'aria-pressed': String(on), 'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist', title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
             on: { click: function () { toggleList(m.id); } } })
         ])
       ]),
