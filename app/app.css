@@ -490,7 +490,6 @@
     .arrow { display: none; }
     .tp .in { padding: 24px 16px 32px; gap: 20px; }
     .tp .poster { width: 150px; }
-    .nav .search, .nav .sbox { display: none; }
   }
 /* Pre-rendered title and person pages (scripts/build.mjs). Shown until the app has loaded the catalogue. */
 .pr{max-width:1100px;margin:0 auto;padding:28px 40px 60px;color:var(--text)}
@@ -1499,3 +1498,28 @@ body.r-lists .pr .crumbs { display: block; }
 }
 @media (min-width: 900px) { .bsheet-wrap { display: none; } }
 .chip.bchip.on, .chip.bchip[aria-pressed="true"] { border-color: var(--accent); background: rgba(245,165,36,.14); color: var(--text); }
+
+/* Header menu button: phones only */
+.menubtn { display: none; }
+@media (max-width: 760px) {
+  .nav { flex-wrap: nowrap; gap: 8px; padding: 10px 8px 10px 16px; }
+  .nav > .links { flex: 1 1 auto; min-width: 0; }
+  .nav .brand { font-size: 22px; }
+  .nav .navr { gap: 4px; flex: none; }
+  .nav nav.links { display: none; }
+  .nav .navr .navsel { display: none; }
+  .menubtn { display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; border: 0; border-radius: 50%; background: none; color: var(--text); cursor: pointer; order: 10; flex: none; }
+  .menubtn:focus-visible { outline: 3px solid var(--accent); outline-offset: -3px; }
+  .nav .authbtn { order: 5; }
+  .nav.open nav.links { display: grid; grid-template-columns: 1fr 1fr; gap: 4px 8px; position: absolute; left: 0; right: 0; top: 100%; z-index: 40; padding: 8px 16px 16px; background: var(--bg); border-bottom: 1px solid var(--line); box-shadow: 0 18px 30px rgba(0,0,0,.45); }
+  .nav.open nav.links a.lnk { display: flex; align-items: center; min-height: 44px; padding: 0 14px; border-radius: 12px; }
+  .nav.open nav.links a.lnk[hidden] { display: none; }
+  .nav .navsels { grid-column: 1 / -1; display: flex; flex-wrap: wrap; gap: 10px; padding-top: 10px; margin-top: 6px; border-top: 1px solid var(--line); }
+  .nav .navsels .navsel { display: block; flex: 1 1 140px; min-height: 44px; }
+  .nav .navsels .navsel[hidden] { display: none; }
+  /* Search: the icon opens a full-width box over the header */
+  .nav .search:focus-within, .nav .search:has(input:not(:placeholder-shown)) { position: fixed; left: 12px; right: 12px; top: 10px; width: auto; z-index: 50; }
+  .nav .search:hover:not(:focus-within):not(:has(input:not(:placeholder-shown))) { width: 44px; padding-right: 0; justify-content: center; }
+  .nav .search:hover:not(:focus-within):not(:has(input:not(:placeholder-shown))) input { flex: 0 0 0; opacity: 0; }
+  .results { position: fixed; top: 62px; left: 12px; right: 12px; width: auto; max-height: 70vh; overflow: auto; z-index: 50; }
+}

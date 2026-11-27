@@ -30,7 +30,7 @@
 <header class="nav">
   <div class="links">
     <a class="brand" href="/"><span class="dot"></span>REELSCORE</a>
-    <nav class="links" aria-label="Main">
+    <nav class="links" id="mainNav" aria-label="Main">
       <a class="lnk" href="/" data-r="home">Home</a>
       <a class="lnk" href="/browse" data-r="browse">Browse</a>
       <a class="lnk" href="/movies" data-r="movies">Movies</a>
@@ -61,6 +61,7 @@
     <select id="navLang" class="navsel" hidden title="Show titles in this language"><option value="">Language</option></select>
     <label class="sr" for="navCity">City</label>
     <select id="navCity" class="navsel" title="Your city, for ticket booking links"><option value="">City</option></select>
+    <button type="button" class="menubtn" id="menuBtn" aria-expanded="false" aria-controls="mainNav" aria-label="Menu"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"></path></svg></button>
   </div>
 </header>
 

@@ -641,6 +641,34 @@
     S.lastDrawn = null; render(true);
   }
   (function () { var sel = $('navLang'); if (sel) sel.addEventListener('change', function () { setNavLang(sel.value); }); })();
+  // Phones: a slim header (logo, search, account, menu). The menu opens the page links, and the Language and City pickers
+  // move into it while the screen is phone-sized (the same elements, so everything that fills or reads them still works).
+  (function () {
+    var hdr = document.querySelector('header.nav'), btn = $('menuBtn'), nav = $('mainNav'), navr = document.querySelector('.navr');
+    if (!hdr || !btn || !nav || !navr) return;
+    var mq = window.matchMedia('(max-width: 760px)'), box = null;
+    function place() {
+      var ids = ['navLang', 'navCity'];
+      if (mq.matches) {
+        if (!box) { box = h('div', { class: 'navsels' }); nav.appendChild(box); }
+        ids.forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), el = $(id); if (l) box.appendChild(l); if (el) box.appendChild(el); });
+      } else {
+        if (box) ids.forEach(function (id) { var l = document.querySelector('label[for="' + id + '"]'), el = $(id); if (l) navr.insertBefore(l, btn); if (el) navr.insertBefore(el, btn); });
+        setOpen(false);
+      }
+    }
+    function setOpen(on) {
+      hdr.classList.toggle('open', on); btn.setAttribute('aria-expanded', String(on));
+      btn.setAttribute('aria-label', on ? 'Close menu' : 'Menu');
+    }
+    btn.addEventListener('click', function (e) { e.stopPropagation(); setOpen(!hdr.classList.contains('open')); });
+    nav.addEventListener('click', function (e) { if (e.target.closest('a')) setOpen(false); });
+    document.addEventListener('click', function (e) { if (hdr.classList.contains('open') && !hdr.contains(e.target)) setOpen(false); });
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && hdr.classList.contains('open')) { setOpen(false); btn.focus(); } });
+    window.addEventListener('popstate', function () { setOpen(false); });
+    if (mq.addEventListener) mq.addEventListener('change', place); else if (mq.addListener) mq.addListener(place);
+    place();
+  })();
   (function () { var sel = $('navCity'); if (sel) sel.addEventListener('change', function () { setCity(sel.value); }); })();
   document.addEventListener('focusout', function () { setTimeout(function () { if (S.pending) render(); }, 0); });
 
