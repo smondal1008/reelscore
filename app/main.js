@@ -286,14 +286,65 @@
   // Your list (watchlist, reminders, seen, following…) is one document, written whole. It must never be written
   // before the saved copy has loaded: the page starts with an empty list, and writing that would wipe the real one.
   // A tap that comes before it loads is kept and merged into the saved list when it arrives (mergeMine).
+  // Saves go item by item (add this title, remove that one), worked out against the last copy read from Firestore,
+  // so a save can never replace the whole list.
   function saveMine(msg) {
     if (!needUser()) return;
     if (!S.mineLoaded) { S.minePending = true; if (msg) toast(msg); return; }
     if (writing.m) { writing.mAgain = msg || true; return; }
+    var ch = mineDiff();
+    backupMine();
+    if (!ch.length) { if (msg) toast(msg); return; }
     writing.m = true;
-    guard(S.db.doc('data/users/' + S.uid + '/profile').set(clone(S.mine)), msg).then(function () {
+    var was = S.mineSynced; S.mineSynced = clone(S.mine);
+    S.db.doc('data/users/' + S.uid + '/profile').edit(ch).then(function () { if (msg) toast(msg); }, function (e) {
+      S.mineSynced = was; // not saved: the next save tries these changes again
+      toast(e && e.code === 'invalid_argument' ? 'You don’t have permission to do that.' : 'Couldn’t save. Try again.');
+    }).then(function () {
       writing.m = false; if (writing.mAgain) { var again = writing.mAgain; writing.mAgain = null; saveMine(again === true ? null : again); }
     });
+  }
+  function mineDiff() {
+    var base = S.mineSynced || {}, ch = [];
+    MINE_KEYS.forEach(function (k) {
+      var now = Array.isArray(S.mine[k]) ? S.mine[k] : [], was = Array.isArray(base[k]) ? base[k] : [];
+      var add = now.filter(function (x) { return was.indexOf(x) === -1; }), rem = was.filter(function (x) { return now.indexOf(x) === -1; });
+      if (add.length || rem.length) ch.push({ field: k, add: add, remove: rem });
+    });
+    if (Array.isArray(S.mine.apps) && JSON.stringify(S.mine.apps) !== JSON.stringify(base.apps || null)) ch.push({ field: 'apps', value: S.mine.apps });
+    return ch;
+  }
+  // A copy of your watchlist and reminders in this browser, per account. It is never written back by itself: if the list
+  // loads from Firestore with titles missing that this browser had, a bar offers to add them back (checkMineBackup).
+  function bakKey() { return 'rs_listbak:' + S.uid; }
+  function readBak() { try { var b = JSON.parse(localStorage.getItem(bakKey()) || 'null'); return b && Array.isArray(b.watchlist) ? b : null; } catch (e) { return null; } }
+  function backupMine() {
+    if (!S.uid || !S.mineLoaded || S.bakOffer) return;
+    try { localStorage.setItem(bakKey(), JSON.stringify({ at: new Date().toISOString(), watchlist: S.mine.watchlist || [], reminders: S.mine.reminders || [] })); } catch (e) {}
+  }
+  function checkMineBackup() {
+    var b = readBak(); if (!b) { backupMine(); return; }
+    var miss = function (k) { var now = S.mine[k] || []; return (b[k] || []).filter(function (id) { return now.indexOf(id) === -1; }); };
+    var mw = miss('watchlist'), mr = miss('reminders'), had = (b.watchlist || []).length, n = mw.length;
+    // A big drop (not one or two titles taken off on another device): offer to add them back.
+    if (n >= 3 && n >= had * 0.3) { showRestoreBar(mw, mr, b.at); return; }
+    backupMine();
+  }
+  function showRestoreBar(mw, mr, at) {
+    if (S.bakOffer) return;
+    S.bakOffer = true;
+    var when = at ? new Date(at).toLocaleDateString('en-IN', { day: 'numeric', month: 'short' }) : '';
+    var close = function () { S.bakOffer = false; if (bar.parentNode) bar.parentNode.removeChild(bar); };
+    var bar = h('div', { class: 'restorebar', role: 'alert' }, [
+      h('span', { text: 'Your watchlist has ' + mw.length + ' fewer title' + (mw.length === 1 ? '' : 's') + ' than this browser saved' + (when ? ' on ' + when : '') + (mr.length ? ' (and ' + mr.length + ' reminder' + (mr.length === 1 ? '' : 's') + ')' : '') + '.' }),
+      h('button', { type: 'button', class: 'btn primary small', text: 'Restore them', on: { click: function () {
+        mw.forEach(function (id) { if (S.mine.watchlist.indexOf(id) === -1) S.mine.watchlist.push(id); });
+        S.mine.reminders = S.mine.reminders || []; mr.forEach(function (id) { if (S.mine.reminders.indexOf(id) === -1) S.mine.reminders.push(id); });
+        close(); render(); saveMine('Restored ' + mw.length + ' title' + (mw.length === 1 ? '' : 's') + (mr.length ? ' and ' + mr.length + ' reminder' + (mr.length === 1 ? '' : 's') : ''));
+      } } }),
+      h('button', { type: 'button', class: 'btn small', text: 'Keep as it is', on: { click: function () { close(); backupMine(); } } })
+    ]);
+    document.body.appendChild(bar);
   }
   // The list keys a tap can add to. Before the saved list loads, everything in them came from taps on this page.
   var MINE_KEYS = ['watchlist', 'following', 'reminders', 'wtw', 'nope', 'seen', 'unseen'];
@@ -5995,9 +6046,11 @@
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
       var pending = !S.mineLoaded && S.minePending ? S.mine : null;
       S.mine = mergeMine(d, pending || {});
+      S.mineSynced = mergeMine(d, {}); if (Array.isArray(d.apps)) S.mineSynced.apps = d.apps.slice();
       if (Array.isArray(d.apps)) S.mine.apps = d.apps.slice(); else { var la = myApps(); if (la.length) { S.mine.apps = la; } }
       S.mineLoaded = true; S.minePending = false; render();
       if (pending) saveMine(null);
+      checkMineBackup();
     }, function () { if (S.minePending) toast('Couldn’t load your list, so your last change wasn’t saved. Reload to try again.'); });
   }).catch(function () { clearTimeout(timer); S.loadMsg = 'The catalogue is unavailable in this view.'; render(true); });
 })();

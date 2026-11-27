@@ -92,6 +92,17 @@ async function start() {
       get: () => wrapP(F.getDoc(ref)).then(wrapDocSnap),
       set: (data, opts) => wrapP(F.setDoc(ref, clean(data), opts && opts.merge ? { merge: true } : {})),
       update: (data) => wrapP(F.updateDoc(ref, clean(data))),
+      // Item-by-item changes to list fields, in one atomic write: [{ field, add: [...], remove: [...] }, { field, value }].
+      // Adding or removing one title never rewrites the rest of the list. Creates the document if it doesn't exist.
+      edit: (changes) => {
+        const b = F.writeBatch(fs); let n = 0;
+        (changes || []).forEach((c) => {
+          if (Array.isArray(c.add) && c.add.length) { b.set(ref, { [c.field]: F.arrayUnion(...clean(c.add)) }, { merge: true }); n++; }
+          if (Array.isArray(c.remove) && c.remove.length) { b.set(ref, { [c.field]: F.arrayRemove(...clean(c.remove)) }, { merge: true }); n++; }
+          if ('value' in c) { b.set(ref, { [c.field]: clean(c.value) }, { merge: true }); n++; }
+        });
+        return n ? wrapP(b.commit()) : Promise.resolve();
+      },
       delete: () => wrapP(F.deleteDoc(ref)),
       onSnapshot: (next, error) => F.onSnapshot(ref, (s) => next(wrapDocSnap(s)), (e) => error && error(mapErr(e)))
     };
