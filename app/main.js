@@ -1516,6 +1516,8 @@
     return a.sort(function (x, y) { return pos[x.m.id] - pos[y.m.id]; }).concat(b);
   }
   // Coming soon rows show titles with a release date; ones still TBA stay on Browse > Coming soon (last), unless pinned in Admin.
+  // A Coming soon title with no full release date (TBA) and not pinned in Admin > Home rows: left out of Coming soon lists.
+  function soonTba(m) { return m.data.section === 'Coming soon' && !/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && rowPins('Coming soon').indexOf(m.id) === -1; }
   function withDate(list, sec) { var pins = rowPins(sec); return list.filter(function (m) { return /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || pins.indexOf(m.id) !== -1; }); }
   function pinFirst(list, ids) {
     if (!ids || !ids.length) return list;
@@ -4686,6 +4688,7 @@
       if (!inNavLang(m)) return false;
       if (LP && LP.kind === 'movies' && isTv(m)) return false;
       if (skip !== 'status' && B.status !== 'All' && d.section !== B.status) return false;
+      if (skip !== 'status' && B.status === 'Coming soon' && soonTba(m)) return false; // TBA titles stay off Browse > Coming soon
       if (skip !== 'lang' && langs.length && langs.indexOf(langOf(d)) === -1) return false;
       if (skip !== 'ott' && otts.length && !ottsOf(d).some(function (o) { return otts.indexOf(o) !== -1; })) return false;
       if (skip !== 'genre' && gens.length && !genreTags(d).some(function (g) { return gens.indexOf(g) !== -1; })) return false;
@@ -4721,6 +4724,7 @@
 
     // Status tabs, with counts under the other filters
     var sc = counts('status', function (d) { return d.section; }), tot = 0; Object.keys(sc).forEach(function (k) { tot += sc[k]; });
+    if (sc['Coming soon'] && S.loaded) sc['Coming soon'] -= S.movies.filter(function (m) { return soonTba(m) && pass(m, 'status'); }).length; // the tab counts what it shows
     var statuses = ['All', 'In theatres', 'Coming soon', 'On OTT', 'Older releases', 'TV shows'];
     w.appendChild(h('nav', { class: 'btabs', 'aria-label': 'What to show' }, statuses.map(function (st) {
       var n = st === 'All' ? tot : sc[st] || 0, on = B.status === st;
@@ -4793,7 +4797,7 @@
     gens.forEach(function (k) { pills.push([k, function () { go({ genre: bToggle(B.genre, k) }); }]); });
     if (B.year) pills.push([bYearLabel(B.year), function () { go({ year: '' }); }]);
     if (B.q.trim()) pills.push(['“' + B.q.trim() + '”', function () { go({ q: '' }); }]);
-    var so = h('select', { class: 'in', id: 'bSort' }, B_SORTS.map(function (o) { return h('option', { value: o[0], text: o[1], selected: o[0] === B.sort }); }));
+    var so = h('select', { class: 'in', id: 'bSort' }, B_SORTS.map(function (o) { return h('option', { value: o[0], text: o[0] === 'new' && B.status === 'Coming soon' ? 'Releasing soonest' : o[1], selected: o[0] === B.sort }); }));
     so.addEventListener('change', function () { B.sort = so.value; B.page = 1; so.blur(); render(true); });
     main.appendChild(h('div', { class: 'bbar' }, [
       h('div', { class: 'bbar-l' }, [
@@ -4812,7 +4816,8 @@
       if (B.sort === 'score') return (scm[b.id].pct === null ? -1 : scm[b.id].pct) - (scm[a.id].pct === null ? -1 : scm[a.id].pct) || scm[b.id].tot - scm[a.id].tot;
       if (B.sort === 'votes') return scm[b.id].tot - scm[a.id].tot;
       if (B.sort === 'az') return (A.title || '').localeCompare(Bd.title || '');
-      if (LP && B.sort === 'new' && B.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999');
+      // Coming soon: the default order is the soonest release first, undated (TBA) titles last.
+      if (B.sort === 'new' && B.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999');
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
     if (B.sort === 'new' && !B.q.trim()) list = pinFirst(list, rowPins(B.status));
@@ -4927,6 +4932,7 @@
     var list = pool.filter(function (m) {
       var d = m.data;
       if (!tv && C.status !== 'All' && d.section !== C.status) return false;
+      if (!tv && C.status === 'Coming soon' && soonTba(m)) return false;
       if (C.lang && langOf(d) !== C.lang) return false;
       if (!inNavLang(m)) return false;
       if (C.genre && genreTags(d).indexOf(C.genre) === -1) return false;
@@ -4941,6 +4947,7 @@
       if (C.sort === 'score') return (sc[b.id].pct === null ? -1 : sc[b.id].pct) - (sc[a.id].pct === null ? -1 : sc[a.id].pct) || sc[b.id].tot - sc[a.id].tot;
       if (C.sort === 'votes') return sc[b.id].tot - sc[a.id].tot;
       if (C.sort === 'az') return (A.title || '').localeCompare(Bd.title || '');
+      if (C.status === 'Coming soon') return (A.releaseDate || '9999').localeCompare(Bd.releaseDate || '9999'); // soonest first, TBA last
       return (Bd.releaseDate || '').localeCompare(A.releaseDate || '');
     });
     if (!tv && C.sort === 'new' && C.status !== 'All') list = pinFirst(list, rowPins(C.status));

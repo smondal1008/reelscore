@@ -979,7 +979,9 @@ async function main() {
   const soonest = (a, b) => String(a.data.releaseDate || '9999').localeCompare(String(b.data.releaseDate || '9999')) || String(a.data.title).localeCompare(String(b.data.title));
   Object.keys(bySection).forEach(k => bySection[k].sort(k === 'Coming soon' ? soonest : newest));
   bySection['In theatres'] = pinFirst(bySection['In theatres'] || [], data.rows.theatres);
-  bySection['Coming soon'] = pinFirst(bySection['Coming soon'] || [], data.rows.coming);
+  // Coming soon lists leave out titles with no full release date (TBA), unless pinned in Admin > Home rows (as in app/main.js, soonTba).
+  const datedSoon = m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id);
+  bySection['Coming soon'] = pinFirst((bySection['Coming soon'] || []).filter(datedSoon), data.rows.coming);
   bySection['On OTT'] = pinFirst(bySection['On OTT'] || [], data.rows.ott);
   const titleLi = m => '<li>' + tLink(m) + ' <span class="note">' +
     esc([isTv(m.data) ? tvYears(m.data) : (/^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') && m.data.releaseDate > today ? fmtDate(m.data.releaseDate) : year(m.data)), String(m.data.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ')) + '</span></li>';
@@ -1133,7 +1135,7 @@ async function main() {
         });
       }
       if (all.length >= 50) {
-        const th = pinFirst(films.filter(m => sectionOf(m) === 'In theatres').sort(newest), data.rows.theatres), ott = pinFirst(films.filter(m => sectionOf(m) === 'On OTT').sort(newest), data.rows.ott), up = pinFirst(films.filter(m => sectionOf(m) === 'Coming soon').sort(soonest), data.rows.coming);
+        const th = pinFirst(films.filter(m => sectionOf(m) === 'In theatres').sort(newest), data.rows.theatres), ott = pinFirst(films.filter(m => sectionOf(m) === 'On OTT').sort(newest), data.rows.ott), up = pinFirst(films.filter(m => sectionOf(m) === 'Coming soon' && datedSoon(m)).sort(soonest), data.rows.coming);
         add(l, { path: '/' + s + '-movies-in-theatres', list: th, h1: l + ' movies in theatres', title: l + ' Movies in Theatres Now (' + monYr + ')', status: true,
           intro: th.length ? th.length + ' ' + l + ' film' + (th.length === 1 ? ' is' : 's are') + ' showing in theatres this week. Check the verdict before you book.' : 'No ' + l + ' films are in theatres on Reelscore right now.' });
         add(l, { path: '/new-' + s + '-movies-on-ott', list: ott, h1: 'New ' + l + ' movies on OTT', title: 'New ' + l + ' Movies on OTT (' + monYr + ')', status: true,
