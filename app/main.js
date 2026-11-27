@@ -291,19 +291,49 @@
   function saveMine(msg) {
     if (!needUser()) return;
     if (!S.mineLoaded) { S.minePending = true; if (msg) toast(msg); return; }
-    if (writing.m) { writing.mAgain = msg || true; return; }
+    if (writing.m) { writing.mAgain = msg || true; if (S.waitBox) showSaveWait(waitIds(mineDiff()).concat(S.waitIds || [])); return; }
     var ch = mineDiff();
     backupMine();
     if (!ch.length) { if (msg) toast(msg); return; }
     writing.m = true;
     var was = S.mineSynced; S.mineSynced = clone(S.mine);
-    S.db.doc('data/users/' + S.uid + '/profile').edit(ch).then(function () { if (msg) toast(msg); }, function (e) {
-      S.mineSynced = was; // not saved: the next save tries these changes again
+    // Still not confirmed after a few seconds (offline, or a slow connection): say which titles aren't saved yet.
+    var ids = waitIds(ch), slow = setTimeout(function () { if (writing.m) showSaveWait(ids); }, 4000);
+    S.db.doc('data/users/' + S.uid + '/profile').edit(ch).then(function () {
+      if (S.waitBox) {
+        var left = (S.waitIds || []).filter(function (id) { return ids.indexOf(id) === -1; });
+        if (left.length) showSaveWait(left); else hideSaveWait();
+        toast('Saved ' + titlesOf(ids));
+      } else if (msg) toast(msg);
+    }, function (e) {
+      S.mineSynced = was; hideSaveWait();
       toast(e && e.code === 'invalid_argument' ? 'You don’t have permission to do that.' : 'Couldn’t save. Try again.');
     }).then(function () {
+      clearTimeout(slow);
       writing.m = false; if (writing.mAgain) { var again = writing.mAgain; writing.mAgain = null; saveMine(again === true ? null : again); }
     });
   }
+  // The titles a save is about (watchlist, reminders, seen), for the "not saved yet" note.
+  function waitIds(ch) {
+    var out = [];
+    ch.forEach(function (c) { if (['watchlist', 'reminders', 'seen'].indexOf(c.field) === -1) return; (c.add || []).concat(c.remove || []).forEach(function (id) { if (S.byId[id] && out.indexOf(id) === -1) out.push(id); }); });
+    return out;
+  }
+  function titlesOf(ids) {
+    var t = ids.map(function (id) { return S.byId[id] ? S.byId[id].data.title : null; }).filter(Boolean);
+    if (!t.length) return 'your change';
+    return t.length === 1 ? t[0] : t.length === 2 ? t[0] + ' and ' + t[1] : t[0] + ' and ' + (t.length - 1) + ' more';
+  }
+  function showSaveWait(ids) {
+    var u = []; ids.forEach(function (id) { if (u.indexOf(id) === -1) u.push(id); }); S.waitIds = u;
+    var off = navigator.onLine === false;
+    var text = 'Not saved yet: ' + titlesOf(u) + '. ' + (off ? 'You’re offline; it will save when you’re back online.' : 'Your connection is slow; still trying.') + ' Keep this page open.';
+    if (!S.waitBox) { S.waitBox = h('div', { class: 'savewait', role: 'status', 'aria-live': 'polite' }); document.body.appendChild(S.waitBox); }
+    S.waitBox.textContent = text;
+  }
+  function hideSaveWait() { if (S.waitBox && S.waitBox.parentNode) S.waitBox.parentNode.removeChild(S.waitBox); S.waitBox = null; S.waitIds = null; }
+  window.addEventListener('offline', function () { if (S.waitBox) showSaveWait(S.waitIds || []); });
+  window.addEventListener('online', function () { if (S.waitBox) showSaveWait(S.waitIds || []); });
   function mineDiff() {
     var base = S.mineSynced || {}, ch = [];
     MINE_KEYS.forEach(function (k) {

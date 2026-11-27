@@ -1730,3 +1730,6 @@ textarea.fbin { resize: vertical; min-height: 96px; }
     .rbacts .rbgo { flex: 1; }
     .rbnote { margin-left: 0; }
   }
+
+  /* A save Firestore hasn't confirmed after a few seconds (offline or slow): which titles aren't saved yet */
+  .savewait { position: fixed; left: 50%; top: 16px; transform: translateX(-50%); z-index: 45; width: max-content; max-width: min(560px, calc(100vw - 24px)); box-sizing: border-box; padding: 11px 16px; border-radius: 12px; background: #3A2A10; border: 1px solid var(--accent); color: var(--text); font-size: 14px; line-height: 1.45; box-shadow: 0 10px 30px rgba(0,0,0,.45); }
