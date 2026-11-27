@@ -695,7 +695,7 @@ async function main() {
   const compact = d => { const o = {}; for (const k of Object.keys(d || {})) { const v = d[k]; if (v !== '' && v !== null && v !== undefined) o[k] = v; } return o; };
   // Fields the public app never reads are left out (admin reads the database directly): import notes, image ids,
   // empty lists and the default "Cast" role.
-  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId; delete o.seoDescription;
+  const slim = d => { const o = compact(d); delete o.source; delete o.imdb; delete o.tvmazeId; delete o.importedAt; delete o.posterSource; delete o.bannerSource; delete o.posterId; delete o.bannerId; delete o.seoDescription; delete o.ottSource;
     if (Array.isArray(o.slugHistory) && !o.slugHistory.length) delete o.slugHistory; if (Array.isArray(o.videos) && !o.videos.length) delete o.videos;
     if (Array.isArray(o.cast)) o.cast = o.cast.map(c => { if (!c || c.role !== 'Cast') return c; const x = { ...c }; delete x.role; return x; });
     return o; };
@@ -1385,6 +1385,59 @@ async function main() {
     writeHub(slug + '.html', { title, description: desc, canonical: '/' + slug, ogPath: '/' + slug, route: 'vids', body, robots: items.length ? undefined : 'noindex,follow',
       jsonld: [{ '@context': 'https://schema.org', '@type': 'BreadcrumbList', itemListElement: [{ '@type': 'ListItem', position: 1, name: 'Home', item: SITE + '/' }, { '@type': 'ListItem', position: 2, name: h1, item: SITE + '/' + slug }] }] });
     if (items.length) sitemap.push({ loc: '/' + slug, pri: '0.6' });
+  }
+
+  // ----- OTT release dates: /ott-release-dates (app/main.js drawOttDates; same entry rules as ottEntry there) -----
+  {
+    const OTT_SVC_RE = /netflix|prime video|amazon|hotstar|jiocinema|zee5|sony ?liv|\baha\b|sun ?nxt|mx player|hoichoi|\baltt\b|apple tv|manorama|lionsgate|chaupal|etv win|tentkotta|addatimes|klikk|tvf ?play|eros now|shemaroo|planet marathi|ultra jhakaas|koode|simply south|youtube/i;
+    const isDay = s => /^\d{4}-\d{2}-\d{2}$/.test(s || ''), EXPD = { early: '05', mid: '15', late: '25' };
+    const MF = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+    const addD = (iso, n) => { const t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); };
+    const gap = (a, b) => Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 864e5);
+    const SVC = [['Netflix', /netflix/i], ['Prime Video', /prime video|amazon prime/i], ['JioHotstar', /hotstar|jiocinema/i], ['ZEE5', /zee5/i], ['SonyLIV', /sony ?liv/i], ['MX Player', /mx player/i], ['ALTT', /\baltt\b/i], ['Hoichoi', /hoichoi/i], ['aha', /\baha\b/i], ['Sun NXT', /sun ?nxt/i], ['Eros Now', /eros/i], ['YouTube', /youtube/i], ['TVFPlay', /\btvf/i]];
+    const canon = p => { const x = SVC.find(([, r]) => r.test(p)); return x ? x[0] : p; };
+    const entry = m => {
+      const d = m.data, np = d.nowPlaying || '', p = canon(String((!isTv(d) && (np === 'theatres' || d.section === 'In theatres' || d.section === 'Coming soon') && d.ottPlatform) || d.platform || d.ottPlatform || '').trim()), e = { m, plat: p, expected: '' };
+      const ex = d.ottDateStatus === 'expected' && /^(\d{4}-\d{2})-(early|mid|late)$/.exec(d.ottExpected || '');
+      if (isTv(d)) return OTT_SVC_RE.test(p) && isDay(d.releaseDate) ? { ...e, date: d.releaseDate, kind: 'series' } : null;
+      if (isDay(d.ottReleaseDate) && d.ottDateStatus !== 'expected') return { ...e, date: d.ottReleaseDate, kind: 'theatre' };
+      if (ex) return { ...e, date: ex[1] + '-' + EXPD[ex[2]], expected: ex[2], kind: 'theatre' };
+      if ((np === 'direct' || (d.section === 'On OTT' && !np)) && OTT_SVC_RE.test(p) && isDay(d.releaseDate)) return { ...e, date: d.releaseDate, kind: 'direct' };
+      return null;
+    };
+    const td = TODAY, wd = (new Date(td + 'T12:00:00Z').getUTCDay() + 6) % 7, ws = addD(td, -wd), we = addD(ws, 6), ne = addD(ws, 13);
+    const all = movies.map(entry).filter(e => e && e.date >= addD(td, -30) && e.date <= addD(td, 120)).sort((a, b) => a.date.localeCompare(b.date) || a.m.data.title.localeCompare(b.m.data.title));
+    const tba = movies.filter(m => !isTv(m.data) && !entry(m) && nowPlayingOf(m.data, td) === 'theatres' && isDay(m.data.releaseDate) && m.data.releaseDate <= td && m.data.releaseDate >= addD(td, -70))
+      .sort((a, b) => b.data.releaseDate.localeCompare(a.data.releaseDate));
+    const exLabel = e => e.expected + '-' + MF[+e.date.slice(5, 7) - 1];
+    const lang = d => String(d.languages || '').split(/[,;]/)[0].trim();
+    const li = e => '<li>' + tLink(e.m) + ' <span class="note">' + esc([lang(e.m.data), isTv(e.m.data) ? 'Series' : 'Film', e.plat || 'OTT', e.expected ? 'expected ' + exLabel(e) : (e.date <= td ? 'streaming since ' : 'streams from ') + fmtDate(e.date),
+      e.kind === 'theatre' && isDay(e.m.data.releaseDate) && !e.expected ? 'in theatres ' + fmtDate(e.m.data.releaseDate) + ', on OTT ' + gap(e.m.data.releaseDate, e.date) + ' days later' : e.kind === 'direct' ? 'straight to OTT' : ''].filter(Boolean).join(' · ')) + '</span></li>';
+    const later = all.filter(e => e.date > we || e.expected), week = all.filter(e => e.date >= ws && e.date <= we && !e.expected), now = all.filter(e => e.date < ws).reverse();
+    const grp = (h, l) => l.length ? '<h2>' + esc(h) + '</h2><ul>' + l.map(li).join('') + '</ul>' : '';
+    const wkSpan = (+ws.slice(8)) + (ws.slice(5, 7) === we.slice(5, 7) ? '' : ' ' + MONTHS[+ws.slice(5, 7) - 1]) + '–' + (+we.slice(8)) + ' ' + MONTHS[+we.slice(5, 7) - 1];
+    const faq1 = week.length ? 'This week (' + wkSpan + '): ' + list(week.slice(0, 6).map(e => e.m.data.title + (e.plat ? ' on ' + e.plat : ''))) + (week.length > 6 ? ', and ' + (week.length - 6) + ' more' : '') + '. The list above updates every day.'
+      : 'Nothing has a confirmed OTT date this week yet. The list above updates every day as platforms announce dates.';
+    const hasExp = all.some(e => e.expected);
+    const faqs = [['Which movies release on OTT this week?', faq1],
+      ['How long after the theatre release does a film come to OTT?', 'It varies by film and platform deal. Each entry above shows the gap for that film, counted from its theatre release.'],
+      ['Where do these dates come from?', 'From the platforms’ own announcements and official channels.' + (hasExp ? ' Dates marked “Expected” are not confirmed yet and change when the platform announces them.' : '')]];
+    const svc = [...new Set(all.map(e => e.plat).filter(Boolean))].slice(0, 5);
+    const up = all.filter(e => e.date > td).length;
+    const intro = (up ? up + ' movies and series coming to ' : 'Movies and series new on ') + (svc.length ? list(svc) : 'Netflix, Prime Video, JioHotstar and more') + ', with the day each one starts streaming, how long after the theatre release it comes, and the verdict once it’s out.';
+    const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › OTT release dates</nav><h1>OTT release dates: new movies and series this week</h1><p>' + esc(intro) + '</p><p class="note">Updated ' + esc(fmtDate(td)) + ' · Dates from official platform announcements</p>' +
+      grp('This week', week) + grp('Coming later', later) + grp('Streaming now', now) +
+      (tba.length ? '<h2>In theatres: OTT date not announced</h2><ul>' + tba.slice(0, 24).map(m => '<li>' + tLink(m) + ' <span class="note">' + esc([lang(m.data), 'in theatres since ' + fmtDate(m.data.releaseDate)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' : '') +
+      '<h2>OTT release dates: common questions</h2>' + faqs.map(([q, a]) => '<h3>' + esc(q) + '</h3><p>' + esc(a) + '</p>').join('');
+    const n = all.length + tba.length;
+    writeHub('ott-release-dates.html', { title: 'OTT Release Dates This Week: New Movies & Series | Reelscore',
+      description: clip('OTT release dates for new movies and series on Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV and more: what streams this week, what’s coming next, and films still in theatres.', 158),
+      canonical: '/ott-release-dates', ogPath: '/ott-release-dates', route: 'ottdates', body, robots: n ? undefined : 'noindex,follow',
+      jsonld: [crumbLd(['Home', '/'], ['OTT release dates', '/ott-release-dates']),
+        { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
+        { '@context': 'https://schema.org', '@type': 'ItemList', name: 'OTT release dates', itemListElement: all.filter(e => e.date >= ws).slice(0, 30).map((e, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE + movieUrl(e.m), name: e.m.data.title })) }] });
+    if (n) sitemap.push({ loc: '/ott-release-dates', pri: '0.7', lastmod: td });
+    console.log(`[seo] OTT release dates: ${week.length} this week, ${later.length} later, ${now.length} streaming now, ${tba.length} in theatres with no date`);
   }
 
   // ----- sitemap + robots -----

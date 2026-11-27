@@ -239,3 +239,12 @@
 .needs-rm { width: 24px; height: 24px; border-radius: 50%; border: 0; background: transparent; color: var(--text); font-size: 16px; line-height: 1; cursor: pointer; }
 .needs-rm:hover { background: var(--line2); }
 @media (max-width: 640px) { .needs-p { width: min(340px, calc(100vw - 32px)); } }
+
+/* Admin > Titles: OTT dates to fill; Edit title: Coming to OTT */
+.ottq { margin: 0 0 12px; padding: 12px 14px; border: 1px solid var(--line2); border-radius: 12px; background: var(--panel); }
+.ottqh { display: flex; align-items: center; gap: 10px; width: 100%; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; text-align: left; font-size: 15px; }
+.ottqh .note { margin-left: auto; }
+.ottqlist { display: flex; flex-direction: column; margin-top: 8px; }
+.ottqrow { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 12px; align-items: center; padding: 8px 0; border-top: 1px solid var(--line); }
+.ottqrow a:not(.btn) { color: var(--text); font-weight: 700; text-decoration: none; }
+.ottseg { display: flex; gap: 6px; flex-wrap: wrap; margin: 4px 0 6px; }

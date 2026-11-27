@@ -552,6 +552,7 @@
     else if ((mm = path.match(/^\/person\/([a-z0-9-]+)$/i))) { S.route = 'person'; S.param = mm[1].toLowerCase(); }
     else if (path === '/my-list') { S.route = 'list'; S.param = null; }
     else if (path === '/tonight') { S.route = 'tonight'; S.param = null; }
+    else if (path === '/ott-release-dates') { S.route = 'ottdates'; S.param = null; var oq = new URLSearchParams(location.search); S.ottd = { plat: oq.get('ott') || '', lang: oq.get('lang') || '', kind: 'all', allTh: false }; }
     else if (path === '/trailers' || path === '/songs' || path === '/tv-promos') { S.route = 'vids'; S.param = path.slice(1); S.vids = { lang: '', n: 48, q: '', sort: /[?&]sort=views\b/.test(location.search) && path === '/songs' ? 'views' : '' }; }
     else if (path === '/people') { S.route = 'people'; S.param = null; S.ppl.page = qPage(); }
     else if ((mm = path.match(/^\/genre\/([a-z0-9-]+)$/i)) && genreBySlug(mm[1])) {
@@ -602,6 +603,7 @@
     else if (S.route === 'privacy') document.title = 'Privacy Policy | Reelscore';
     else if (S.route === 'contact') document.title = 'Contact | Reelscore';
     else if (S.route === 'tonight') document.title = 'Tonight: what to watch now | Reelscore';
+    else if (S.route === 'ottdates') document.title = OTTD_TITLE;
     else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') document.title = 'Reelscore — Reviews for Indian movies and series';
     if (S.route === 'news' || S.route === 'lists') loadNews();
     if (S.route === 'admin') startAdmin();
@@ -736,6 +738,7 @@
     else if (S.route === 'title') drawTitle();
     else if (S.route === 'list') drawList();
     else if (S.route === 'tonight') drawTonight();
+    else if (S.route === 'ottdates') drawOttDates();
     else if (S.route === 'browse') drawBrowse();
     else if (S.route === 'movies') drawCatalog('movies');
     else if (S.route === 'tvshows') drawCatalog('tv');
@@ -878,6 +881,7 @@
     // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me or Tickets / Not for me icons.
     var up = !!opts.upIcons && !isTv(m) && !released(m), due = up ? dueLabel(d) : '';
     if (up) meta = [upLead(d), (d.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ');
+    if (opts.ottMeta) meta = opts.ottMeta(m);
     var on = inList(m.id), pa = artLazy(m, 'poster');
     var kids = [
       h('div', { class: 'pw' }, [
@@ -1592,6 +1596,7 @@
       lazySection(function () { return rateSection(); }, 4),
       lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
       lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/coming-soon')); }, 6),
+      lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return genreSection(); }, 8),
       lazySection(function () { return rowSection('New on OTT', pinFirst(homeSection('On OTT'), rowPins('On OTT')), { max: HOME_MAX }, seeAll('/browse/on-ott')); }, 9),
@@ -2433,6 +2438,206 @@
     v.innerHTML = '';
     v.appendChild(h('div', { class: 'wrapx' }, [h('div', { class: 'empty' }, ['This page doesn’t exist, or the title has moved. ', h('a', { href: '/', text: 'Go to the home page' }), ' · ', h('a', { href: '/browse', text: 'Browse all titles' })])]));
   }
+  // ---------- OTT release dates: /ott-release-dates ----------
+  // One entry per title with a known streaming start: a theatre film's OTT date (ottReleaseDate), a straight-to-OTT
+  // film's release date, or a series premiere on a streaming service. "Expected" dates (Admin > Coming to OTT) give a
+  // month and early / mid / late instead of a day. Same rules as scripts/build.mjs (ottEntry).
+  var OTTD_TITLE = 'OTT Release Dates This Week: New Movies & Series | Reelscore';
+  var OTT_SVC_RE = /netflix|prime video|amazon|hotstar|jiocinema|zee5|sony ?liv|\baha\b|sun ?nxt|mx player|hoichoi|\baltt\b|apple tv|manorama|lionsgate|chaupal|etv win|tentkotta|addatimes|klikk|tvf ?play|eros now|shemaroo|planet marathi|ultra jhakaas|koode|simply south|youtube/i;
+  var OTT_COL = { netflix: '#E50914', 'prime-video': '#00A8E1', jiohotstar: '#1F80E0', zee5: '#8230C6', sonyliv: '#E8B10B', aha: '#FF6A00', 'sun-nxt': '#F2A900', 'mx-player': '#2A9DF4', hoichoi: '#E2231A', altt: '#C2185B', 'eros-now': '#D23B3B', youtube: '#FF0033', tvfplay: '#E53935' };
+  var EXP_DAY = { early: '05', mid: '15', late: '25' };
+  function isoDay(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s || ''); }
+  function addDays(iso, n) { var t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+  function daysBetween(a, b) { return Math.round((Date.parse(b + 'T12:00:00Z') - Date.parse(a + 'T12:00:00Z')) / 864e5); }
+  function ottEntry(m) {
+    var d = m.data, np = d.nowPlaying || '', p = String((!isTv(m) && (np === 'theatres' || d.section === 'In theatres' || d.section === 'Coming soon') && d.ottPlatform) || d.platform || d.ottPlatform || '').trim();
+    var e = { m: m, plat: ottOf({ platform: p }), platName: ottName(ottOf({ platform: p })) || p, expected: '' };
+    var ex = d.ottDateStatus === 'expected' && /^(\d{4}-\d{2})-(early|mid|late)$/.exec(d.ottExpected || '');
+    if (isTv(m)) { if (!OTT_SVC_RE.test(p) || !isoDay(d.releaseDate)) return null; e.date = d.releaseDate; e.kind = 'series'; return e; }
+    if (isoDay(d.ottReleaseDate) && d.ottDateStatus !== 'expected') { e.date = d.ottReleaseDate; e.kind = 'theatre'; return e; }
+    if (ex) { e.date = ex[1] + '-' + EXP_DAY[ex[2]]; e.expected = ex[2]; e.kind = 'theatre'; return e; }
+    if ((np === 'direct' || (d.section === 'On OTT' && !np)) && OTT_SVC_RE.test(p) && isoDay(d.releaseDate)) { e.date = d.releaseDate; e.kind = 'direct'; return e; }
+    return null;
+  }
+  function expLabel(e) { var p = e.date.split('-'); return e.expected + '-' + MONTHS_FULL[+p[1] - 1]; }
+  var MONTHS_FULL = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var WDAY = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'];
+  function weekStart(iso) { var t = new Date(iso + 'T12:00:00Z'), w = (t.getUTCDay() + 6) % 7; return addDays(iso, -w); }
+  // Every entry from 30 days back to 120 days ahead, and the theatre films with no OTT date yet.
+  function ottDatesData() {
+    var td = today(), from = addDays(td, -30), to = addDays(td, 120), out = [], tba = [];
+    S.movies.forEach(function (m) {
+      if (!inNavLang(m)) return;
+      var e = ottEntry(m);
+      if (e) { if (e.date >= from && e.date <= to) out.push(e); return; }
+      var d = m.data;
+      if (!isTv(m) && nowPlayingOf(d) === 'theatres' && isoDay(d.releaseDate) && d.releaseDate <= td && d.releaseDate >= addDays(td, -70)) tba.push(m);
+    });
+    out.sort(function (a, b) { return a.date.localeCompare(b.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
+    tba.sort(function (a, b) { return b.data.releaseDate.localeCompare(a.data.releaseDate) || (a.data.title || '').localeCompare(b.data.title || ''); });
+    return { all: out, tba: tba };
+  }
+  // Home: what started streaming in the last 30 days, newest first (See all opens the OTT release dates page).
+  function recentOttSection() {
+    var td = today(), from = addDays(td, -30), list = [];
+    S.movies.forEach(function (m) { if (!inNavLang(m)) return; var e = ottEntry(m); if (e && !e.expected && e.date <= td && e.date >= from) list.push(e); });
+    if (list.length < 4) return null;
+    list.sort(function (a, b) { return b.date.localeCompare(a.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
+    var when = {}; list.forEach(function (e) { when[e.m.id] = e; });
+    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottMeta: function (m) { var e = when[m.id]; return (e.platName || 'OTT') + ' · ' + (e.date === td ? 'Today' : fmtDate(e.date)); } }, seeAll('/ott-release-dates'));
+  }
+  function drawOttDates() {
+    var v = $('view-ottdates');
+    if (!S.loaded && v.querySelector('[data-prerendered]')) return;
+    v.innerHTML = '';
+    var F = S.ottd || (S.ottd = { plat: '', lang: '', kind: 'all', allTh: false });
+    var td = today(), ws = weekStart(td), we = addDays(ws, 6), ns = addDays(ws, 7), ne = addDays(ws, 13);
+    var page = h('div', { class: 'wrapx odpage' }), main = h('div', { class: 'odmain' }), rail = h('aside', { class: 'odrail', 'aria-label': 'More on OTT releases' });
+    page.appendChild(main); v.appendChild(page);
+    main.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › OTT release dates']));
+    main.appendChild(h('h1', { class: 'odh1', text: 'OTT release dates: new movies and series this week' }));
+    if (!S.loaded) { main.appendChild(h('p', { class: 'note', text: S.loadMsg || 'Loading…' })); return; }
+    var D = ottDatesData(), all = D.all;
+    var isFilm = function (m) { return !isTv(m); };
+    var keep = function (m, plat) {
+      if (F.kind === 'films' && !isFilm(m)) return false;
+      if (F.kind === 'series' && isFilm(m)) return false;
+      if (F.lang && langsOf(m.data).indexOf(F.lang) === -1) return false;
+      if (plat !== undefined && F.plat && plat !== F.plat) return false;
+      return true;
+    };
+    var list = all.filter(function (e) { return keep(e.m, e.plat); });
+    var tba = D.tba.filter(function (m) { return keep(m) && !F.plat; });
+    var upcoming = all.filter(function (e) { return e.date > td; });
+    var svcNames = []; upcoming.concat(all).forEach(function (e) { var n = ottName(e.plat); if (n && svcNames.indexOf(n) === -1) svcNames.push(n); });
+    var nUp = upcoming.length, nNew = all.filter(function (e) { return e.date >= ws; }).length;
+    var intro = (nUp ? nUp + ' movies and series coming to ' : 'Movies and series new on ') + (svcNames.length ? listWords(svcNames.slice(0, 5)) + (svcNames.length > 5 ? ' and more' : '') : 'Netflix, Prime Video, JioHotstar and more') +
+      ', with the day each one starts streaming, how long after the theatre release it comes, and the verdict once it’s out.';
+    main.appendChild(h('p', { class: 'odintro', text: intro }));
+    var hasExp = all.some(function (e) { return e.expected; });
+    main.appendChild(h('div', { class: 'odupd' }, [h('span', { text: 'Updated ' + fmtDate(td, true) }), h('span', { text: '·' }), h('span', { text: 'Dates from official platform announcements' }),
+      hasExp ? h('span', { class: 'ok', text: '● Confirmed' }) : null, hasExp ? h('span', { class: 'exp', text: '◌ Expected' }) : null]));
+
+    // Groups: This week (with day headers), Next week, Later (months), Streaming now (the 30 days before this week),
+    // then theatre films with no OTT date yet.
+    var thisWeek = list.filter(function (e) { return e.date >= ws && e.date <= we && !e.expected; });
+    var nextWeek = list.filter(function (e) { return e.date >= ns && e.date <= ne && !e.expected; });
+    var later = list.filter(function (e) { return e.date > ne || (e.expected && e.date > we); });
+    if (nextWeek.length && nextWeek.length < 3) { later = nextWeek.concat(later); nextWeek = []; }
+    var recent = list.filter(function (e) { return e.date < ws && !e.expected; }).reverse();
+    var monthsIn = function (l) { var ms = []; l.forEach(function (e) { var k = MONTHS_FULL[+e.date.slice(5, 7) - 1]; if (ms.indexOf(k) === -1) ms.push(k); }); return ms; };
+    var lm = monthsIn(later), laterH = lm.length === 1 ? 'Later in ' + lm[0] : 'Coming later';
+    var span = function (a, b) { var pa = a.split('-'), pb = b.split('-'); return WDAY[new Date(a + 'T12:00:00Z').getUTCDay()].charAt(0) + WDAY[new Date(a + 'T12:00:00Z').getUTCDay()].slice(1).toLowerCase() + ' ' + (+pa[2]) + (pa[1] === pb[1] ? '' : ' ' + MONTHS[+pa[1] - 1]) + ' – Sun ' + (+pb[2]) + ' ' + MONTHS[+pb[1] - 1]; };
+    var n = function (k, one, many) { return k + ' ' + (k === 1 ? one : many); };
+    var groups = [
+      { id: 'od-week', h: 'This week', chip: 'This week', sub: span(ws, we) + ' · ' + n(thisWeek.length, 'title', 'titles'), items: thisWeek, days: true },
+      { id: 'od-next', h: 'Next week', chip: 'Next week', sub: span(ns, ne) + ' · ' + n(nextWeek.length, 'title', 'titles'), items: nextWeek, days: true },
+      { id: 'od-later', h: laterH, chip: lm.length === 1 ? lm[0] : 'Later', sub: n(later.length, 'title', 'titles') + ' so far', items: later, days: true },
+      { id: 'od-now', h: 'Streaming now', chip: 'Streaming now', sub: 'Started in the last 30 days', items: recent, days: false },
+      { id: 'od-tba', h: 'In theatres: OTT date not announced', chip: 'Not announced', sub: 'Tap the bell to hear the day it streams', items: tba, tba: true }
+    ].filter(function (g) { return g.items.length; });
+
+    // Jump bar (sticky on phones): scrolls to a group.
+    var jump = h('div', { class: 'odjump', role: 'navigation', 'aria-label': 'Jump to' }, groups.map(function (g) {
+      return h('button', { type: 'button', class: 'chip', text: g.chip + ' · ' + g.items.length, on: { click: function () { var el = $(g.id); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); } } });
+    }));
+    if (groups.length > 1) main.appendChild(jump);
+
+    // Filters: platform, language, films or series. Chips only for what the page holds.
+    var plats = {}, langs = {};
+    all.forEach(function (e) { if (e.plat) plats[e.plat] = (plats[e.plat] || 0) + 1; var l = langOf(e.m.data); if (l) langs[l] = (langs[l] || 0) + 1; });
+    D.tba.forEach(function (m) { var l = langOf(m.data); if (l) langs[l] = (langs[l] || 0) + 1; });
+    var platKeys = OTTS.map(function (o) { return o[0]; }).filter(function (k) { return plats[k]; });
+    if (F.plat && platKeys.indexOf(F.plat) === -1 && ottName(F.plat)) platKeys.push(F.plat);
+    var langKeys = Object.keys(langs).filter(function (l) { return /^[A-Za-z]+$/.test(l); }).sort(function (a, b) { return langs[b] - langs[a] || a.localeCompare(b); }).slice(0, 8);
+    if (F.lang && langKeys.indexOf(F.lang) === -1) langKeys.push(F.lang);
+    var setF = function (k, val) { F[k] = val; var q = []; if (F.plat) q.push('ott=' + F.plat); if (F.lang) q.push('lang=' + encodeURIComponent(F.lang)); var u = '/ott-release-dates' + (q.length ? '?' + q.join('&') : ''); if (u !== location.pathname + location.search) history.replaceState(null, '', u); var y = window.scrollY; drawOttDates(); window.scrollTo(0, y); };
+    var chip = function (label, on, click, dot) { return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(on), on: { click: click } }, [dot ? h('i', { class: 'oddot', style: 'background:' + dot }) : null, label]); };
+    var frow = function (label, kids, cls) { return h('div', { class: 'odfrow' + (cls ? ' ' + cls : '') }, [h('span', { class: 'odfl', text: label })].concat(kids)); };
+    var filters = h('div', { class: 'odfilters' }, [
+      platKeys.length > 1 ? frow('Platform', [chip('All', !F.plat, function () { setF('plat', ''); })].concat(platKeys.map(function (k) { return chip(ottName(k), F.plat === k, function () { setF('plat', F.plat === k ? '' : k); }, OTT_COL[k] || '#8E8899'); }))) : null,
+      langKeys.length > 1 ? frow('Language', [chip('All', !F.lang, function () { setF('lang', ''); })].concat(langKeys.map(function (l) { return chip(l, F.lang === l, function () { setF('lang', F.lang === l ? '' : l); }); })), 'odlang') : null,
+      frow('Show', [['all', 'All'], ['films', 'Films'], ['series', 'Series']].map(function (o) { return chip(o[1], F.kind === o[0], function () { setF('kind', o[0]); }); }), 'odkind')
+    ]);
+    var fbtn = h('button', { type: 'button', class: 'chip odfbtn', 'aria-expanded': 'false', text: 'Filters' + (F.lang || F.kind !== 'all' ? ' · on' : ''), on: { click: function () { var o = filters.classList.toggle('open'); fbtn.setAttribute('aria-expanded', String(o)); } } });
+    main.appendChild(h('div', { class: 'odfwrap' }, [fbtn, filters]));
+
+    var rowOf = function (x, g) {
+      var e = x.m ? x : { m: x, tba: true }, m = e.m, d = m.data, t = d.title, sc = score(m.id), pct = shownPct(sc);
+      var genre = String(d.genre || '').split(/,/).slice(0, 2).map(function (s) { return s.trim(); }).filter(Boolean).join(', ');
+      var meta = [langOf(d), genre, isTv(m) ? 'Series' : 'Film'].filter(Boolean).join(' · ') + (g && g.id === 'od-now' ? ' · since ' + fmtDate(e.date) : '');
+      var line = e.tba ? 'In theatres since ' + fmtDate(d.releaseDate) + ' · ' + n(daysBetween(d.releaseDate, td), 'day', 'days') + ' so far'
+        : e.kind === 'theatre' ? (isoDay(d.releaseDate) ? 'In theatres ' + fmtDate(d.releaseDate) + (e.expected ? ' · expected ' + expLabel(e) : ' · on OTT ' + n(daysBetween(d.releaseDate, e.date), 'day', 'days') + ' later') : 'After its theatre run')
+        : e.kind === 'direct' ? 'Straight to OTT' : 'Series premiere';
+      var status = e.tba ? ['', 'Not announced'] : e.expected ? ['exp', '◌ Expected ' + expLabel(e)] : e.date <= td ? ['ok', '● Streaming now'] : ['ok', '● Confirmed'];
+      var tp = e.tba && String(d.ottPlatform || '').trim(), tpk = tp ? ottOf({ platform: tp }) : '';
+      var plat = e.tba ? (tp ? h('span', { class: 'odplat', style: 'border-left-color:' + (OTT_COL[tpk] || '#8E8899') }, [platLogo(tp), ottName(tpk) || tp]) : h('span', { class: 'odplat none', text: 'Platform not announced' })) : h('span', { class: 'odplat', style: 'border-left-color:' + (OTT_COL[e.plat] || '#8E8899') }, [platLogo(e.platName), e.platName || 'OTT']);
+      var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
+      var trB = h('button', { type: 'button', class: 'qb odtr' + (tr ? '' : ' off'), 'aria-label': tr ? 'Play the trailer of ' + t : 'No trailer for ' + t + ' yet', title: tr ? 'Trailer' : 'No trailer yet',
+        on: { click: function () { if (tr) openTrailerOverlay(m, tr, trB, titleQueue(m, tr)); else toast('No trailer for ' + t + ' yet'); } } }, [icon('play', 18)]);
+      var rem = hasReminder(m.id), future = e.tba || e.date > td;
+      var bell = future ? h('button', { type: 'button', class: 'qb odbell' + (rem ? ' on' : ''), 'aria-pressed': String(rem), title: rem ? 'Reminder set' : 'Remind me when it streams',
+        'aria-label': rem ? 'Reminder set for ' + t + '. Tap to turn it off' : 'Remind me when ' + t + ' streams', on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 18)]) : null;
+      var pa = artLazy(m, 'poster', 120);
+      return h('div', { class: 'odrow', 'data-id': m.id }, [
+        h('a', { class: 'odpost art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-hidden': 'true', tabindex: '-1' }, pa.bg ? null : [h('span', { text: t })]),
+        h('div', { class: 'odinfo' }, [
+          h('a', { class: 'odt', href: movieUrl(m), text: t }),
+          h('div', { class: 'odmeta', text: meta }),
+          h('div', { class: 'odline', text: line }),
+          h('div', { class: 'odpm' }, [plat.cloneNode(true), h('span', { class: 'odst ' + status[0], text: status[1] })])
+        ]),
+        h('div', { class: 'odpc' }, [plat, h('span', { class: 'odst ' + status[0], text: status[1] })]),
+        h('div', { class: 'odact' }, [pct !== null ? h('span', { class: 'odsc', title: 'Reelscore', text: pct + '%' }) : null, trB, bell])
+      ]);
+    };
+    var dayHead = function (iso) {
+      var dt = new Date(iso + 'T12:00:00Z'), p = iso.split('-');
+      return h('div', { class: 'odday' + (iso === td ? ' today' : ''), text: WDAY[dt.getUTCDay()] + ' ' + (+p[2]) + ' ' + MONTHS[+p[1] - 1].toUpperCase() + (iso === td ? ' · TODAY' : iso === addDays(td, 1) ? ' · TOMORROW' : '') });
+    };
+    if (!groups.length) main.appendChild(h('div', { class: 'empty', text: 'Nothing matches these filters yet. Try another platform or language.' }));
+    groups.forEach(function (g) {
+      var sec = h('section', { class: 'odgrp', id: g.id, 'aria-labelledby': g.id + '-h' }, [h('div', { class: 'odgh' }, [h('h2', { id: g.id + '-h', text: g.h }), h('span', { text: g.sub })])]);
+      var items = g.items, last = '';
+      if (g.tba && !F.allTh && items.length > 12) items = items.slice(0, 12);
+      items.forEach(function (x) {
+        if (g.days) { var key = x.expected ? 'x' + x.date : x.date; if (key !== last) { sec.appendChild(x.expected ? h('div', { class: 'odday', text: 'EXPECTED ' + expLabel(x).toUpperCase() }) : dayHead(x.date)); last = key; } }
+        sec.appendChild(rowOf(x, g));
+      });
+      if (items.length < g.items.length) sec.appendChild(h('button', { type: 'button', class: 'btn small odmore', text: 'Show all ' + g.items.length, on: { click: function () { F.allTh = true; var y = window.scrollY; drawOttDates(); window.scrollTo(0, y); } } }));
+      main.appendChild(sec);
+    });
+    main.appendChild(h('p', { class: 'note odfoot', text: 'Tap a title for its trailer, cast and where to watch. Tap the bell to get a reminder the day it streams.' }));
+
+    // Common questions (same text as the pre-rendered page and its FAQ markup).
+    var wkTitles = all.filter(function (e) { return e.date >= ws && e.date <= we && !e.expected; });
+    var faq1 = wkTitles.length ? 'This week (' + (+ws.slice(8)) + (ws.slice(5, 7) === we.slice(5, 7) ? '' : ' ' + MONTHS[+ws.slice(5, 7) - 1]) + '–' + (+we.slice(8)) + ' ' + MONTHS[+we.slice(5, 7) - 1] + '): ' + listWords(wkTitles.slice(0, 6).map(function (e) { return e.m.data.title + (e.platName ? ' on ' + e.platName : ''); })) + (wkTitles.length > 6 ? ', and ' + (wkTitles.length - 6) + ' more' : '') + '. The list above updates every day.'
+      : 'Nothing has a confirmed OTT date this week yet. The list above updates every day as platforms announce dates.';
+    main.appendChild(h('section', { class: 'odfaq', 'aria-label': 'Common questions' }, [h('h2', { text: 'OTT release dates: common questions' }),
+      h('div', { class: 'faq' }, [h('h3', { text: 'Which movies release on OTT this week?' }), h('p', { text: faq1 })]),
+      h('div', { class: 'faq' }, [h('h3', { text: 'How long after the theatre release does a film come to OTT?' }), h('p', { text: 'It varies by film and platform deal. Each entry above shows the gap for that film, counted from its theatre release.' })]),
+      h('div', { class: 'faq' }, [h('h3', { text: 'Where do these dates come from?' }), h('p', { text: 'From the platforms’ own announcements and official channels.' + (hasExp ? ' Dates marked “Expected” are not confirmed yet and change when the platform announces them.' : '') })])
+    ]));
+
+    // Right rail: most awaited (popularity: verdicts, then the cast's body of work), dates by platform, reminders.
+    var waitL = D.tba.concat(upcoming.filter(function (e) { return !isTv(e.m); }).map(function (e) { return e.m; })), pop = popularityOf(waitL);
+    waitL = waitL.filter(function (m, i) { return waitL.indexOf(m) === i; }).sort(function (a, b) { return pop[b.id] - pop[a.id]; }).slice(0, 5);
+    var eOf = {}; all.forEach(function (e) { eOf[e.m.id] = e; });
+    if (waitL.length >= 3) rail.appendChild(h('div', { class: 'odbox' }, [h('h3', { text: 'Most awaited on OTT' })].concat(waitL.map(function (m, i) {
+      var e = eOf[m.id];
+      return h('a', { class: 'odaw', href: movieUrl(m) }, [h('b', { text: String(i + 1) }), h('span', { text: m.data.title }), h('small', { text: e ? (e.platName || 'OTT') + ' · ' + (e.expected ? expLabel(e) : fmtDate(e.date)) : 'Date not announced' })]);
+    }))));
+    if (platKeys.length) rail.appendChild(h('div', { class: 'odbox' }, [h('h3', { text: 'Release dates by platform' })].concat(platKeys.map(function (k) {
+      return h('a', { class: 'odpl', href: '/ott-release-dates?ott=' + k, 'aria-current': F.plat === k ? 'page' : null, on: { click: function (ev) { ev.preventDefault(); setF('plat', k); window.scrollTo(0, 0); } } }, [h('span', {}, [h('i', { class: 'oddot', style: 'background:' + (OTT_COL[k] || '#8E8899') }), ottName(k) + ' release dates']), h('small', { text: plats[k] + ' →' })]);
+    }))));
+    var nRem = (S.mine.reminders || []).length;
+    rail.appendChild(h('div', { class: 'odbox' }, [h('h3', { text: 'Never miss a release' }), h('p', { text: 'Tap the bell on any title and it goes on your list with a reminder for the day it starts streaming.' }),
+      S.uid ? h('a', { class: 'chip', href: '/my-list', 'aria-pressed': 'true', text: nRem ? n(nRem, 'reminder', 'reminders') + ' set · My List' : 'Your reminders · My List' })
+        : h('button', { type: 'button', class: 'chip', 'aria-pressed': 'true', text: 'Sign in to set reminders', on: { click: function () { if (window.reelSignIn) window.reelSignIn(); else toast('Sign in to do that.'); } } })]));
+    page.appendChild(rail);
+    v.appendChild(footer());
+  }
+  function listWords(a) { return a.length < 2 ? a.join('') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; }
   function drawVids() {
     var v = $('view-vids'), P = VID_PAGES[S.param];
     if (!S.loaded && v.querySelector('[data-prerendered]')) return;

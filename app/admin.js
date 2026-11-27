@@ -2251,6 +2251,7 @@ window.ReelAdmin = function (env) {
     if (seoF) loadSeoVotes();
     var tc = $('titleCount'); if (tc) tc.textContent = movies.length ? String(movies.length) : '';
     if (page !== 'titles') return;
+    renderOttQueue();
     var qi = $('q'); if (qi && document.activeElement !== qi) qi.value = query;
     renderFilters();
     var table = $('list'), pager = $('pager'), sum = $('tsum');
@@ -2573,6 +2574,104 @@ window.ReelAdmin = function (env) {
       draft.nowPlaying = 'ott'; draft.section = npSection(draft); did.unshift('Now playing set to Now on OTT');
     }
     return did;
+  }
+  // ---------- Coming to OTT (films in theatres or coming soon) ----------
+  // The planned service is kept in ottPlatform until the date is confirmed, so a film still in theatres never reads as
+  // "streaming now" on the site. Confirmed: ottReleaseDate (and platform takes ottPlatform on save). Expected: month +
+  // early / mid / late in ottExpected ("2026-12-mid"); the OTT release dates page shows "Expected mid-December".
+  var OTT_MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  function ottCardFor(d) { return d && d.section !== 'TV shows' && d.nowPlaying !== 'direct' && (d.section === 'In theatres' || d.section === 'Coming soon' || d.nowPlaying === 'theatres'); }
+  function ottStatusOf(d) { return d.ottDateStatus === 'expected' ? 'expected' : d.ottReleaseDate ? 'confirmed' : ''; }
+  function ottAddDays(iso, n) { var t = new Date(iso + 'T12:00:00Z'); t.setUTCDate(t.getUTCDate() + n); return t.toISOString().slice(0, 10); }
+  function ottWhere(d) {
+    var td = npToday(), wd = (new Date(td + 'T12:00:00Z').getUTCDay() + 6) % 7, ws = ottAddDays(td, -wd), st = ottStatusOf(d);
+    var date = st === 'confirmed' ? d.ottReleaseDate : st === 'expected' && /^\d{4}-\d{2}-(early|mid|late)$/.test(d.ottExpected || '') ? d.ottExpected.slice(0, 7) + '-' + { early: '05', mid: '15', late: '25' }[d.ottExpected.slice(8)] : '';
+    if (!date) return (d.section === 'In theatres' || d.nowPlaying === 'theatres') && d.releaseDate && d.releaseDate <= td ? 'In theatres: OTT date not announced' : 'Not on the page until a date or expected month is set';
+    var g = st === 'expected' ? 'Later' : date < ottAddDays(td, -30) ? '' : date < ws ? 'Streaming now' : date <= ottAddDays(ws, 6) ? 'This week' : date <= ottAddDays(ws, 13) ? 'Next week' : date <= ottAddDays(td, 120) ? 'Later' : '';
+    if (!g) return 'Outside the page’s window (last 30 days to 4 months ahead)';
+    var p = date.split('-'), dt = new Date(date + 'T12:00:00Z');
+    var gap = d.releaseDate && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate) && st === 'confirmed' ? Math.round((Date.parse(date) - Date.parse(d.releaseDate)) / 864e5) : null;
+    return g + ' › ' + (st === 'expected' ? 'Expected ' + d.ottExpected.slice(8) + '-' + OTT_MONTHS[+p[1] - 1] : ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dt.getUTCDay()] + ' ' + (+p[2]) + ' ' + OTT_MONTHS[+p[1] - 1].slice(0, 3)) + (gap !== null && gap >= 0 ? ' · ' + gap + ' days after theatres' : '');
+  }
+  function ottCard() {
+    var st = ottStatusOf(draft), cur = draft.ottPlatform || draft.platform || '';
+    var sel = h('select', { id: 'f_ottPlatform', class: 'in', disabled: !canWrite }, [h('option', { value: '', text: 'Not known yet', selected: !cur })].concat(OTT_LIST.map(function (x) { return h('option', { value: x, text: x, selected: x === cur }); })).concat(cur && OTT_LIST.indexOf(cur) === -1 ? [h('option', { value: cur, text: cur, selected: true })] : []));
+    sel.addEventListener('change', function () { draft.ottPlatform = sel.value; touch(); renderKeepFocus(); });
+    var seg = h('div', { class: 'ottseg', role: 'group', 'aria-label': 'How sure is the date?' }, [['confirmed', 'Confirmed'], ['expected', 'Expected'], ['', 'Not known']].map(function (o) {
+      return h('button', { type: 'button', class: 'btn small' + (st === o[0] ? ' primary' : ''), 'aria-pressed': String(st === o[0]), disabled: !canWrite, text: o[1], on: { click: function () {
+        if (o[0] === 'expected') { draft.ottDateStatus = 'expected'; if (!draft.ottExpected) { var n = new Date(); n.setMonth(n.getMonth() + 1); draft.ottExpected = n.toISOString().slice(0, 7) + '-mid'; } draft.ottReleaseDate = ''; }
+        else if (o[0] === 'confirmed') { draft.ottDateStatus = 'confirmed'; delete draft.ottExpected; }
+        else { delete draft.ottDateStatus; delete draft.ottExpected; draft.ottReleaseDate = ''; }
+        touch(); renderEditor();
+      } } });
+    }));
+    var dateF = null;
+    if (st === 'expected') {
+      var em = h('input', { id: 'f_ottMonth', class: 'in', type: 'month', disabled: !canWrite }); em.value = (draft.ottExpected || '').slice(0, 7);
+      var ep = h('select', { id: 'f_ottPart', class: 'in', disabled: !canWrite }, ['early', 'mid', 'late'].map(function (x) { return h('option', { value: x, text: x.charAt(0).toUpperCase() + x.slice(1), selected: (draft.ottExpected || '').slice(8) === x }); }));
+      var setE = function () { if (/^\d{4}-\d{2}$/.test(em.value)) { draft.ottExpected = em.value + '-' + ep.value; touch(); renderKeepFocus(); } };
+      em.addEventListener('change', setE); ep.addEventListener('change', setE);
+      dateF = h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_ottMonth', text: 'Expected month' }), h('div', { style: 'display:flex;gap:8px' }, [em, ep])]);
+    } else {
+      dateF = field('OTT release date', 'ottReleaseDate', { type: 'date', note: st === 'confirmed' ? 'The day it starts streaming, as the platform announced it.' : 'Pick a date and it counts as confirmed.' });
+      var di = dateF.querySelector('input'); di.addEventListener('change', function () { if (di.value) draft.ottDateStatus = 'confirmed'; else delete draft.ottDateStatus; touch(); renderEditor(); });
+    }
+    var src = field('Source (official announcement)', 'ottSource', { type: 'url', placeholder: 'https://… (the platform’s own post)', note: 'The platform’s own post, press release or official trailer. Not other OTT-date sites.' });
+    return h('section', { class: 'card', id: 'ottCard' }, [h('h2', { text: 'Coming to OTT' }),
+      h('div', { class: 'grid' }, [
+        h('div', { class: 'field' }, [h('label', { class: 'l', for: 'f_ottPlatform', text: 'Platform' }), sel, h('span', { class: 'note', text: 'Shown as the streaming platform once the date is confirmed.' })]),
+        dateF,
+        h('div', { class: 'field wide' }, [h('span', { class: 'l', text: 'How sure is the date?' }), seg,
+          h('span', { class: 'note', text: 'Confirmed: the platform has announced it. Expected: pick a month and part (early, mid, late) instead of a day; the page shows “Expected mid-December”.' })]),
+        src
+      ]),
+      h('div', { class: 'note', style: 'margin-top:10px' }, [h('b', { text: 'Shows on OTT release dates › ' }), ottWhere(draft)])
+    ]);
+  }
+  // Checked and tidied before a save; returns an error message or ''.
+  function ottTidy(d) {
+    if (!ottCardFor(d) && !d.ottPlatform && !d.ottDateStatus) return '';
+    d.ottSource = String(d.ottSource || '').trim(); if (!d.ottSource) delete d.ottSource;
+    else if (!/^https:\/\/[^\s]+\.[^\s]+/.test(d.ottSource)) return 'The OTT source must be a full link starting with https://';
+    if (d.ottDateStatus === 'expected') { if (!/^\d{4}-\d{2}-(early|mid|late)$/.test(d.ottExpected || '')) return 'Pick the expected OTT month, and early, mid or late.'; d.ottReleaseDate = ''; }
+    else if (d.ottReleaseDate) { d.ottDateStatus = 'confirmed'; delete d.ottExpected; }
+    else { delete d.ottDateStatus; delete d.ottExpected; }
+    d.ottPlatform = String(d.ottPlatform || '').trim(); if (!d.ottPlatform) delete d.ottPlatform;
+    if (d.ottDateStatus === 'confirmed' && d.ottPlatform) d.platform = d.ottPlatform;
+    return '';
+  }
+  // Admin > Titles: films in theatres or coming soon whose OTT date still needs filling, most-awaited first.
+  var ottQTab = 'none', ottQOpen = false;
+  function renderOttQueue() {
+    var box = $('ottQueue'); if (!box) return;
+    box.innerHTML = '';
+    var td = npToday(), pub = movies.filter(function (m) { return m.data.published !== false && ottCardFor(m.data); });
+    var pop = function (m) { return (m.data.order != null && m.data.order < 100000 ? 100000 - m.data.order : 0) + (m.data.posterUrl ? 5 : 0) + ((m.data.cast || []).length); };
+    var tabs = {
+      none: pub.filter(function (m) { return !ottStatusOf(m.data) && m.data.releaseDate && m.data.releaseDate <= ottAddDays(td, 14); }),
+      expected: pub.filter(function (m) { return ottStatusOf(m.data) === 'expected'; }),
+      passed: movies.filter(function (m) { var d = m.data; return d.published !== false && d.section === 'Coming soon' && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '') && d.releaseDate < td; })
+    };
+    Object.keys(tabs).forEach(function (k) { tabs[k].sort(function (a, b) { return pop(b) - pop(a) || String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')); }); });
+    var list = tabs[ottQTab] || [];
+    var head = h('button', { type: 'button', class: 'ottqh', 'aria-expanded': String(ottQOpen), on: { click: function () { ottQOpen = !ottQOpen; renderOttQueue(); } } }, [
+      h('b', { text: 'OTT dates to fill' }), h('span', { class: 'cnt', text: tabs.none.length + ' films' }), h('span', { class: 'note', text: ottQOpen ? 'Hide' : 'Show' })]);
+    box.appendChild(head);
+    if (!ottQOpen) return;
+    box.appendChild(h('div', { class: 'note', style: 'margin:6px 0 10px', text: 'Films in theatres or coming soon with no OTT date, most-awaited first. Fill one in and it moves onto the OTT release dates page at the next build.' }));
+    box.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'OTT dates to fill' }, [['none', 'No date'], ['expected', 'Expected, not confirmed'], ['passed', 'Date passed, still Coming soon']].map(function (t) {
+      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(ottQTab === t[0]), text: t[1] + ' · ' + tabs[t[0]].length, on: { click: function () { ottQTab = t[0]; renderOttQueue(); } } });
+    })));
+    if (!list.length) { box.appendChild(h('div', { class: 'note', text: 'Nothing here.' })); return; }
+    box.appendChild(h('div', { class: 'ottqlist' }, list.slice(0, 40).map(function (m) {
+      var d = m.data, days = d.releaseDate ? Math.round((Date.parse(td) - Date.parse(d.releaseDate)) / 864e5) : null;
+      return h('div', { class: 'ottqrow' }, [
+        h('div', { style: 'min-width:0' }, [h('a', { href: titleHref(m), text: d.title }), h('div', { class: 'note', text: [String(d.languages || '').split(/[,;]/)[0], d.section, d.releaseDate ? 'released ' + d.releaseDate : '', ottQTab === 'expected' ? 'expected ' + String(d.ottExpected || '') : '', d.ottPlatform ? 'on ' + d.ottPlatform : ''].filter(Boolean).join(' · ') })]),
+        h('span', { class: 'note', text: days === null ? '' : days >= 0 ? days + ' days out' : 'in ' + -days + ' days' }),
+        h('a', { class: 'btn small', href: titleHref(m) + '#ottCard', text: ottQTab === 'passed' ? 'Fix status' : 'Add date' })
+      ]);
+    })));
+    if (list.length > 40) box.appendChild(h('div', { class: 'note', text: 'And ' + (list.length - 40) + ' more.' }));
   }
   function platformField(label, withTv, note) {
     var cur = draft.platform || '', used = {};
@@ -3673,7 +3772,7 @@ window.ReelAdmin = function (env) {
         return f;
       })(),
       field(draft.section === 'On OTT' ? 'Streaming date' : tvEd ? 'First aired' : 'Release date', 'releaseDate', { type: 'date' }),
-      field('OTT Release Date', 'ottReleaseDate', { type: 'date', note: 'When it starts streaming. Leave blank if not announced.' }),
+      ottCardFor(draft) ? null : field('OTT Release Date', 'ottReleaseDate', { type: 'date', note: 'When it starts streaming. Leave blank if not announced.' }),
       tvEd ? field('Seasons', 'seasons', { placeholder: 'e.g. 16' }) : null,
       tvEd ? field('Episodes', 'episodes', { placeholder: 'e.g. 240', note: 'Total across all seasons.' }) : null,
       tvEd ? field('Last aired (year)', 'endYear', { placeholder: 'e.g. 2019', note: 'Leave blank if the show is still running.' }) : null,
@@ -3681,6 +3780,7 @@ window.ReelAdmin = function (env) {
       slugField()
     ]);
     main.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Basics' }), g1]));
+    if (ottCardFor(draft)) main.appendChild(ottCard());
     if (movies.some(function (m) { return m.id === currentId; })) main.appendChild(seoCard());
 
     // images
@@ -3951,6 +4051,7 @@ window.ReelAdmin = function (env) {
       ((was && was.data.videos) || []).forEach(function (x) { if (x && x.url) had[x.url] = 1; });
       draft.videos.forEach(function (x) { if (x && x.url && !x.addedAt && !had[x.url]) x.addedAt = vday; });
     }
+    var ottErr = ottTidy(draft); if (ottErr) { setStatus(ottErr); return Promise.resolve(false); }
     saving = true; setDirty(true);
     var isNew = !movies.some(function (m) { return m.id === currentId; });
     var slug = urlSlug(draft.slug) || suggestedSlug(draft);
