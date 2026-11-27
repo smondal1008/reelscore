@@ -1395,3 +1395,27 @@ body.r-lists .pr .crumbs { display: block; }
 
 /* /songs: YouTube view count under each song (space kept so cards don't jump when counts arrive) */
 .vgrid .tcard .vviews { display: block; min-height: 1.4em; font-size: 12px; }
+/* Where to watch card (title page sidebar): language chips, Book tickets / Stream / Rent or buy groups */
+.wwcard { display: flex; flex-direction: column; }
+.wwcard h2 { margin: 0 0 12px; }
+.wwlangs { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.wwlangs .chip { height: 30px; padding: 0 12px; font-size: 13px; }
+.wwlangs .chip[aria-pressed=true] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+.wwstat { font-size: 13px; color: var(--muted); line-height: 1.45; margin: 2px 0; }
+.wwstat b { color: var(--text); }
+.wwstat .dot { color: var(--ok); }
+.wwstat .linkish { background: none; border: 0; padding: 0; font: inherit; color: var(--accent); text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.wwcity { display: block; margin: 8px 0 2px; }
+.wwcity[hidden] { display: none; }
+.wwcity select { max-width: 240px; }
+.wwcard .wwl { font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 14px 0 2px; }
+.wwrow { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.wwrow + .wwrow { border-top: 1px solid #221F2A; }
+.wwt { flex: 1; min-width: 0; }
+.wwn { font-weight: 700; }
+.wws { font-size: 12px; color: var(--muted); line-height: 1.4; margin-top: 1px; }
+.wwbtn { display: inline-flex; align-items: center; gap: 5px; height: 36px; padding: 0 14px; border-radius: 18px; border: 1px solid var(--line2); color: var(--text); font-weight: 600; font-size: 13px; text-decoration: none; white-space: nowrap; flex: none; }
+.wwbtn:hover { border-color: var(--muted); color: var(--text); }
+.wwbtn.pri { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+.wwbtn.pri:hover { filter: brightness(1.08); color: #0B0A0F; }
+.wwcard .note { margin-top: 10px; }

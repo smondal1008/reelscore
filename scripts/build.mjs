@@ -602,7 +602,7 @@ async function main() {
   //   thin   – a one-line story (under 80 characters) and nothing else
   //   border – a short story (under 200 characters) and nothing else
   //   good   – a poster, a video, where to watch (platform or booking link), a story of 200+ characters, or 3+ verdicts
-  const hasWhere = d => !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.values(d.bookingUrls || {}).some(u => safeUrl(u)) || (d.moreBooking || []).some(p => p && Object.values(p.urls || {}).some(u => safeUrl(u))));
+  const hasWhere = d => !!(String(d.platform || '').trim() || (d.watch || []).some(w => w && String(w.platform || '').trim()) || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.values(d.bookingUrls || {}).some(u => safeUrl(u)) || (d.moreBooking || []).some(p => p && Object.values(p.urls || {}).some(u => safeUrl(u))));
   const seoTier = (d, tot) => {
     const syn = String(d.synopsis || '').trim().length;
     if (!syn && !safeUrl(d.posterUrl) && !ytVideos(d).length && !tot) return 'kept';

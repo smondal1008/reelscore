@@ -1959,7 +1959,7 @@ window.ReelAdmin = function (env) {
   // Published = what visitors can see on the site; the list starts there so its counts match the live site.
   var STATUS_OPTS = { published: 'Published', unpublished: 'Unpublished', all: 'All' };
   function pubOk(d, st) { return st === 'all' || (st === 'unpublished' ? d.published === false : d.published !== false); }
-  function hasWhere(d) { return !!(String(d.platform || '').trim() || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); }) || (d.moreBooking || []).some(function (p) { return p && Object.keys(p.urls || {}).some(function (c) { return safeUrl(p.urls[c]); }); })); }
+  function hasWhere(d) { return !!(String(d.platform || '').trim() || (d.watch || []).some(function (w) { return w && String(w.platform || '').trim(); }) || safeUrl(d.platformUrl) || safeUrl(d.bookingUrl) || Object.keys(d.bookingUrls || {}).some(function (c) { return safeUrl(d.bookingUrls[c]); }) || (d.moreBooking || []).some(function (p) { return p && Object.keys(p.urls || {}).some(function (c) { return safeUrl(p.urls[c]); }); })); }
   function hasYt(d) { return (d.videos || []).some(function (v) { return /youtu\.?be/.test(v.url || ''); }); }
   // A story from the editorial file (content/synopses.json) counts at its length, as the build applies it before tiering.
   var synLen = {};
@@ -2493,6 +2493,7 @@ window.ReelAdmin = function (env) {
   // ---------- streaming platform picker ----------
   // A list instead of free text, so names match the logos on poster tiles (app/main.js PLAT). Platforms already used on any
   // title are added to the list, so one you add by hand shows up as an option next time.
+  var WATCH_KINDS = ['Subscription', 'Free', 'Free with ads', 'Rent', 'Buy', 'Rent or buy'];
   var OTT_LIST = ['Netflix', 'Prime Video', 'JioHotstar', 'ZEE5', 'SonyLIV', 'Sun NXT', 'aha', 'Hoichoi', 'ALTT', 'Amazon MX Player', 'Amazon miniTV',
     'Apple TV', 'YouTube', 'Lionsgate Play', 'discovery+', 'Eros Now', 'ShemarooMe', 'Hungama Play', 'Ultra Jhakaas', 'Planet Marathi', 'ManoramaMAX',
     'Simply South', 'Chaupal', 'Addatimes', 'Klikk', 'Tentkotta', 'Namma Flix', 'Saina Play', 'Neestream', 'Koode', 'Crunchyroll', 'MUBI',
@@ -3234,6 +3235,7 @@ window.ReelAdmin = function (env) {
           el.addEventListener('input', function () { item[c.k] = el.value; touch(); });
           el.addEventListener('change', function () { item[c.k] = el.value; touch(); if (c.k === 'kind') KIND_PICKED.add(item); });
           if (c.k === 'url' && (key === 'videos' || key === 'interviews' || key === 'extras')) ytPrefill(el, key, i, item, rows);
+          if (c.k === 'url' && key === 'watch') el.addEventListener('change', function () { if (String(item.platform || '').trim()) return; var pf = platformFromUrl(el.value); if (pf) { item.platform = pf; touch(); var pe = rows.querySelector('#' + key + i + 'platform'); if (pe) pe.value = pf; } });
           return h('span', { style: 'min-width:0' }, [lab, el]);
         });
         // Videos: ★ picks the one the Movies / TV Shows page banner plays for this title (draft.bannerVideo, its URL).
@@ -3330,7 +3332,7 @@ window.ReelAdmin = function (env) {
           cells.unshift(h('span', { class: 'vgrip' }, [grip, prev]));
           (function (pv) { setTimeout(function () { var u = rows.querySelector('#' + key + i + 'url'); if (u) u.addEventListener('change', function () { var id = ytIdOf(u.value); pv.style.backgroundImage = id ? 'url("https://i.ytimg.com/vi/' + id + '/mqdefault.jpg")' : ''; }); }, 0); })(prev);
         }
-        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'boDaily' ? ' bod' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awd' : '') + (key === 'trivia' ? ' trv' : '') + (av ? ' cast' + (cols.length > 3 ? ' tvc' : '') : '') }, cells);
+        var rowEl = h('div', { class: 'row' + (cols.length > 2 ? ' v' : '') + (key === 'videos' ? ' feat' : '') + (key === 'extras' ? ' xtra' : '') + (key === 'interviews' ? ' intv' : '') + (key === 'boDaily' ? ' bod' : '') + (key === 'posters' ? ' pst' : '') + (key === 'news' ? ' news' : '') + (key === 'awards' ? ' awd' : '') + (key === 'trivia' ? ' trv' : '') + (key === 'watch' ? ' wtch' : '') + (av ? ' cast' + (cols.length > 3 ? ' tvc' : '') : '') }, cells);
         if (key === 'videos' || key === 'extras' || key === 'interviews' || key === 'posters') dragRow(rowEl, i);
         rows.appendChild(rowEl);
       });
@@ -3393,7 +3395,7 @@ window.ReelAdmin = function (env) {
           .catch(function (e) { setStatus('Upload failed' + (e && e.message ? ': ' + e.message : '') + '.'); });
       });
     }
-    var hint = key === 'boDaily' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'One row per day, in ₹ crore. Only that day’s India nett is needed; the rest is optional. By language is the India nett so far, per language version (put it on the newest row). On save, the newest row fills the box office figures above (latest day, change vs the day before, totals and date). The title page draws the chart, weeks and clubs (India nett) from these rows.' }) : key === 'interviews' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Cast interviews, after Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. “Who’s in it” shows under each video, with its length. Press and entertainment channels are fine here; trailers and songs stay official only.' }) : key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
+    var hint = key === 'watch' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Every place to watch it, shown on the title page in this order: Subscription and Free rows under Stream, Rent and Buy rows under Rent or buy. Languages are the audio languages on that service (e.g. Hindi, Tamil); once two languages appear, visitors get language chips to filter by. Pasting a link fills in the service. The Streaming platform above still drives badges and lists; a service named there but missing here shows as a Stream row with its link.' }) : key === 'boDaily' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'One row per day, in ₹ crore. Only that day’s India nett is needed; the rest is optional. By language is the India nett so far, per language version (put it on the newest row). On save, the newest row fills the box office figures above (latest day, change vs the day before, totals and date). The title page draws the chart, weeks and clubs (India nett) from these rows.' }) : key === 'interviews' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Cast interviews, after Songs, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. “Who’s in it” shows under each video, with its length. Press and entertainment channels are fine here; trailers and songs stay official only.' }) : key === 'posters' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as a row of posters after the videos, in this order, once there are 2 or more. A poster shows only after you pick its permission. ★ makes it the page poster used on cards and the banner. Credit is shown in the viewer (e.g. the studio). Visitors can’t right-click, drag or long-press to save them.' }) : key === 'extras' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Shown on the title page as Fan videos, below Reviews, in this order. Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder. Channel shows under each video. Post-credit scene breakdowns and compilations get a Spoilers label. Turn on Blur to hide a thumbnail until it’s played.' }) : key === 'videos' ? h('div', { class: 'note', style: 'margin-top:8px', text: 'Drag ⋮⋮ (or focus it and press ↑ ↓) to reorder: the title page shows trailers and songs in this order, and the first trailer is the main one. ★ picks the video the ' + bname + ' page banner plays for this title, and adds the title to the ' + bname + ' banner when you save. With none picked, it plays ' + (draft.section === 'TV shows' ? 'the first trailer, or else the first promo, clip or episode.' : 'the newest song.') }) : null;
     return h('section', { class: 'card' }, [h('div', { class: 'head' }, [h('h2', { text: title }), h('span', { style: 'display:flex;gap:8px;flex-wrap:wrap' }, [ytBtn, upBtn, extra, add])]), rows, hint]);
   }
 
@@ -3648,6 +3650,10 @@ window.ReelAdmin = function (env) {
       main.appendChild(h('section', { class: 'card', id: 'linksCard' }, [head, gL]));
     }
 
+    // Where to watch: every streaming, rental and purchase option (draft.watch).
+    if (!document.getElementById('wwSvcList')) document.body.appendChild(h('datalist', { id: 'wwSvcList' }, OTT_LIST.concat(['Apple TV', 'YouTube', 'Google TV', 'Prime Video Store', 'BookMyShow Stream']).map(function (x) { return h('option', { value: x }); })));
+    main.appendChild(listEditor('Where to watch', 'watch', [{ k: 'platform', label: 'Service', list: 'wwSvcList' }, { k: 'kind', label: 'Type', options: WATCH_KINDS }, { k: 'langs', label: 'Languages, e.g. Hindi, Tamil' }, { k: 'url', label: 'Link https://' }], 'No services listed. Add one row per service; the Streaming platform above is still shown on its own.'));
+
     var g2 = h('div', { class: 'grid' }, [
       field('Languages', 'languages', { placeholder: 'Hindi, English' }),
       genreField(),
@@ -3763,6 +3769,15 @@ window.ReelAdmin = function (env) {
       draft.moreBooking.forEach(function (p, i) { if (!p) return; if (badP) return; Object.keys(p.urls).forEach(function (c) { if (!badP && !/^https:\/\/[^\s]+\.[^\s]+/.test(p.urls[c])) badP = [i + 1, c, p.platform]; }); });
       if (badP) { setStatus('The ' + badP[1] + ' booking URL' + (badP[2] ? ' for ' + badP[2] : '') + ' must be a full link starting with https://'); if (bkTab.i !== badP[0]) { bkTab = { id: currentId, i: badP[0] }; linksOpenFor = currentId; renderEditor(); } var bp2 = $(bkId(badP[0], badP[1])); if (bp2) bp2.focus(); return Promise.resolve(false); }
       draft.moreBooking = draft.moreBooking.filter(function (p) { return p && (p.platform || Object.keys(p.urls).length); });
+    }
+    if (Array.isArray(draft.watch)) {
+      draft.watch.forEach(function (w) { if (!w) return; ['platform', 'kind', 'langs', 'url'].forEach(function (k) { w[k] = String(w[k] || '').trim(); }); if (!w.kind) w.kind = 'Subscription'; });
+      var badW = draft.watch.filter(function (w) { return w && w.url && !/^https:\/\/[^\s]+\.[^\s]+/.test(w.url); })[0];
+      if (badW) { setStatus('The Where to watch link' + (badW.platform ? ' for ' + badW.platform : '') + ' must be a full link starting with https://'); return Promise.resolve(false); }
+      var noName = draft.watch.filter(function (w) { return w && !w.platform && w.url; })[0];
+      if (noName) { setStatus('Name the service for each Where to watch link.'); return Promise.resolve(false); }
+      draft.watch = draft.watch.filter(function (w) { return w && w.platform; });
+      if (!draft.watch.length) delete draft.watch;
     }
     var badUrl = [['platformUrl', 'Streaming platform URL']].filter(function (f) { var v = (draft[f[0]] || '').trim(); draft[f[0]] = v; return v && !/^https:\/\/[^\s]+\.[^\s]+/.test(v); })[0];
     if (badUrl) { setStatus(badUrl[1] + ' must be a full link starting with https://'); var bf = $('f_' + badUrl[0]); if (bf) bf.focus(); return Promise.resolve(false); }

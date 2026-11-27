@@ -100,6 +100,7 @@
   .x.blurb { width: 60px; font-size: 13px; font-weight: 600; } .x.blurb.on { color: var(--accent); border-color: var(--accent); } .x.blurb:hover { color: var(--text); border-color: var(--line2); } .x.blurb.on:hover { color: var(--accent); border-color: var(--accent); }
   .row.v.awd { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) 130px minmax(0, 1fr) 80px 44px; }
   .row.trv { grid-template-columns: minmax(0, 2.4fr) minmax(0, 1fr) 44px; }
+  .row.v.wtch { grid-template-columns: minmax(0, 1fr) 150px minmax(0, 1fr) minmax(0, 1.4fr) 44px; }
   button.vthumb.nthumb { cursor: pointer; }
   .vthumb.nthumb { width: 72px; height: 40px; background-size: cover; background-position: center; }
   .vthumb.nthumb.busy { opacity: .45; }

@@ -3825,12 +3825,6 @@
     ]);
     return sec;
   }
-  // "Watch on …": a real link once a streaming URL is added in Admin, otherwise a disabled button.
-  function watchBtn(d, label, off) {
-    if (!btnOn('title', 'watch')) return null;
-    var u = safeUrl(d.platformUrl);
-    return u && !off ? h('a', { class: 'btn primary', href: u, target: '_blank', rel: 'noopener', text: label + ' ↗' }) : h('button', { type: 'button', class: 'btn primary', disabled: true, text: label });
-  }
   // Where to watch tile: the service's own logo when we have one, else its initials on its colour.
   function watchTile(p) {
     var parts = String(p || '').split('/').map(function (x) { return x.trim(); }), hit = null;
@@ -3839,37 +3833,107 @@
     var any = PLAT.filter(function (x) { return x[0].test(parts[0]); })[0];
     return h('span', { class: 'c wtile', 'aria-hidden': 'true', style: any ? 'background:' + any[2] + ';color:#fff' : '', text: (parts[0] || 'OTT').slice(0, 2).toUpperCase() });
   }
+  // ---------- Where to watch (sidebar card): Book tickets, Stream, Rent or buy, with an audio-language filter ----------
+  // Rows come from Admin's "Where to watch" list (d.watch: platform, kind, langs, url). The main Streaming platform and
+  // its link (d.platform / d.platformUrl) still count: any service named there that the list doesn't have becomes a Stream row.
+  var WW_RENT = /^(rent|buy|rent or buy)$/i;
+  var BOOK_TILE = { bookmyshow: ['BMS', '#C4242B', '#fff'], district: ['D', '#F4F1EA', '#0B0A0F'], 'pvr inox': ['PVR', '#F5C518', '#0B0A0F'], ticketnew: ['TN', '#E2231A', '#fff'] };
+  function bookTile(p) {
+    var t = BOOK_TILE[String(p || '').toLowerCase()];
+    return h('span', { class: 'c wtile', 'aria-hidden': 'true', style: t ? 'background:' + t[1] + ';color:' + t[2] : '', text: t ? t[0] : String(p || 'T').slice(0, 2).toUpperCase() });
+  }
+  // Which of several services named in d.platform a single link belongs to, from the link's address.
+  var WW_HOST = [[/netflix/, /netflix/i], [/primevideo|amazon\./, /prime/i], [/hotstar/, /hotstar/i], [/zee5/, /zee5/i], [/sonyliv/, /sony ?liv/i], [/sunnxt/, /sun ?nxt/i], [/aha\.video/, /\baha\b/i], [/mxplayer/, /mx player/i], [/hoichoi/, /hoichoi/i], [/youtube/, /youtube/i], [/jiocinema/, /jiocinema/i], [/apple\.com/, /apple/i]];
+  function linkOwner(url, names) {
+    var host = ''; try { host = new URL(url).hostname.toLowerCase(); } catch (e) { return ''; }
+    var hit = WW_HOST.filter(function (x) { return x[0].test(host); })[0];
+    return hit ? names.filter(function (n) { return hit[1].test(n); })[0] || '' : '';
+  }
+  function langList(s) { return String(s || '').split(/[,;/]|\band\b/).map(function (x) { return x.trim(); }).filter(Boolean); }
+  function watchRows(m) {
+    var d = m.data, rows = [];
+    (Array.isArray(d.watch) ? d.watch : []).forEach(function (w) {
+      if (!w || !String(w.platform || '').trim()) return;
+      rows.push({ platform: String(w.platform).trim(), kind: String(w.kind || '').trim(), langs: langList(w.langs), url: safeUrl(w.url) });
+    });
+    var named = String(d.platform || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean), url = safeUrl(d.platformUrl);
+    var owner = url ? (named.length === 1 ? named[0] : linkOwner(url, named) || named[0]) : '';
+    named.forEach(function (p) {
+      var have = rows.filter(function (r) { return r.platform.toLowerCase() === p.toLowerCase(); })[0];
+      if (have) { if (!have.url && p === owner) have.url = url; return; }
+      rows.push({ platform: p, kind: '', langs: [], url: p === owner ? url : '', main: true });
+    });
+    if (!named.length && url) rows.push({ platform: 'Streaming', kind: '', langs: [], url: url, main: true });
+    return rows;
+  }
   function actionBlock(m, rel, ott) {
-    var d = m.data;
-    if (ott) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
-      h('div', { class: 'person' }, [watchTile(d.platform || 'OTT'),
-        h('span', { class: 'nmx' }, [h('div', { text: d.platform || 'Streaming service' }), h('div', { class: 'note', text: rel ? 'Streaming now · included with subscription' : 'Streams from ' + fmtDate(d.releaseDate, true) })])]),
-      watchBtn(d, rel ? 'Watch on ' + (d.platform || 'OTT') : 'Not streaming yet', !rel),
-      safeUrl(d.platformUrl) ? null : h('div', { class: 'note', text: 'A link to watch it will show here once it’s added.' })]);
-    if (isOld(m) || isTv(m)) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }),
-      d.platform ? h('div', { class: 'person' }, [watchTile(d.platform),
-        h('span', { class: 'nmx' }, [h('div', { text: d.platform }), h('div', { class: 'note', text: isTv(m) ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now' })])]) : h('div', { class: 'note', text: isTv(m) ? 'Where to watch will show here once added.' : 'No longer in theatres. Streaming details will show here once added.' }),
-      d.platform || safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
-    // In theatres / coming soon: Book tickets, when a booking link has been added in Admin
-    var bps = partnersFor(d, S.city), bnames = (bps.length ? bps.map(function (p) { return p.platform; }) : partnerNames(d)).filter(Boolean), bp = bnames.join(' and ');
-    if (hasBooking(d) && btnOn('title', 'book')) {
-      var cs = citiesFor(d); if (S.city && cs.indexOf(S.city) === -1) cs.push(S.city);
-      var csel = h('select', { class: 'in', id: 'bookCity', style: 'max-width:240px' }, [h('option', { value: '', text: 'Choose your city' })].concat(cs.map(function (c) { return h('option', { value: c, text: c, selected: c === S.city }); })));
-      csel.addEventListener('change', function () { csel.blur(); setCity(csel.value); });
-      return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
-      h('div', { class: 'field', style: 'margin-bottom:10px' }, [h('label', { class: 'l', for: 'bookCity', text: 'City' }), csel]),
-      h('div', { class: 'note', text: !S.city ? 'Pick your city to see the booking link' + (partnerNames(d).length > 1 ? 's' : '') + '.' : !bps.length ? 'No booking link for ' + S.city + ' yet.' : rel ? 'Showtimes, seats and prices are on ' + (bp || 'the booking site') + '.' : 'Bookings open on ' + (bp || 'the booking site') + ' closer to release.' }),
-      bps.length ? h('div', { style: 'display:flex;flex-wrap:wrap;gap:10px' }, bps.map(function (p) { return h('a', { class: 'btn primary', href: p.url, target: '_blank', rel: 'noopener', text: p.platform ? 'Book on ' + p.platform : 'Book tickets' }); })) : null,
-      safeUrl(d.platformUrl) ? watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false) : null]);
+    var d = m.data, tv = isTv(m);
+    var all = watchRows(m), canWatch = btnOn('title', 'watch'), canBook = btnOn('title', 'book');
+    var streams = all.filter(function (r) { return !WW_RENT.test(r.kind); }), rents = all.filter(function (r) { return WW_RENT.test(r.kind); });
+    var theatrical = !ott && !tv && !isOld(m) && hasBooking(d) && canBook;
+    var pending = ott && !rel; // direct to OTT, not streaming yet
+    if (!theatrical && !all.length && !(ott || isOld(m) || tv)) return null; // no booking or streaming link added for this film
+    var filmLangs = langList(d.languages), fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
+    // Audio-language chips, once the rows say which languages each service has.
+    var langs = []; all.forEach(function (r) { r.langs.forEach(function (l) { if (langs.indexOf(l) === -1) langs.push(l); }); });
+    S.wwLang = S.wwLang && S.wwLang.id === m.id ? S.wwLang : { id: m.id, l: '' };
+    if (S.wwLang.l && langs.indexOf(S.wwLang.l) === -1) S.wwLang.l = '';
+    var sec = h('section', { class: 'card wwcard', id: 'watch', 'aria-labelledby': 'wwh' });
+    function draw() {
+      sec.innerHTML = '';
+      var L = S.wwLang.l, fits = function (ls) { return !L || !ls.length || ls.indexOf(L) !== -1; };
+      sec.appendChild(h('h2', { id: 'wwh', text: 'Where to watch' }));
+      if (langs.length > 1) sec.appendChild(h('div', { class: 'wwlangs', role: 'group', 'aria-label': 'Audio language' }, [''].concat(langs).map(function (l) {
+        return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(l === L), text: l || 'All', on: { click: function () { S.wwLang.l = l; draw(); var b = sec.querySelector('.wwlangs [aria-pressed=true]'); if (b) b.focus(); } } });
+      })));
+      var row = function (tile, name, sub, act) {
+        return h('div', { class: 'wwrow' }, [tile, h('div', { class: 'wwt' }, [h('div', { class: 'wwn', text: name }), sub ? h('div', { class: 'wws', text: sub }) : null]), act]);
+      };
+      var go = function (url, label, pri, aria) { return h('a', { class: 'wwbtn' + (pri ? ' pri' : ''), href: url, target: '_blank', rel: 'noopener', 'aria-label': aria }, [label, h('span', { 'aria-hidden': 'true', text: '↗' })]); };
+      // Book tickets
+      if (theatrical) {
+        var bps = partnersFor(d, S.city), cs = citiesFor(d);
+        var cityBox = h('span', { class: 'wwcity', hidden: !!S.city && !sec._pickCity });
+        var csel = h('select', { class: 'in', id: 'bookCity', 'aria-label': 'Your city' }, [h('option', { value: '', text: 'Choose your city' })].concat((S.city && cs.indexOf(S.city) === -1 ? cs.concat([S.city]) : cs).map(function (c) { return h('option', { value: c, text: c, selected: c === S.city }); })));
+        csel.addEventListener('change', function () { csel.blur(); sec._pickCity = false; setCity(csel.value); });
+        cityBox.appendChild(csel);
+        var status = S.city ? h('div', { class: 'wwstat' }, [h('span', { class: 'dot', 'aria-hidden': 'true', text: '●' }), ' ' + (rel ? 'In theatres in ' : 'Advance booking in '), h('b', { text: S.city }),
+          bps.length ? null : ' · no booking link yet', ' · ', h('button', { type: 'button', class: 'linkish', 'aria-expanded': String(!!sec._pickCity), text: 'Change city', on: { click: function () { sec._pickCity = !sec._pickCity; draw(); var s = sec.querySelector('#bookCity'); if (s && sec._pickCity) s.focus(); } } })])
+          : h('div', { class: 'wwstat' }, [rel ? 'In theatres. ' : 'Advance booking. ', 'Pick your city to see the booking link' + (partnerNames(d).length > 1 ? 's' : '') + '.']);
+        sec.appendChild(status); sec.appendChild(cityBox);
+        var bsub = [filmLangs.join(', '), fm.join(', ')].filter(Boolean).join(' · ');
+        if (bps.length && fits(filmLangs)) {
+          sec.appendChild(h('div', { class: 'lbl wwl', text: rel ? 'Book tickets' : 'Advance booking' }));
+          bps.forEach(function (p, i) { sec.appendChild(row(bookTile(p.platform), p.platform || 'Tickets', bsub, go(p.url, 'Book', i === 0, 'Book tickets on ' + (p.platform || 'the booking site') + ' in ' + S.city))); });
+        }
+      }
+      // Stream
+      var vis = streams.filter(function (r) { return fits(r.langs); }), anyPri = false;
+      if (vis.length) {
+        sec.appendChild(h('div', { class: 'lbl wwl', text: tv ? 'Watch' : 'Stream' }));
+        vis.forEach(function (r) {
+          var sub = [r.kind, r.langs.join(', ')].filter(Boolean).join(' · ');
+          if (!sub && r.main) sub = pending ? 'Streams from ' + fmtDate(d.ottReleaseDate || d.releaseDate, true) : tv ? (d.endYear ? 'Aired ' + tvYears(d) : 'Running now') : 'Streaming now';
+          var act = r.url && canWatch && !pending ? go(r.url, 'Watch', !anyPri, 'Watch ' + d.title + ' on ' + r.platform) : null;
+          if (act) anyPri = true;
+          sec.appendChild(row(watchTile(r.platform), r.platform, sub, act));
+        });
+      }
+      // Rent or buy
+      var vr = rents.filter(function (r) { return fits(r.langs); });
+      if (vr.length) {
+        sec.appendChild(h('div', { class: 'lbl wwl', text: 'Rent or buy' }));
+        vr.forEach(function (r) {
+          var verb = /^buy$/i.test(r.kind) ? 'Buy' : 'Rent';
+          sec.appendChild(row(watchTile(r.platform), r.platform, [r.kind, r.langs.join(', ')].filter(Boolean).join(' · '), r.url && canWatch ? go(r.url, verb, false, verb + ' ' + d.title + ' on ' + r.platform) : null));
+        });
+      }
+      if (L && !sec.querySelector('.wwrow')) sec.appendChild(h('div', { class: 'note', text: 'Nothing here has ' + L + ' audio yet.' }));
+      if (!all.length && !theatrical) sec.appendChild(h('div', { class: 'note', text: tv ? 'Where to watch will show here once added.' : ott ? 'A link to watch it will show here once it’s added.' : 'No longer in theatres. Streaming details will show here once added.' }));
+      else if (ott && streams.length && !streams.some(function (r) { return r.url; }) && canWatch) sec.appendChild(h('div', { class: 'note', text: 'A link to watch it will show here once it’s added.' }));
     }
-    if (safeUrl(d.platformUrl) && btnOn('title', 'watch')) return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: 'Where to watch' }), watchBtn(d, 'Watch on ' + (d.platform || 'streaming'), false)]);
-    return null; // no booking or streaming link added for this film
-    var fm = (d.formats || '').split(',').map(function (s) { return s.trim(); }).filter(Boolean);
-    return h('section', { class: 'card', id: 'watch' }, [h('h2', { text: rel ? 'Book tickets' : 'Advance booking' }),
-      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'city', text: 'City' }), h('select', { class: 'in', id: 'city' }, ['Bengaluru', 'Mumbai', 'Delhi NCR', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune'].map(function (c) { return h('option', { text: c }); }))]),
-      fm.length ? h('div', { class: 'chips' }, fm.map(function (f, i) { return h('span', { class: 'chip', style: 'display:inline-flex;align-items:center;cursor:default', text: f }); })) : null,
-      h('div', { class: 'note', text: 'Showtimes and seats come from the ticketing partner once it’s connected.' }),
-      h('button', { type: 'button', class: 'btn primary', disabled: true, text: 'See showtimes' })]);
+    draw();
+    return sec;
   }
   function planBlock(m) {
     var people = S.mine.following;
