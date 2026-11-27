@@ -1743,3 +1743,4 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .fh .logo a:hover { text-decoration: underline; text-decoration-thickness: 3px; text-underline-offset: 6px; }
 .fh .pill .ic { display: inline-flex; margin-right: 2px; }
 @media (max-width: 640px) { .fh .ftag-p { font-size: 11.5px; padding: 5px 11px 5px 9px; } .fh .ftag-s { font-size: 13px; } }
+.fh .hc .ic { display: inline-flex; color: var(--muted); }

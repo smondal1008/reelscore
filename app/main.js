@@ -3110,7 +3110,7 @@
     var langs = langShort(d), rk = rankIn(m);
     var secName = { 'In theatres': 'in Theatres', 'On OTT': 'on OTT', 'Coming soon': 'Coming soon', 'Older releases': 'in Older releases', 'TV shows': 'in TV shows' }[d.section] || '';
     var chips = [];
-    if (langs.length) chips.push(h('span', { class: 'hc' }, [h('span', { 'aria-hidden': 'true', text: '🗣' }), 'In ' + langs.join(', ')]));
+    if (langs.length) chips.push(h('span', { class: 'hc', title: 'Languages' }, [icon('lang', 18), 'In ' + langs.join(', ')]));
     if (rk && rk <= 10) chips.push(h('span', { class: 'hc' }, [h('b', { text: 'TOP' }), '#' + rk + ' ' + secName]));
     else if (shownPct(sc) !== null) chips.push(h('span', { class: 'hc' }, [h('b', { text: sc.pct + '%' }), sc.tot + (sc.tot === 1 ? ' verdict' : ' verdicts')]));
     else chips.push(h('span', { class: 'hc' }, [statusLabel(m)]));
@@ -3877,6 +3877,7 @@
     skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
     play: '<path d="M7 4.5l12.5 7.5L7 19.5z"/>',
     music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+    lang: '<path d="M4 5h9M8.5 3v2M6 5c.6 3.2 2.6 5.8 5.5 7.2M11 5c-.8 3.6-3.4 6.6-7 8"/><path d="M13 21l4-9 4 9M14.4 18h5.2"/>',
     flag: '<path d="M5 21V4"/><path d="M5 4h11l-2 4 2 4H5"/>',
     check: '<path d="M5 12l5 5 9-10"/>',
     moon: '<path d="M20.5 14.5A8.5 8.5 0 1 1 9.5 3.5a7 7 0 0 0 11 11z"/>',
