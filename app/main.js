@@ -1117,6 +1117,7 @@
       box.innerHTML = ''; box.appendChild(art); box.appendChild(play); play.focus();
     }
     function start() {
+      if (miniOn()) { toMini(m, tr); return; }
       if (tnStopPlaying) tnStopPlaying();
       tnStopPlaying = stopIt;
       var frame = h('iframe', { class: 'tnframe', src: 'https://www.youtube-nocookie.com/embed/' + tr.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: m.data.title + ' · ' + tr.title,
@@ -1547,13 +1548,15 @@
 
   // Full-screen trailer player over the current page; Esc, the close button or a click outside the video closes it.
   // queue: { list: [{m, x}], i } — the row the video was opened from, so the next one can follow.
-  function openTrailerOverlay(m, x, opener, queue, keepMini) {
-    if (!keepMini) S.tovMini = false; // a video you open yourself starts full size; the next one in the row keeps the mini player
+  function openTrailerOverlay(m, x, opener, queue, keepMini, startAt) {
+    // A video you open yourself starts full size, unless the mini player is already showing: then it plays there.
+    if (!keepMini && !(S.tov && S.tovMini)) S.tovMini = false;
+    var st = startAt > 1 ? Math.floor(startAt) : 0;
     closeTrailerOverlay();
     var d = m.data, media;
-    if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin), title: d.title + ' · ' + x.title,
+    if (x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1' + (st ? '&start=' + st : '') + '&origin=' + encodeURIComponent(location.origin), title: d.title + ' · ' + x.title,
       allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
-    else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); setTimeout(function () { safePlay(media); }, 0); }
+    else { media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true }); media.setAttribute('aria-label', d.title + ' · ' + x.title); if (st) media.addEventListener('loadedmetadata', function () { try { media.currentTime = st; } catch (e) {} }, { once: true }); setTimeout(function () { safePlay(media); }, 0); }
     var close = h('button', { type: 'button', class: 'tov-x', 'aria-label': 'Close video', text: '×', on: { click: function () { S.tovMini = false; closeTrailerOverlay(); } } });
     // Go to the title's page from the player: close it, remember the home row it was opened from, then navigate.
     var toPage = function (e) {
@@ -1615,6 +1618,33 @@
     if (!tovMiniOk()) S.tovMini = false;
     setTovMini(!!S.tovMini, true);
     if (!S.tovMini) close.focus();
+  }
+  // Mini player helpers. miniOn: a video is playing in the corner. toMini: play this video of the title there, with the
+  // title's other videos as previous / next. ytClock: follow an inline YouTube player's position, so moving it to the
+  // mini player carries on from the same moment.
+  function miniOn() { return !!(S.tov && S.tovMini); }
+  function titleQueue(m, x) {
+    var list = vidItems(m).filter(function (y) { return y.yt || y.clip; }).map(function (y) { return { m: m, x: y }; });
+    var i = -1; list.some(function (q, k) { if (q.x === x || (x.yt && q.x.yt === x.yt) || (x.clip && q.x.clip === x.clip)) { i = k; return true; } return false; });
+    return i === -1 ? null : { list: list, i: i };
+  }
+  function toMini(m, x, startAt) { if (!x) return; S.tovMini = true; openTrailerOverlay(m, x, null, titleQueue(m, x), true, startAt); }
+  function ytClock(frame) {
+    var YT = 'https://www.youtube-nocookie.com';
+    frame._t = 0;
+    var onMsg = function (e) {
+      if (!frame.isConnected) { window.removeEventListener('message', onMsg); return; }
+      if (e.origin !== YT || e.source !== frame.contentWindow) return;
+      var m; try { m = typeof e.data === 'string' ? JSON.parse(e.data) : e.data; } catch (er) { return; }
+      if (m && m.info && typeof m.info === 'object' && typeof m.info.currentTime === 'number') frame._t = m.info.currentTime;
+    };
+    var hello = function () { try { frame.contentWindow.postMessage(JSON.stringify({ event: 'listening', id: 'rs-inl', channel: 'widget' }), YT); } catch (er) {} };
+    window.addEventListener('message', onMsg);
+    frame.addEventListener('load', function () { hello(); setTimeout(hello, 1000); });
+    return frame;
+  }
+  function miniBtn(cls, onClick) {
+    return tovMiniOk() ? h('button', { type: 'button', class: cls, title: 'Keep watching in a small player while you browse', on: { click: onClick } }, [icon('pip', 16), h('span', { text: 'Mini player' })]) : null;
   }
   function tovRepeat() { try { return localStorage.getItem('rs_repeat') === '1'; } catch (e) { return false; } }
   // Repeat for a YouTube song: when the player reports the end (state 0), go back to the start and play again.
@@ -2499,7 +2529,10 @@
     return it.filter(function (x) { return x.cat === 'trailers'; })[0] || it[0] || null;
   }
   function safePlay(el, onFail) { try { var p = el.play(); if (p && p.catch) p.catch(function () { if (onFail) onFail(); }); } catch (e) { if (onFail) onFail(); } }
-  function startTrailer(id) { S.play = { id: id, muted: false, paused: false }; S.heroNode = null; drawHero(); }
+  function startTrailer(id) {
+    if (miniOn()) { var mm = S.byId[id]; if (mm) { toMini(mm, heroYt(mm) || vidItems(mm).filter(function (x) { return x.clip; })[0]); return; } }
+    S.play = { id: id, muted: false, paused: false }; S.heroNode = null; drawHero();
+  }
   function stopTrailer() { if (S.heroVideo) { try { S.heroVideo.pause(); } catch (e) {} } S.play = null; S.heroNode = null; S.heroVideo = null; drawHero(); }
   function togglePause() {
     var vd = S.heroVideo, b = document.getElementById('vPlay'); if (!vd || !S.play) return;
@@ -2672,6 +2705,7 @@
       video,
       h('div', { class: 'shade' }),
       playing ? h('button', { type: 'button', class: 'vclose', 'aria-label': 'Close trailer', text: '×', on: { click: stopTitleTrailer } }) : null,
+      playing ? miniBtn('btn small tp-mini', function () { var t = video ? video.currentTime : 0, cx = vidItems(m).filter(function (x) { return x.clip === clip; })[0]; stopTitleTrailer(); toMini(m, cx || { clip: clip, title: 'Trailer', kind: 'Trailer', cat: 'trailers' }, t); }) : null,
       playing ? h('div', { class: 'vprog', 'aria-hidden': 'true' }, [h('span', { id: 'tProg' })]) : null,
       h('div', { class: 'in' }, [
         h('div', { class: 'poster art', style: art(m, 'poster', 480), role: 'img', 'aria-label': d.title + ' poster' }),
@@ -2708,6 +2742,7 @@
     return node;
   }
   function startTitleTrailer(id) {
+    if (miniOn()) { var mm = S.byId[id]; if (mm) { toMini(mm, vidItems(mm).filter(function (x) { return x.clip; })[0] || heroYt(mm)); return; } }
     if (S.play) stopTrailer();
     S.tplay = { id: id, muted: false, paused: false }; S.tpNode = null; render(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2879,9 +2914,13 @@
       h('a', { href: tv ? '/browse/tv-shows' : '/browse', text: tv ? 'TV shows' : 'Movies' }), ' › ', h('a', { href: movieUrl(m), text: d.title }), ' › ', kindName]));
     var stage = h('div', { class: 'vstage', style: 'background-image:url("https://i.ytimg.com/vi/' + cur.yt + '/hqdefault.jpg")' });
     var play = function () {
+      if (miniOn()) { toMini(m, x); return; }
       stage.innerHTML = ''; stage.classList.add('on');
-      stage.appendChild(h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + cur.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1', title: videoName(m, cur),
+      var fr = ytClock(h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + cur.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin), title: videoName(m, cur),
         allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' }));
+      stage.appendChild(fr);
+      var mb = miniBtn('btn small vp-mini', function () { var t = fr._t; stage.innerHTML = ''; stage.classList.remove('on'); toMini(m, x, t); w.querySelector('.vp-mini') && w.querySelector('.vp-mini').remove(); });
+      var acts = w.querySelector('.vacts'); if (mb && acts && !acts.querySelector('.vp-mini')) acts.insertBefore(mb, acts.firstChild);
     };
     stage.appendChild(h('span', { class: 'kb', text: kindName.toUpperCase() }));
     stage.appendChild(h('button', { type: 'button', class: 'vplay', 'aria-label': 'Play ' + videoName(m, cur), on: { click: play } }, [h('span', { 'aria-hidden': 'true', text: '▶' })]));
@@ -2926,6 +2965,7 @@
     return done;
   }
   function playVid(mid, i, scroll) {
+    if (miniOn()) { var mm = S.byId[mid]; if (mm) { toMini(mm, vidItems(mm)[i]); return; } }
     S.vsel = S.vsel || {}; S.vsel[mid] = i;
     var prev = S.vplay && S.vplay.mid === mid ? S.vplay.i : -1;
     S.vplay = { mid: mid, i: i }; S.vIdle = null;
@@ -3398,8 +3438,8 @@
   }
   function vidStage(m, items, i, playing, onClose) {
     var d = m.data, x = items[i], media = null;
-    if (playing && x.yt) media = h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1',
-      title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' });
+    if (playing && x.yt) media = ytClock(h('iframe', { src: 'https://www.youtube-nocookie.com/embed/' + x.yt + '?autoplay=1&rel=0&playsinline=1&modestbranding=1&enablejsapi=1&origin=' + encodeURIComponent(location.origin),
+      title: d.title + ' · ' + x.title, allow: 'autoplay; encrypted-media; picture-in-picture; fullscreen', allowfullscreen: true, referrerpolicy: 'strict-origin-when-cross-origin' }));
     else if (playing && x.clip) {
       media = h('video', { src: x.clip, controls: true, autoplay: true, playsinline: true, preload: 'auto' });
       media.setAttribute('aria-label', d.title + ' · ' + x.title);
@@ -3416,6 +3456,11 @@
     var info = h('div', { class: 'thx-i' }, [
       h('div', { style: 'min-width:0' }, [h('div', { class: 'kicker', style: 'color:var(--accent)', text: playing ? 'Now playing' : x.kind }), h('h3', { text: x.title })]),
       h('div', { class: 'thx-c' }, [
+        playing && media ? miniBtn('btn small', function () {
+          var t = media.tagName === 'VIDEO' ? media.currentTime : media._t;
+          var was = S.vplay ? S.vplay.i : -1; S.vplay = null; if (!refreshVideos(m.id, [was])) { S.vKeep = null; render(true); }
+          toMini(m, x, t);
+        }) : null,
         vp ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Share ' + x.title, text: 'Share', on: { click: function () { shareVideo(m, vp, movieUrl(m) + vp.path); } } }) : null,
         onClose ? h('button', { type: 'button', class: 'btn small', 'aria-label': 'Close player', text: 'Close', on: { click: onClose } }) : null
       ])
