@@ -2317,10 +2317,11 @@
     var countText = function () { return list.length + ' ' + P.what + (S.vids.q.trim() ? ' matching “' + S.vids.q.trim() + '”' : '') + (S.vids.sort === 'views' ? (allViews ? ', most viewed first' : ' · loading view counts…') : S.vids.q.trim() ? '' : ', newest first') + (S.navLang ? ' · ' + S.navLang + ' only' : ''); };
     var drawRes = function () {
       res.innerHTML = ''; countEl.textContent = countText();
-      res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, S.vids.n).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
-      if (list.length > S.vids.n) res.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; drawRes(); } } })]));
+      var shown = Math.ceil(S.vids.n / 48) * gridPer(res, 'vgrid', 48); // whole rows: 48 a time, rounded to the grid's columns
+      res.appendChild(h('div', { class: 'vgrid' }, list.slice(0, shown).map(function (p, i) { return P.card(p, i, list); }))); // the player's previous/next runs through the whole list
+      if (list.length > shown) res.appendChild(h('div', { style: 'text-align:center;margin:24px 0' }, [h('button', { type: 'button', class: 'btn', text: 'Show more', on: { click: function () { S.vids.n += 48; drawRes(); } } })]));
       fillViews(res);
-      if (S.param === 'songs') loadViews(allYt, list.slice(0, S.vids.n).map(function (p) { return p.x.yt; }), function () { if (res.isConnected) fillViews(res); });
+      if (S.param === 'songs') loadViews(allYt, list.slice(0, shown).map(function (p) { return p.x.yt; }), function () { if (res.isConnected) fillViews(res); });
       if (!list.length) res.appendChild(h('p', { class: 'note', text: S.vids.q.trim() ? 'No ' + P.what + ' match “' + S.vids.q.trim() + '”. Try a film, a singer or fewer words.' : 'Nothing here yet.' }));
     };
     head.appendChild(countEl);
@@ -4449,7 +4450,7 @@
         if (P.sort === 'recent') return b.last.localeCompare(a.last) || b.n - a.n || a.name.localeCompare(b.name);
         return b.n - a.n || a.name.localeCompare(b.name);
       });
-      var PER = 60, pages = Math.max(1, Math.ceil(list.length / PER));
+      var PER = gridPer(w, 'pgrid'), pages = Math.max(1, Math.ceil(list.length / PER));
       if (P.page > pages) P.page = pages; if (P.page < 1) P.page = 1;
       var from = (P.page - 1) * PER;
       if (S.route === 'people') syncListUrl('/people' + (P.page > 1 ? '?page=' + P.page : ''));
@@ -4879,18 +4880,19 @@
   // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
   // Posters per page: about 60, rounded to whole rows of the grid as it is drawn here, so a page never ends on a half-empty row
   // (60 fills rows of 2, 3, 4, 5 and 6; 7 columns get 63, 8 get 64). A resize that changes the column count redraws.
-  function gridPer(host) {
-    var g = h('div', { class: 'grid-posters', 'aria-hidden': 'true', style: 'visibility:hidden;height:0;overflow:hidden' }); host.appendChild(g);
+  function gridPer(host, cls, base) {
+    cls = cls || 'grid-posters';
+    var g = h('div', { class: cls, 'aria-hidden': 'true', style: 'visibility:hidden;height:0;overflow:hidden' }); host.appendChild(g);
     var n = 0; try { n = getComputedStyle(g).gridTemplateColumns.split(' ').filter(function (x) { return x && x !== 'none'; }).length; } catch (e) {}
-    host.removeChild(g); n = n || 1; S.gridCols = n;
-    return n * Math.max(1, Math.round(60 / n));
+    host.removeChild(g); n = n || 1; S.gridCols = n; S.gridCls = cls;
+    return n * Math.max(1, Math.round((base || 60) / n));
   }
   (function () {
     var t = null;
     window.addEventListener('resize', function () {
       clearTimeout(t); t = setTimeout(function () {
-        if (!S.gridCols || ['browse', 'genre', 'year'].indexOf(S.route) === -1) return;
-        var vw = $('view-' + S.route), host = vw && vw.querySelector('.grid-posters'); if (!host) return;
+        if (!S.gridCols || ['browse', 'genre', 'year', 'people', 'vids'].indexOf(S.route) === -1) return;
+        var vw = $('view-' + S.route), host = vw && vw.querySelector('.' + (S.gridCls || 'grid-posters') + ':not([aria-hidden])'); if (!host) return;
         var n = 0; try { n = getComputedStyle(host).gridTemplateColumns.split(' ').filter(Boolean).length; } catch (e) {}
         if (n && n !== S.gridCols) render(true);
       }, 250);

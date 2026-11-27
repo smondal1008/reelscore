@@ -697,8 +697,8 @@ a.lead:hover .ln { text-decoration: underline; }
   .vstrip { margin: -36px 12px 0; padding: 18px; flex-direction: column; }
   .vs-sep { width: auto; height: 1px; }
   .vs-peer { flex-basis: auto; }
-  .vgrid { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 4px; }
-  .vgrid .vcard { flex: 0 0 240px; }
+  .tpage .vgrid { display: flex; overflow-x: auto; gap: 12px; padding-bottom: 4px; }
+  .tpage .vgrid .vcard { flex: 0 0 240px; }
   .leads, .leads.three { grid-template-columns: 1fr; }
   .lead .lf { width: 64px; height: 64px; font-size: 20px; }
 }
