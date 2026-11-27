@@ -114,6 +114,14 @@
       "destination": "/"
     },
     {
+      "source": "/lists",
+      "destination": "/"
+    },
+    {
+      "source": "/lists/:slug",
+      "destination": "/"
+    },
+    {
       "source": "/news",
       "destination": "/"
     },

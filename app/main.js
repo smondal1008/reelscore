@@ -478,7 +478,7 @@
     blog: { base: '/blog', label: 'Blog', title: 'Reelscore Blog: Product News & Updates', h1: 'Blog', lead: 'What’s new on Reelscore, how it works and what we’re building next, from the Reelscore team.',
       what: 'post', all: 'See all posts', more: 'More from the blog', none: 'No posts yet. Check back soon.', back: 'Back to the Blog', tag: 'Blog' }
   };
-  function postKind(p) { return p && p.kind === 'blog' ? 'blog' : 'news'; }
+  function postKind(p) { return p && p.kind === 'blog' ? 'blog' : p && p.kind === 'list' ? 'list' : 'news'; }
   // Movies (/movies, /movies/<section>) and TV Shows (/tv-shows): Browse split by kind. Titles match scripts/build.mjs.
   var MOVIES_TITLE = 'Indian Movies – Reviews, Verdicts & OTT | Reelscore', TV_TITLE = 'Indian TV Shows & Web Series | Reelscore';
   var MOVIE_SECTIONS = { 'in-theatres': 'In theatres', 'coming-soon': 'Coming soon', 'on-ott': 'On OTT', 'older-releases': 'Older releases' };
@@ -551,6 +551,7 @@
     }
     else if (path === '/tv-shows') { S.route = 'tvshows'; S.param = null; catFromUrl(S.cat.tv, 'All'); }
     else if ((mm = path.match(/^\/admin(\/.*)?$/))) { S.route = 'admin'; S.param = null; S.adminSub = (mm[1] || '').toLowerCase(); }
+    else if ((mm = path.match(/^\/lists(?:\/([a-z0-9-]+))?$/i))) { S.route = 'lists'; S.param = mm[1] ? mm[1].toLowerCase() : null; }
     else if ((mm = path.match(/^\/(news|blog)(?:\/([a-z0-9-]+))?$/i))) { S.route = 'news'; S.newsKind = mm[1].toLowerCase(); S.param = mm[2] ? mm[2].toLowerCase() : null; }
     else if (path === '/about') { S.route = 'about'; S.param = null; }
     else if (path === '/privacy') { S.route = 'privacy'; S.param = null; }
@@ -570,12 +571,13 @@
     else if (S.route === 'vids') document.title = VID_PAGES[S.param].t;
     else if (S.route === 'notfound') document.title = 'Page not found | Reelscore';
     else if (S.route === 'about') document.title = 'About Reelscore & How Scores Work';
-    else if (S.route === 'news') { if (!S.param) document.title = POSTS[S.newsKind].title; } // a story's page keeps its own title until drawNews sets it
+    else if (S.route === 'news') { if (!S.param) document.title = POSTS[S.newsKind].title; }
+    else if (S.route === 'lists') { if (!S.param) document.title = LISTS_TITLE; } // a story's page keeps its own title until drawNews sets it
     else if (S.route === 'privacy') document.title = 'Privacy Policy | Reelscore';
     else if (S.route === 'contact') document.title = 'Contact | Reelscore';
     else if (S.route === 'tonight') document.title = 'Tonight: what to watch now | Reelscore';
     else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video') document.title = 'Reelscore — Reviews for Indian movies and series';
-    if (S.route === 'news') loadNews();
+    if (S.route === 'news' || S.route === 'lists') loadNews();
     if (S.route === 'admin') startAdmin();
     S.restoreHome = S.route === 'home' && S.prevRoute === 'title' && !!S.homeSpot;
     S.prevRoute = S.route;
@@ -583,12 +585,12 @@
     else if (S.route === 'title' && !from) S.titleFrom = null;
     S.lastPath = location.pathname; S.lastSearch = location.search;
     if (S.route === 'notfound') setNoindex(true);
-    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video' && S.route !== 'news') setNoindex(false);
+    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'video' && S.route !== 'news' && S.route !== 'lists') setNoindex(false);
     if (S.route === 'list' || S.route === 'admin' || S.route === 'tonight') setCanonical(null);
     else if (S.route === 'browse' || S.route === 'people' || S.route === 'genre' || S.route === 'year') setCanonical(listCanonical());
     else if (S.route === 'movies' || S.route === 'tvshows') setCanonical(catCanonical());
     else if (S.route === 'notfound') setCanonical(null);
-    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'news') setCanonical(location.pathname);
+    else if (S.route !== 'title' && S.route !== 'person' && S.route !== 'news' && S.route !== 'lists') setCanonical(location.pathname);
     S.rtab = 'all';
     render(true);
     window.scrollTo(0, 0);
@@ -692,6 +694,7 @@
     else if (S.route === 'notfound') drawNotFound();
     else if (S.route === 'about') drawAbout();
     else if (S.route === 'news') drawNews();
+    else if (S.route === 'lists') drawLists();
     else if (S.route === 'privacy') drawAbout('privacy');
     else if (S.route === 'contact') drawContact();
     applyAdsRule();
@@ -1860,8 +1863,8 @@
       S.newsLive = snap.docs.map(function (x) { var d = x.data() || {}; d.id = x.id; return d; })
         .filter(function (d) { return d.slug && d.title; })
         .sort(function (a, b) { return String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')); });
-      if (S.route === 'news') render(true);
-    }).catch(function () { loadNews.failed = true; if (S.route === 'news') render(true); });
+      if (S.route === 'news' || S.route === 'lists') render(true);
+    }).catch(function () { loadNews.failed = true; if (S.route === 'news' || S.route === 'lists') render(true); });
   }
   function newsUrl(p) { return POSTS[postKind(p)].base + '/' + p.slug; }
   function newsDate(p) { return /^\d{4}-\d{2}-\d{2}/.test(p.publishedAt || '') ? fmtDate(p.publishedAt.slice(0, 10), true) : ''; }
@@ -1941,6 +1944,79 @@
     w.appendChild(h('p', { class: 'note', style: 'margin:0 0 18px', text: K.lead }));
     w.appendChild(list.length ? h('div', { class: 'card news' }, list.map(newsItem)) : h('div', { class: 'empty', text: S.newsLive || loadNews.failed ? K.none : 'Loading…' }));
     w.appendChild(footer());
+  }
+  // ---------- Lists (/lists, /lists/<slug>): hand-picked titles with a note each, written in Admin > Lists ----------
+  // Stored in Firestore "news" with kind "list". Each build writes the pages for search engines; the app redraws them
+  // from the database (with posters and where to watch), so a list shows as soon as it is published.
+  var LISTS_TITLE = 'Movie Lists: What to Watch by Language & OTT | Reelscore';
+  function listsLive() { return (S.newsLive || []).filter(function (p) { return postKind(p) === 'list'; }); }
+  function listItems(p) { return (Array.isArray(p.items) ? p.items : []).map(function (x) { return { m: x && S.byId[x.id], note: String((x && x.note) || '').trim() }; }).filter(function (x) { return x.m; }); }
+  function listWhere(m) {
+    var d = m.data;
+    if (!isTv(m) && isUpcoming(m)) return d.releaseDate ? 'In theatres ' + fmtDate(d.releaseDate, true) : 'Coming soon';
+    if (!isTv(m) && (nowPlayingOf(d) === 'theatres' || d.section === 'In theatres')) return 'In theatres now';
+    return d.platform ? 'On ' + String(d.platform).split('/').map(function (x) { return x.trim(); }).filter(Boolean).join(', ') : '';
+  }
+  function drawLists() {
+    var v = $('view-lists');
+    var built = !!v.querySelector('[data-prerendered]') && location.pathname.replace(/\/+$/, '') === adsFirst.path.replace(/\/+$/, '');
+    if ((!S.newsLive || !S.loaded) && built) return;
+    // Opened inside the app while the database can't be reached: load the built page instead.
+    if (loadNews.failed && !S.newsLive && !built && S.pushed) { location.reload(); return; }
+    v.innerHTML = '';
+    var w = h('div', { class: 'wrapx nwpage' }); v.appendChild(w);
+    var lists = listsLive();
+    w.appendChild(h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › '].concat(S.param ? [h('a', { href: '/lists', text: 'Lists' })] : ['Lists'])));
+    if (!S.loaded || (!S.newsLive && !loadNews.failed)) { w.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+    if (S.param) {
+      var p = lists.filter(function (x) { return x.slug === S.param; })[0];
+      if (!p) {
+        document.title = 'Not found | Reelscore'; setNoindex(true); setCanonical(null);
+        w.appendChild(h('div', { class: 'empty' }, ['We couldn’t find this list. ', h('a', { href: '/lists', text: 'See all lists' })])); w.appendChild(footer()); return;
+      }
+      var items = listItems(p), up = String(p.updatedAt || p.publishedAt || '').slice(0, 10);
+      setNoindex(items.filter(function (x) { return titleHasSubstance(x.m); }).length < 5); setCanonical('/lists/' + p.slug);
+      document.title = (p.title + ' | Reelscore').length <= 60 ? p.title + ' | Reelscore' : p.title.length <= 65 ? p.title : p.title.slice(0, 64).replace(/\s+\S*$/, '') + '…'; // same as scripts/build.mjs
+      var box = h('div', { class: 'lsw' }); w.appendChild(box);
+      box.appendChild(h('h1', { class: 'nwh', style: 'font-family:Anton, "Anton Fallback", Impact, sans-serif;font-weight:400;font-size:clamp(34px,4.4vw,52px);letter-spacing:.5px;line-height:1.08;margin:0 0 10px', text: p.title }));
+      if (p.summary) box.appendChild(h('p', { class: 'nwdek', text: p.summary }));
+      box.appendChild(h('div', { class: 'note', style: 'margin-bottom:8px', text: ['By Reelscore', /^\d{4}-\d{2}-\d{2}$/.test(up) ? 'Updated ' + fmtDate(up, true) : '', items.length + (items.length === 1 ? ' title' : ' titles')].filter(Boolean).join(' · ') }));
+      if (p.body) box.appendChild(h('div', { class: 'nwbody' }, newsBody(p.body)));
+      var ol = h('ol', { style: 'list-style:none;padding:0;margin:8px 0 0' });
+      items.forEach(function (x, i) {
+        var m = x.m, d = m.data, pa = artLazy(m, 'poster'), sc = score(m.id), wh = listWhere(m);
+        ol.appendChild(h('li', { class: 'lsi' }, [
+          h('a', { class: 'lsp art', href: movieUrl(m), style: pa.style, 'data-bg': pa.bg, 'aria-label': d.title, tabindex: '-1' }, [safeUrl(d.posterUrl) ? null : h('span', { class: 'ptitle', 'aria-hidden': 'true', text: d.title })]),
+          h('div', { class: 'lsb' }, [
+            h('span', { class: 'lsn', 'aria-hidden': 'true', text: String(i + 1) }),
+            h('h2', { style: 'margin:0;font-size:inherit' }, [h('a', { class: 'lst', href: movieUrl(m), text: d.title })]),
+            h('span', { class: 'lsm', text: [isTv(m) ? 'TV' : '', (d.releaseDate || '').slice(0, 4), langOf(d), d.genre, d.runtime].filter(Boolean).join(' · ') }),
+            wh ? h('span', { class: 'lsv' }, [/^On /.test(wh) ? platLogo(d.platform) : null, h('span', { text: wh })]) : null,
+            x.note ? h('p', { class: 'lsnote' }, newsInline(x.note)) : null,
+            shownPct(sc) != null ? h('span', { class: 'note', text: shownPct(sc) + '% of ' + sc.tot + ' Reelscore verdicts say watch it' }) : null
+          ])
+        ]));
+      });
+      box.appendChild(ol);
+      var more = lists.filter(function (x) { return x !== p; }).slice(0, 4);
+      if (more.length) w.appendChild(h('section', { class: 'nwmore', 'aria-labelledby': 'h-lsmore' }, [h('h2', { id: 'h-lsmore', text: 'More lists' }), h('div', { class: 'lshub' }, more.map(listCard))]));
+      w.appendChild(footer());
+      return;
+    }
+    setNoindex(!lists.length); setCanonical('/lists'); document.title = LISTS_TITLE;
+    w.appendChild(h('h1', { class: 'display', style: 'margin:0 0 6px', text: 'Lists' }));
+    w.appendChild(h('p', { class: 'note', style: 'margin:0 0 18px', text: 'Hand-picked lists of Indian films and series: what to stream by language, genre and platform, written by the Reelscore team.' }));
+    w.appendChild(lists.length ? h('div', { class: 'lshub' }, lists.map(listCard)) : h('div', { class: 'empty', text: 'No lists yet. Check back soon.' }));
+    w.appendChild(footer());
+  }
+  function listCard(p) {
+    var items = listItems(p);
+    return h('a', { class: 'lsc', href: '/lists/' + p.slug }, [
+      h('span', { class: 'lscs', 'aria-hidden': 'true' }, items.slice(0, 4).map(function (x) { return h('span', { style: art(x.m, 'poster', 160) }); })),
+      h('span', { class: 'lsct', text: p.title }),
+      p.summary ? h('span', { class: 'note', text: p.summary }) : null,
+      h('span', { class: 'note', text: items.length + ' titles' })
+    ]);
   }
   // /about is a static page; navigating to it inside the app loads it in full.
   function drawAbout(id) { if (!$('view-' + (id || 'about')).querySelector('[data-prerendered]')) location.reload(); }
@@ -2404,7 +2480,7 @@
     return null;
   }
   function footer() {
-    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('a', { href: '/news', text: 'News' }), h('a', { href: '/blog', text: 'Blog' }), h('a', { href: '/privacy', text: 'Privacy' }), h('a', { href: '/contact', text: 'Contact' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
+    return h('footer', { class: 'ft' }, [h('span', { text: 'Reelscore · Verdicts and reviews are public.' }), h('a', { href: '/about', text: 'About & how scores work' }), h('a', { href: '/news', text: 'News' }), h('a', { href: '/lists', text: 'Lists' }), h('a', { href: '/blog', text: 'Blog' }), h('a', { href: '/privacy', text: 'Privacy' }), h('a', { href: '/contact', text: 'Contact' }), h('span', { class: 'note', text: 'Some data: Wikidata (CC0) and TVmaze (CC BY-SA 4.0)' })]);
   }
 
   // ---------- title ----------

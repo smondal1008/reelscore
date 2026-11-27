@@ -477,7 +477,7 @@ window.ReelAdmin = function (env) {
   var PE_PLAIN = /^(as\s+)?(cast|actor|actress|lead|self|host|co-host|judge|narrator|guest|presenter|anchor|mentor|contestant)\b/i;
   function peIsTv(d) { return d.section === 'TV shows'; }
   function peUpcoming(d) { return !peIsTv(d) && (d.releaseDate ? d.releaseDate > todayStr() : d.section === 'Coming soon'); }
-  function peLang(d) { return (Array.isArray(d.languages) ? d.languages[0] : d.language) || ''; }
+  function peLang(d) { return (Array.isArray(d.languages) ? d.languages[0] : String(d.languages || d.language || '').split(/[,;]/)[0].trim()) || ''; }
   function peWhen(d, c) { if (peIsTv(d)) { var ys = String((c && c.year) || d.releaseDate || '').match(/\d{4}/g); return ys ? ys.sort().pop() : ''; } return d.releaseDate || ''; }
   function peSvcs(d) { return peUpcoming(d) || d.section === 'In theatres' ? [] : String(d.platform || '').split('/').map(function (x) { return x.trim(); }).filter(Boolean); }
   // Every credit for key: one row per cast entry, plus a row for a Director-field name with no cast entry.
@@ -805,6 +805,191 @@ window.ReelAdmin = function (env) {
       renderPersonEdit(true);
     }).catch(function (e) { pe.saving = false; peBar(); setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
   }
+  // ---------- Lists: /admin/lists and /admin/lists/<id|new> ----------
+  // Hand-picked lists for /lists/<slug>: a title, a summary (also the Google description), an optional intro, and titles in
+  // order, each with a short note in our own words. Stored in Firestore "news" with kind "list" (same rules as News).
+  var listsMode = false, lsWant = '', lsEd = null, lsDirty = false;
+  var LS_MIN_PUBLISH = 5;
+  function lsDocs() { return kindDocs('list'); }
+  function lsCountEl() { var el = $('listsCount'); if (!el) return; var all = lsDocs(), d = all.filter(function (x) { return x.data.status !== 'published'; }).length; el.textContent = newsLoaded && all.length ? (d ? d + ' draft' + (d === 1 ? '' : 's') : String(all.length)) : ''; }
+  function lsOpen(id) {
+    var doc = lsDocs().filter(function (x) { return x.id === id; })[0];
+    lsEd = doc ? { id: doc.id, d: JSON.parse(JSON.stringify(doc.data)), slugEdited: true } : { id: null, d: { kind: 'list', title: '', slug: '', summary: '', body: '', items: [], status: 'draft' }, slugEdited: false };
+    if (!Array.isArray(lsEd.d.items)) lsEd.d.items = [];
+    lsDirty = false;
+  }
+  function lsTouch() { lsDirty = true; var s = $('lsState'); if (s) { s.textContent = 'Unsaved changes'; s.className = 'pe-dirty'; } }
+  function lsMovie(id) { return movies.find(function (m) { return m.id === id; }) || null; }
+  function lsMeta(m) { var d = m.data; return [peIsTv(d) ? 'TV' : '', (d.releaseDate || '').slice(0, 4), peLang(d), d.genre].filter(Boolean).join(' · '); }
+  function lsWhere(d) { return peUpcoming(d) ? 'Coming soon' : d.section === 'In theatres' ? 'In theatres' : String(d.platform || '').trim() ? 'On ' + String(d.platform).split('/').map(function (x) { return x.trim(); }).filter(Boolean).join(', ') : ''; }
+  function renderLists(force) {
+    var main = $('main');
+    // A catalogue update while a list is being edited: leave the page alone (the draft lives in lsEd).
+    if (!force && lsDirty && document.activeElement && document.activeElement.closest && document.activeElement.closest('#main') && /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement.tagName) && main.querySelector('#ls_title')) return;
+    main.innerHTML = '';
+    if (!lsWant) {
+      var all = lsDocs().slice().sort(function (a, b) { return String(b.data.updatedAt || '').localeCompare(String(a.data.updatedAt || '')); });
+      var card = h('section', { class: 'card' }, [
+        h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: all.length + ' list' + (all.length === 1 ? '' : 's') + ' · /lists on the site' }), h('h1', { text: 'Lists' })]),
+          h('a', { class: 'btn primary', href: '/admin/lists/new', text: '+ New list', style: 'text-decoration:none' + (canWrite ? '' : ';pointer-events:none;opacity:.5') })]),
+        h('div', { class: 'note', text: 'Hand-picked lists such as “Hindi thrillers on Netflix”. Each title gets a short note in our own words. A list goes into Google once it links to ' + LS_MIN_PUBLISH + ' or more titles with content; its page is built at the next deploy, and shows on the site as soon as it’s published.' })
+      ]);
+      if (!newsLoaded) card.appendChild(h('div', { class: 'empty', text: 'Loading…' }));
+      else if (newsErr) card.appendChild(h('div', { class: 'warn', text: newsErr }));
+      else if (!all.length) card.appendChild(h('div', { class: 'empty', text: 'No lists yet.' }));
+      var rows = h('div', { class: 'rows' });
+      all.forEach(function (x) {
+        var d = x.data, live = d.status === 'published', n = (d.items || []).length;
+        rows.appendChild(h('div', { class: 'pe-row' }, [
+          h('div', { class: 'pe-rb' }, [h('a', { href: '/admin/lists/' + x.id, class: 'pe-t', text: d.title || '(No title)' }),
+            h('span', { class: 'note', text: '/lists/' + (d.slug || '…') + ' · ' + n + ' title' + (n === 1 ? '' : 's') + (d.updatedAt ? ' · saved ' + newsWhen(d.updatedAt) : '') }),
+            h('span', { class: live ? 'pe-ok' : 'warn', text: live ? '● Published' : '● Draft' })]),
+          h('div', { class: 'pe-act' }, [live ? h('a', { class: 'btn small', href: '/lists/' + d.slug, target: '_blank', rel: 'noopener', text: 'View ↗' }) : null, h('a', { class: 'btn small', href: '/admin/lists/' + x.id, text: 'Edit' })])
+        ]));
+      });
+      if (all.length) card.appendChild(rows);
+      main.appendChild(card);
+      return;
+    }
+    if (!lsEd || (lsWant === 'new' ? lsEd.id : lsEd.id !== lsWant)) {
+      if (lsWant !== 'new' && !lsDocs().some(function (x) { return x.id === lsWant; })) {
+        main.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/lists', text: '← All lists' })]));
+        main.appendChild(h('div', { class: 'empty', text: newsLoaded ? 'No list at this address. It may have been deleted.' : 'Loading…' })); return;
+      }
+      lsOpen(lsWant === 'new' ? null : lsWant);
+    }
+    var E = lsEd, d = E.d, live = d.status === 'published';
+    var wrap = h('div', { class: 'pe' }); main.appendChild(wrap);
+    wrap.appendChild(h('div', { class: 'crumbs' }, [h('a', { href: '/admin/lists', text: '← All lists' }),
+      live && E.id ? h('a', { href: '/lists/' + d.slug, target: '_blank', rel: 'noopener', text: 'View on the site ↗' }) : h('span', { class: 'sub', text: E.id ? 'Draft · only admins can see it' : 'New list' })]));
+    var titleIn = h('input', { class: 'in', id: 'ls_title', maxlength: 90, placeholder: 'e.g. Hindi thrillers on Netflix', disabled: !canWrite }); titleIn.value = d.title || '';
+    var slugIn = h('input', { class: 'in', id: 'ls_slug', maxlength: 80, disabled: !canWrite }); slugIn.value = d.slug || '';
+    var sumIn = h('textarea', { class: 'in', id: 'ls_sum', rows: 3, maxlength: 220, placeholder: 'One or two sentences: what’s on the list and who it’s for.', disabled: !canWrite }); sumIn.value = d.summary || '';
+    var bodyIn = h('textarea', { class: 'in', id: 'ls_body', rows: 4, maxlength: 4000, placeholder: 'Optional. A short intro above the titles.', disabled: !canWrite }); bodyIn.value = d.body || '';
+    var tN = h('span', { class: 'note' }), sN = h('span', { class: 'note' });
+    var gt = h('span', { class: 'pe-gt' }), gd = h('span', { class: 'pe-gd' });
+    function google() {
+      var t = d.title || 'Untitled list'; gt.textContent = (t + ' | Reelscore').length <= 60 ? t + ' | Reelscore' : t; gd.textContent = d.summary || '—';
+      tN.textContent = (d.title || '').length + ' characters' + ((d.title || '').length > 60 ? ': Google may cut it' : '');
+      sN.textContent = (d.summary || '').length + ' / 158';
+    }
+    titleIn.addEventListener('input', function () { d.title = titleIn.value; if (!E.slugEdited) { d.slug = urlSlug(d.title); slugIn.value = d.slug; } lsTouch(); google(); });
+    slugIn.addEventListener('input', function () { d.slug = urlSlug(slugIn.value); E.slugEdited = true; lsTouch(); });
+    slugIn.addEventListener('blur', function () { slugIn.value = d.slug; });
+    sumIn.addEventListener('input', function () { d.summary = sumIn.value; lsTouch(); google(); });
+    bodyIn.addEventListener('input', function () { d.body = bodyIn.value; lsTouch(); });
+
+    var problem = function (publishing) {
+      if (!String(d.title || '').trim()) return [titleIn, 'Give the list a title.'];
+      if (!/^[a-z0-9-]+$/.test(d.slug || '')) return [slugIn, 'Give the list an address (letters, numbers and dashes).'];
+      if (lsDocs().some(function (x) { return x.id !== E.id && x.data.slug === d.slug; })) return [slugIn, 'Another list already uses /lists/' + d.slug + '. Change the address.'];
+      if (publishing && String(d.summary || '').trim().length < 40) return [sumIn, 'Write a summary of at least 40 characters before publishing.'];
+      var ok = d.items.filter(function (x) { var m = lsMovie(x.id); return m && m.data.published !== false; });
+      if (publishing && ok.length < LS_MIN_PUBLISH) return [$('ls_add'), 'Add at least ' + LS_MIN_PUBLISH + ' published titles before publishing.'];
+      if (publishing && d.items.some(function (x) { return !String(x.note || '').trim(); })) return [document.querySelector('.ls-note-empty') || $('ls_add'), 'Write a note for every title before publishing.'];
+      return null;
+    };
+    var save = function (status) {
+      var publishing = status === 'published', bad = problem(publishing);
+      if (bad) { setStatus(bad[1]); if (bad[0]) bad[0].focus(); return; }
+      var now = new Date().toISOString(), id = E.id || ('l' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6));
+      var old = (lsDocs().filter(function (x) { return x.id === E.id; })[0] || { data: {} }).data;
+      var body = { kind: 'list', title: String(d.title).trim().slice(0, 90), slug: d.slug, summary: String(d.summary || '').trim().slice(0, 220), body: String(d.body || '').trim().slice(0, 4000),
+        items: d.items.filter(function (x) { return x && x.id; }).slice(0, 60).map(function (x) { return { id: x.id, note: String(x.note || '').trim().slice(0, 400) }; }),
+        status: status, createdAt: old.createdAt || now, updatedAt: now };
+      if (old.publishedAt) body.publishedAt = old.publishedAt; else if (publishing) body.publishedAt = now;
+      setStatus('Saving…');
+      db.doc('news/' + id).set(body).then(function () {
+        E.id = id; E.d = JSON.parse(JSON.stringify(body)); lsDirty = false;
+        setStatus(publishing ? (old.status === 'published' ? 'Saved. The change shows on /lists/' + body.slug + ' now.' : 'Published at /lists/' + body.slug + '. Its page reaches Google after the next deploy.') : 'Draft saved.');
+        if (location.pathname !== '/admin/lists/' + id) history.replaceState(null, '', '/admin/lists/' + id);
+        lsWant = id; renderLists();
+      }).catch(function (e) { setStatus('Couldn’t save' + (e && e.message ? ': ' + e.message : '') + '.'); });
+    };
+    wrap.appendChild(h('section', { class: 'card pe-head' }, [
+      h('div', { class: 'pe-id' }, [h('div', { class: 'pe-kick', text: live ? 'Published list' : 'Draft list' }), h('h1', { class: 'pe-name', text: d.title || 'New list' }),
+        h('div', { class: 'pe-meta' }, [h('span', { class: 'note', text: '/lists/' + (d.slug || '…') }), h('span', { class: 'note', text: d.items.length + ' title' + (d.items.length === 1 ? '' : 's') })])]),
+      h('div', { class: 'pe-save' }, [h('span', { id: 'lsState', class: lsDirty ? 'pe-dirty' : 'note', text: lsDirty ? 'Unsaved changes' : E.id ? 'All changes saved' : 'Not saved yet' }),
+        h('div', { style: 'display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end' }, [
+          live ? null : h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Save draft', on: { click: function () { save('draft'); } } }),
+          h('button', { type: 'button', class: 'btn primary', disabled: !canWrite, text: live ? 'Save changes' : 'Publish', on: { click: function () { save('published'); } } }),
+          live ? h('button', { type: 'button', class: 'btn', disabled: !canWrite, text: 'Unpublish', on: { click: function () {
+            askConfirm('Unpublish this list?', 'It leaves /lists at once. Its address stays reserved, so you can publish it again later.', 'Unpublish', false).then(function (yes) { if (yes) save('draft'); });
+          } } }) : null,
+          E.id ? h('button', { type: 'button', class: 'btn ghost', disabled: !canWrite, text: 'Delete', on: { click: function () {
+            askConfirm('Delete this list?', '“' + (d.title || 'Untitled') + '” will be removed for good. This can’t be undone.', 'Delete', true).then(function (yes) {
+              if (!yes) return;
+              db.doc('news/' + E.id).delete().then(function () { lsEd = null; lsDirty = false; setStatus('List deleted.'); history.pushState(null, '', '/admin/lists'); lsWant = ''; renderLists(); })
+                .catch(function (e) { setStatus('Couldn’t delete' + (e && e.message ? ': ' + e.message : '') + '.'); });
+            });
+          } } }) : null])])
+    ]));
+    var cols = h('div', { class: 'pe-cols' }), left = h('div', { class: 'pe-main' }), side = h('aside', { class: 'pe-side' });
+    cols.appendChild(left); cols.appendChild(side); wrap.appendChild(cols);
+    left.appendChild(h('section', { class: 'card', 'aria-labelledby': 'ls_h_about' }, [h('h2', { id: 'ls_h_about', text: 'About the list' }),
+      h('div', { class: 'field' }, [h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: 'ls_title', text: 'Title' }), tN]), titleIn,
+        h('div', { class: 'note', text: 'Say what people search for: language, genre or mood, and the service. Don’t call it “best” unless verdicts back it up.' })]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'ls_slug', text: 'Address' }), h('div', { style: 'display:flex;align-items:center;gap:6px' }, [h('span', { class: 'note', text: '/lists/' }), slugIn])]),
+      h('div', { class: 'field' }, [h('div', { style: 'display:flex;justify-content:space-between;gap:10px' }, [h('label', { class: 'l', for: 'ls_sum', text: 'Summary' }), sN]), sumIn,
+        h('div', { class: 'note', text: 'Shown under the title and used as the Google description.' })]),
+      h('div', { class: 'field' }, [h('label', { class: 'l', for: 'ls_body', text: 'Intro (optional)' }), bodyIn,
+        h('div', { class: 'note', text: 'Blank line = new paragraph; **bold**; [words](/movie/…) for a link.' })])
+    ]));
+
+    // Titles: add from the catalogue, then reorder and write a note for each.
+    var dlId = 'lsTitles';
+    var dl = $(dlId); if (!dl) { dl = h('datalist', { id: dlId }); document.body.appendChild(dl); }
+    dl.innerHTML = ''; var labelToId = {};
+    movies.filter(function (m) { return m.data.published !== false && m.data.title; }).forEach(function (m) {
+      var lab = m.data.title + ' (' + [(m.data.releaseDate || '').slice(0, 4), peLang(m.data), peIsTv(m.data) ? 'TV' : ''].filter(Boolean).join(', ') + ')';
+      if (labelToId[lab]) return; labelToId[lab] = m.id; dl.appendChild(h('option', { value: lab }));
+    });
+    var addIn = h('input', { class: 'in', id: 'ls_add', list: dlId, placeholder: 'Type a title, pick it, then Enter', autocomplete: 'off', disabled: !canWrite, style: 'flex:1 1 300px;width:auto' });
+    function add() {
+      var id = labelToId[addIn.value] || (movies.find(function (m) { return m.data.title && m.data.title.toLowerCase() === addIn.value.trim().toLowerCase() && m.data.published !== false; }) || {}).id;
+      if (!id) { setStatus('Pick a title from the list as you type.'); return; }
+      if (d.items.some(function (x) { return x.id === id; })) { setStatus('That title is already on the list.'); return; }
+      d.items.push({ id: id, note: '' }); lsTouch(); renderLists(true); var n = $('ls_add'); if (n) n.focus();
+    }
+    addIn.addEventListener('keydown', function (e) { if (e.key === 'Enter') { e.preventDefault(); add(); } });
+    var itemsCard = h('section', { class: 'card', 'aria-labelledby': 'ls_h_items' }, [h('div', { class: 'pe-hd' }, [h('h2', { id: 'ls_h_items', text: 'Titles · ' + d.items.length }), h('span', { class: 'note', text: 'In the order they appear. Each needs a note before publishing.' })]),
+      h('div', { style: 'display:flex;gap:10px;flex-wrap:wrap' }, [h('label', { class: 'sr', for: 'ls_add', text: 'Add a title' }), addIn, h('button', { type: 'button', class: 'btn', text: 'Add', disabled: !canWrite, on: { click: add } })])]);
+    var box = h('div', { class: 'pe-list' });
+    d.items.forEach(function (x, i) {
+      var m = lsMovie(x.id), dd = m ? m.data : null;
+      var noteIn = h('textarea', { class: 'in' + (String(x.note || '').trim() ? '' : ' ls-note-empty'), rows: 2, maxlength: 400, placeholder: 'Why it’s on the list, in our own words (1–2 sentences).', 'aria-label': 'Note for ' + (dd ? dd.title : 'this title'), disabled: !canWrite });
+      noteIn.value = x.note || '';
+      var nN = h('span', { class: 'note', text: (x.note || '').length + ' / 400' });
+      noteIn.addEventListener('input', function () { x.note = noteIn.value; nN.textContent = x.note.length + ' / 400'; noteIn.classList.toggle('ls-note-empty', !x.note.trim()); lsTouch(); });
+      function mv(dir) { var j = i + dir; if (j < 0 || j >= d.items.length) return; var t = d.items[i]; d.items[i] = d.items[j]; d.items[j] = t; lsTouch(); renderLists(true); }
+      box.appendChild(h('div', { class: 'pe-row', style: 'align-items:flex-start' }, [
+        h('span', { class: 'lsnum', text: String(i + 1) }),
+        h('span', { class: 'pe-thumb', style: dd ? bgUrl(dd.posterUrl) : '', 'aria-hidden': 'true' }),
+        h('div', { class: 'pe-rb', style: 'flex:1 1 360px;gap:6px' }, [
+          dd ? h('a', { href: titleHref(m), class: 'pe-t', text: dd.title }) : h('span', { class: 'warn', text: 'This title was deleted. Remove it.' }),
+          dd ? h('span', { class: 'note', text: [lsMeta(m), lsWhere(dd)].filter(Boolean).join(' · ') }) : null,
+          dd && dd.published === false ? h('span', { class: 'warn', text: 'Not published: it won’t show on the list.' }) : null,
+          noteIn, nN]),
+        h('div', { class: 'pe-act', style: 'flex-direction:column' }, [
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move up', text: '↑', disabled: !canWrite || i === 0, on: { click: function () { mv(-1); } } }),
+          h('button', { type: 'button', class: 'btn small', 'aria-label': 'Move down', text: '↓', disabled: !canWrite || i === d.items.length - 1, on: { click: function () { mv(1); } } }),
+          h('button', { type: 'button', class: 'btn small danger', 'aria-label': 'Remove ' + (dd ? dd.title : 'title'), text: '×', disabled: !canWrite, on: { click: function () { d.items.splice(i, 1); lsTouch(); renderLists(true); } } })])
+      ]));
+    });
+    if (d.items.length) itemsCard.appendChild(box); else itemsCard.appendChild(h('div', { class: 'note', text: 'No titles yet.' }));
+    left.appendChild(itemsCard);
+
+    var pubOk = d.items.filter(function (x) { var m = lsMovie(x.id); return m && m.data.published !== false; }).length, noted = d.items.filter(function (x) { return String(x.note || '').trim(); }).length;
+    side.appendChild(h('section', { class: 'card', 'aria-labelledby': 'ls_h_g' }, [h('h2', { id: 'ls_h_g', text: 'In Google' }),
+      h('div', { class: 'pe-serp' }, [h('span', { class: 'pe-gu', text: location.host + ' › lists › ' + (d.slug || '…') }), gt, gd]),
+      h('div', { class: 'pe-checks' }, [
+        [pubOk >= LS_MIN_PUBLISH, 'Titles', pubOk + ' published (' + LS_MIN_PUBLISH + '+ needed)'],
+        [noted === d.items.length && d.items.length > 0, 'Notes', noted + ' of ' + d.items.length + ' written'],
+        [String(d.summary || '').trim().length >= 40, 'Summary', String(d.summary || '').trim().length >= 40 ? 'written' : 'at least 40 characters']
+      ].map(function (c) { return h('div', { class: 'pe-check' }, [h('span', { class: 'pe-dot' + (c[0] ? '' : ' no'), 'aria-hidden': 'true', text: c[0] ? '✓' : '!' }), h('span', {}, [h('b', { text: c[1] }), ' ', h('span', { class: 'note', text: c[2] })])]); })),
+      h('div', { class: 'note', text: 'Notes are in our own words: no copied reviews, no made-up verdicts. Verdicts show on the page by themselves once a title has enough.' })]));
+    google();
+  }
   // In-page confirm. Native confirm() dialogs are silently blocked in some browsers and app webviews
   // (they return false without showing anything), which made these actions look broken.
   function askConfirm(title, body, okLabel, danger) {
@@ -1117,7 +1302,7 @@ window.ReelAdmin = function (env) {
   var NK = { news: { label: 'News', one: 'story', ones: 'stories', base: '/news', sub: 'Our own stories', newBtn: '+ New story' },
     blog: { label: 'Blog', one: 'post', ones: 'posts', base: '/blog', sub: 'Product blog', newBtn: '+ New post' } };
   var newsKind = 'news';
-  function kindOf(d) { return d && d.kind === 'blog' ? 'blog' : 'news'; }
+  function kindOf(d) { return d && d.kind === 'blog' ? 'blog' : d && d.kind === 'list' ? 'list' : 'news'; }
   function kindDocs(k) { return newsDocs.filter(function (x) { return kindOf(x.data) === k; }); }
   var newsMode = false, newsWant = '', newsDocs = [], newsLoaded = false, newsErr = '', newsEd = null, newsDirty = false, newsPreview = false;
   function newsCountEl() {
@@ -2088,7 +2273,7 @@ window.ReelAdmin = function (env) {
       var p = a.getAttribute('data-p'), on = p === page || (p === 'titles' && page === 'title') || (p === 'people' && page === 'person');
       a.setAttribute('aria-current', on ? 'page' : 'false');
     });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', lists: 'Lists', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -2102,9 +2287,10 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; pbMode = null; peopleMode = false; personEdMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
+    featuredMode = false; pbMode = null; peopleMode = false; personEdMode = false; listsMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
     if (parts[0] === 'people' && parts[1]) { page = 'person'; personEdMode = true; var pk = personKey(decodeURIComponent(parts[1])); if (pk !== peWant) pe = null; peWant = pk; }
     else if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
+    else if (parts[0] === 'lists') { page = 'lists'; listsMode = true; var lw = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (lw !== lsWant) { lsEd = null; lsDirty = false; } lsWant = lw; }
     else if (parts[0] === 'popular') { page = 'popular'; popularMode = true; }
     else if (parts[0] === 'home-banner') { page = 'banner'; featuredMode = true; }
     else if (parts[0] === 'tv-banner') { page = 'tvbanner'; pbMode = 'tv'; }
@@ -2129,6 +2315,15 @@ window.ReelAdmin = function (env) {
       askConfirm('Leave without saving?', 'You have unsaved changes to this ' + NK[newsKind].one + '.', 'Discard changes', true).then(function (yes) {
         leaveAsking = false; if (!yes) return;
         newsDirty = false; newsEd = null; history.pushState(null, '', to); window.dispatchEvent(new PopStateEvent('popstate'));
+      });
+      return false;
+    }
+    if (page === 'lists' && lsDirty && nextPath !== location.pathname) {
+      if (leaveAsking) return false;
+      var lto = nextPath || (location.pathname + location.search); leaveAsking = true;
+      askConfirm('Leave without saving?', 'You have unsaved changes to this list.', 'Discard changes', true).then(function (yes) {
+        leaveAsking = false; if (!yes) return;
+        lsDirty = false; lsEd = null; history.pushState(null, '', lto); window.dispatchEvent(new PopStateEvent('popstate'));
       });
       return false;
     }
@@ -3206,6 +3401,7 @@ window.ReelAdmin = function (env) {
   }
   function renderEditorInner() {
     if (personEdMode) { renderPersonEdit(); return; }
+    if (listsMode) { renderLists(); return; }
     if (peopleMode) { renderPeople(); return; }
     if (popularMode) { renderPopular(); return; }
     if (featuredMode) { renderFeatured(); return; }
@@ -3619,7 +3815,8 @@ window.ReelAdmin = function (env) {
   }, function () { msgLoaded = true; msgErr = 'Messages can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; if (msgMode) renderMessages(); });
   db.collection('news').onSnapshot(function (snap) {
     newsDocs = snap.docs.map(function (x) { return { id: x.id, data: x.data() || {} }; }); newsLoaded = true; newsErr = '';
-    newsCountEl(); if (newsMode && !newsDirty) renderNews();
+    newsCountEl(); lsCountEl(); if (newsMode && !newsDirty) renderNews();
+    if (listsMode && !lsDirty) renderLists();
   }, function () { newsLoaded = true; newsErr = 'Stories can’t be read yet. Publish the latest firestore.rules in the Firebase console (Firestore › Rules).'; newsCountEl(); if (newsMode) renderNews(); });
   db.doc('settings/buttons').onSnapshot(function (snap) {
     if (btnWriting) return;

@@ -481,7 +481,8 @@ async function loadNewsPosts() {
     return rows.map(x => ({ ...x.data, id: x.id })).filter(p => p.slug && p.title && /^[a-z0-9-]+$/.test(p.slug));
   } catch (e) {
     console.warn('[seo] news unavailable (' + e.message + '); reusing the live news-data.json');
-    try { const r = await fetch(SITE + '/news-data.json'); return r.ok ? await r.json() : []; } catch (e2) { return []; }
+    const get = async f => { try { const r = await fetch(SITE + f); return r.ok ? await r.json() : []; } catch (e2) { return []; } };
+    return (await get('/news-data.json')).concat(await get('/lists-data.json'));
   }
 }
 // Story text to HTML. Same rules as app/main.js newsBody: blank line = new paragraph; "## " / "### " headings; "- " list;
@@ -510,7 +511,9 @@ async function main() {
   const t0 = Date.now();
   const data = await loadData();
   PREV_DATES = await previousPageDates();
-  const newsPosts = await loadNewsPosts();
+  // Lists (Admin > Lists) share the "news" collection with kind "list"; they get their own pages below.
+  const allPosts = await loadNewsPosts();
+  const newsPosts = allPosts.filter(p => p.kind !== 'list'), listPosts = allPosts.filter(p => p.kind === 'list');
   console.log(`[seo] ${data.movies.length} titles, ${data.people.length} people docs, ${data.verdicts.length} verdict docs (${data.source})`);
 
   // Editorial synopses from content/synopses.json fill titles whose database synopsis is empty.
@@ -1205,6 +1208,51 @@ async function main() {
       console.log(`[seo] ${kind}: ${posts.length} published`);
     }
     write('news-data.json', JSON.stringify(newsSorted));
+  }
+
+  // ----- Lists (/lists, /lists/<slug>): curated lists written in Admin > Lists (Firestore "news", kind "list") -----
+  // Each item is a title id and a short note in our own words. A list page is in Google once it links to 5+ titles with
+  // substance; unpublished or deleted titles drop out. Verdicts show only past MIN_VERDICTS, as on title pages.
+  {
+    const byId = new Map(movies.map(m => [m.id, m]));
+    const day = iso => /^\d{4}-\d{2}-\d{2}/.test(iso || '') ? iso.slice(0, 10) : '';
+    const lists = listPosts.filter(p => p.slug && p.title && /^[a-z0-9-]+$/.test(p.slug)).sort((a, b) => String(b.publishedAt || '').localeCompare(String(a.publishedAt || '')));
+    const itemsOf = p => (Array.isArray(p.items) ? p.items : []).map(x => ({ m: byId.get(x && x.id), note: String((x && x.note) || '').trim() })).filter(x => x.m);
+    const whereOf = d => {
+      if (!isTv(d) && (d.releaseDate ? d.releaseDate > TODAY : d.section === 'Coming soon')) return /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '') ? 'In theatres ' + fmtDate(d.releaseDate) : 'Coming soon';
+      if (d.section === 'In theatres') return 'In theatres now';
+      return String(d.platform || '').trim() ? 'On ' + String(d.platform).split('/').map(x => x.trim()).filter(Boolean).join(', ') : '';
+    };
+    const liOf = (x, i) => { const d = x.m.data, sc = score(x.m.id);
+      return '<li><h2>' + (i + 1) + '. ' + tLink(x.m) + '</h2><p class="note">' + esc([isTv(d) ? 'TV · ' + tvYears(d) : year(d), String(d.languages || '').split(/[,;]/)[0].trim(), d.genre, whereOf(d)].filter(Boolean).join(' · ')) + '</p>' +
+        (x.note ? '<p>' + newsInlineHtml(x.note) + '</p>' : '') + (sc.tot >= MIN_VERDICTS ? '<p class="note">Reelscore: ' + sc.pct + '% say watch it (' + sc.tot + ' verdicts)</p>' : '') + '</li>'; };
+    for (const p of lists) {
+      const url = '/lists/' + p.slug, items = itemsOf(p);
+      const rich = items.filter(x => !thinT(Object.assign({ __id: x.m.id }, x.m.data))).length, indexed = rich >= 5;
+      const others = lists.filter(x => x !== p).slice(0, 6);
+      const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › <a href="/lists">Lists</a></nav><h1>' + esc(p.title) + '</h1>' +
+        (p.summary ? '<p class="nwdek">' + esc(p.summary) + '</p>' : '') +
+        '<p class="note">By Reelscore' + (day(p.updatedAt || p.publishedAt) ? ' · Updated <time datetime="' + day(p.updatedAt || p.publishedAt) + '">' + fmtDate(day(p.updatedAt || p.publishedAt)) + '</time>' : '') + ' · ' + items.length + ' title' + (items.length === 1 ? '' : 's') + '</p>' +
+        (p.body ? '<div class="nwbody">' + newsHtml(p.body) + '</div>' : '') +
+        '<ol class="lsl">' + items.map(liOf).join('') + '</ol>' +
+        (others.length ? '<h2>More lists</h2><ul class="nwlist">' + others.map(x => '<li><a href="/lists/' + esc(x.slug) + '">' + esc(x.title) + '</a></li>').join('') + '</ul>' : '');
+      const description = clip(p.summary || items.slice(0, 4).map(x => x.m.data.title).join(', '), 158);
+      const node = { '@context': 'https://schema.org', '@type': 'ItemList', name: p.title, description, url: SITE + url, numberOfItems: items.length,
+        itemListOrder: 'https://schema.org/ItemListOrderAscending',
+        itemListElement: items.map((x, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE + movieUrl(x.m), name: x.m.data.title })) };
+      write(url.slice(1) + '.html', page(shell, { title: (p.title + ' | Reelscore').length <= 60 ? p.title + ' | Reelscore' : clip(p.title, 65), description, canonical: url, ogType: 'article', image: null, wide: true, route: 'lists', body,
+        robots: indexed ? undefined : 'noindex,follow', jsonld: [node, crumbLd(['Home', '/'], ['Lists', '/lists'], [clip(p.title, 60), url])] }));
+      if (indexed) sitemap.push({ loc: url, lastmod: day(p.updatedAt) || day(p.publishedAt), pri: '0.7' });
+    }
+    const hubBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Lists</nav><h1>Lists</h1>' +
+      '<p>Hand-picked lists of Indian films and series: what to stream by language, genre and platform, written by the Reelscore team.</p>' +
+      (lists.length ? '<ul class="nwlist">' + lists.map(p => '<li><a href="/lists/' + esc(p.slug) + '">' + esc(p.title) + '</a> <span class="note">· ' + itemsOf(p).length + ' titles</span>' + (p.summary ? '<br><span class="note">' + esc(p.summary) + '</span>' : '') + '</li>').join('') + '</ul>' : '<p class="note">No lists yet. Check back soon.</p>');
+    writeHub('lists.html', { title: 'Movie Lists: What to Watch by Language & OTT | Reelscore', description: 'Hand-picked lists of Indian films and series to stream, by language, genre and platform, from the Reelscore team.',
+      canonical: '/lists', ogPath: '/lists', route: 'lists', body: hubBody, robots: lists.length ? undefined : 'noindex,follow',
+      jsonld: [crumbLd(['Home', '/'], ['Lists', '/lists'])].concat(lists.length ? [listLd('Reelscore lists', lists.map(p => '/lists/' + p.slug))] : []) });
+    if (lists.length) sitemap.push({ loc: '/lists', pri: '0.6' });
+    write('lists-data.json', JSON.stringify(lists));
+    console.log(`[seo] lists: ${lists.length} published`);
   }
 
   // ----- About / how scores work -----
