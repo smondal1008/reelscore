@@ -1121,7 +1121,7 @@ window.ReelAdmin = function (env) {
     ['coming', 'Coming soon', 'In the usual Coming soon order', 'in Coming soon', 'film'],
     ['ott', 'New on OTT', 'In the usual On OTT order', 'on OTT', 'film'],
     ['trailers', 'New trailers', 'Newest release first, films from the last 6 months and upcoming ones', 'with a trailer', 'film'],
-    ['songs', 'New songs', 'Newest release first, films from the last 6 months and upcoming ones (up to 3 songs each)', 'with a video song', 'film'],
+    ['songs', 'New songs', 'Newest song first (its YouTube upload date, or the film’s release if that’s earlier), films from the last 6 months and upcoming ones (up to 3 songs each)', 'with a video song', 'film'],
     ['tvpromos', 'New TV promotionals', 'Shows still running first, then newest (up to 2 videos each)', 'with a video', 'show']
   ];
   function rowInfo(key) { return ROWS.filter(function (r) { return r[0] === key; })[0]; }
@@ -1154,7 +1154,19 @@ window.ReelAdmin = function (env) {
     }
     if (key === 'trailers' || key === 'songs') { // the homescreen row only reaches back 6 months (pinned films are shown regardless)
       var cut = new Date(Date.now() - 180 * 864e5).toISOString().slice(0, 10);
-      return list.filter(function (m) { return (m.data.releaseDate || '') >= cut; }).sort(newest);
+      var recent = list.filter(function (m) { return (m.data.releaseDate || '') >= cut; });
+      if (key === 'trailers') return recent.sort(newest);
+      // Songs: as on the site, each song counts from its YouTube upload date or the film's release, whichever is earlier;
+      // a film sits where its newest song (of the first 3) does.
+      var when = function (m) {
+        var r = /^\d{4}/.test(m.data.releaseDate || '') ? String(m.data.releaseDate) : '', best = '';
+        (m.data.videos || []).filter(function (v) { return vidKind(v.kind) === 'songs'; }).slice(0, 3).forEach(function (v) {
+          var u = /^\d{4}-\d{2}-\d{2}/.test(v.publishedAt || '') ? v.publishedAt.slice(0, 10) : '', w = u && r ? (u < r ? u : r) : u || r;
+          if (w > best) best = w;
+        });
+        return best || r;
+      };
+      return recent.sort(function (a, b) { return when(b).localeCompare(when(a)) || newest(a, b); });
     }
     if (key === 'tvpromos') {
       var y = String(new Date().getFullYear()), on = function (m) { return !m.data.endYear || String(m.data.endYear) >= y ? 1 : 0; };
