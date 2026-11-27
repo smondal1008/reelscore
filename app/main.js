@@ -1538,7 +1538,7 @@
     var list = all.filter(function (m) { return !G.lang || langOf(m.data) === G.lang; });
     list.sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') || (a.data.title || '').localeCompare(b.data.title || ''); });
     if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'No ' + lc + ' titles here yet.' })); v.appendChild(footer()); return; }
-    var PER = 60, pages = Math.ceil(list.length / PER); G.page = Math.min(Math.max(1, G.page || 1), pages);
+    var PER = gridPer(w), pages = Math.ceil(list.length / PER); G.page = Math.min(Math.max(1, G.page || 1), pages);
     syncListUrl(genreHref(G, G.page));
     var from = (G.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }));
@@ -2429,7 +2429,7 @@
     var pop = popularityOf(list);
     list.sort(function (a, b) { return pop[b.id] - pop[a.id] || (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') || (a.data.title || '').localeCompare(b.data.title || ''); });
     if (!list.length) { w.appendChild(h('div', { class: 'empty', text: 'No movies from ' + y + ' here yet.' })); v.appendChild(footer()); return; }
-    var PER = 60, pages = Math.ceil(list.length / PER); Y.page = Math.min(Math.max(1, Y.page || 1), pages);
+    var PER = gridPer(w), pages = Math.ceil(list.length / PER); Y.page = Math.min(Math.max(1, Y.page || 1), pages);
     syncListUrl(yearHref(Y, Y.page));
     var from = (Y.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' movies' : list.length + (list.length === 1 ? ' movie' : ' movies') }));
@@ -4653,7 +4653,7 @@
     if (B.sort === 'new' && !B.q.trim()) list = pinFirst(list, rowPins(B.status));
     if (!list.length) main.appendChild(h('div', { class: 'empty' }, ['Nothing matches these filters. ', active ? h('button', { type: 'button', class: 'btn small', text: 'Clear all', on: { click: clearAll } }) : null]));
     else {
-      var PER = 60, pages2 = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages2);
+      var PER = gridPer(main), pages2 = Math.ceil(list.length / PER); B.page = Math.min(Math.max(1, B.page || 1), pages2);
       syncListUrl(bHref(B, B.page));
       var from = (B.page - 1) * PER;
       main.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
@@ -4877,6 +4877,25 @@
     v.appendChild(h('div', { class: 'wrapx', style: 'padding-top:8px' }, [h('a', { class: 'btn', href: '/browse', text: 'Browse all movies and shows →' })]));
   }
   // Page links are real <a href> so crawlers can reach every page; the site's link handler keeps them in-app.
+  // Posters per page: about 60, rounded to whole rows of the grid as it is drawn here, so a page never ends on a half-empty row
+  // (60 fills rows of 2, 3, 4, 5 and 6; 7 columns get 63, 8 get 64). A resize that changes the column count redraws.
+  function gridPer(host) {
+    var g = h('div', { class: 'grid-posters', 'aria-hidden': 'true', style: 'visibility:hidden;height:0;overflow:hidden' }); host.appendChild(g);
+    var n = 0; try { n = getComputedStyle(g).gridTemplateColumns.split(' ').filter(function (x) { return x && x !== 'none'; }).length; } catch (e) {}
+    host.removeChild(g); n = n || 1; S.gridCols = n;
+    return n * Math.max(1, Math.round(60 / n));
+  }
+  (function () {
+    var t = null;
+    window.addEventListener('resize', function () {
+      clearTimeout(t); t = setTimeout(function () {
+        if (!S.gridCols || ['browse', 'genre', 'year'].indexOf(S.route) === -1) return;
+        var vw = $('view-' + S.route), host = vw && vw.querySelector('.grid-posters'); if (!host) return;
+        var n = 0; try { n = getComputedStyle(host).gridTemplateColumns.split(' ').filter(Boolean).length; } catch (e) {}
+        if (n && n !== S.gridCols) render(true);
+      }, 250);
+    });
+  })();
   function pagerNav(cur, pages, hrefFor, onPick) {
     var nav = h('nav', { class: 'pager', 'aria-label': 'Pages', style: 'margin-top:26px' });
     function b(n, label, dis) {
