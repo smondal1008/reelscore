@@ -1066,7 +1066,6 @@
     // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
     if (cta) kids.push(cta);
-    else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m, 'n3'));
     }
@@ -2268,11 +2267,12 @@
     if (!card) return;
     var sec = card.closest('section[aria-label]'), R = sec && S.rateRows && S.rateRows[sec.getAttribute('aria-label')];
     var shown = sec ? Array.prototype.map.call(sec.querySelectorAll('.pc[data-id]'), function (c) { return c.getAttribute('data-id'); }) : [m.id];
-    var next = R ? R.next(shown) : null, parent = card.parentNode, after = card.nextSibling, nc = null;
+    var next = R ? R.next(shown) : null, parent = card.parentNode, after = card.nextSibling, nc = null, secHome = sec && sec.parentNode, secAfter = sec && sec.nextSibling;
     if (R && R.swap) R.swap(m.id, next ? next.id : null);
     // Undo (a mis-tap): the title is asked about again and its card comes back where it was.
     toast(nope ? 'Got it. We won\u2019t suggest ' + m.data.title + ' again' : 'Got it. We won\u2019t ask about ' + m.data.title + ' here again', function () {
       if (nope) tnDelNope(m.id); else rateDelUnseen(m.id);
+      if (sec && !sec.isConnected && secHome && secHome.isConnected) secHome.insertBefore(sec, secAfter && secAfter.parentNode === secHome ? secAfter : null);
       if (R && R.swap && next) R.swap(next.id, m.id);
       var back = posterCard(m, R ? R.opts : { rate: true }); back.classList.add('pcflip');
       if (nc && nc.parentNode) nc.parentNode.replaceChild(back, nc);
@@ -2280,7 +2280,7 @@
       else if (parent) parent.insertBefore(back, after && after.parentNode === parent ? after : null);
       var f = back.querySelector('.rch .tnact, .qb'); if (f) f.focus({ preventScroll: true });
     });
-    if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
+    if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); if (R && R.dropEmpty && sec && !sec.querySelector('.pc') && sec.parentNode) sec.parentNode.removeChild(sec); }, 320); return; }
     nc = posterCard(next, R.opts); nc.classList.add('pcflip');
     card.parentNode.replaceChild(nc, card);
     var f = nc.querySelector('.rch .tnact, .qb'); if (f) f.focus({ preventScroll: true });
@@ -5766,27 +5766,12 @@
     if (d.section === 'On OTT' || d.platform || safeUrl(d.platformUrl)) return 'ott';
     return '';
   }
-  function followUpBox(m) {
-    var box = h('div', { class: 'fu' });
-    var showRate = function () { box.innerHTML = ''; box.appendChild(verdictButtons(m, function () { wtwDone(m.id); })); };
-    if (myVerdict(m.id)) { showRate(); return box; }
-    box.appendChild(h('div', { class: 'fu-b' }, [
-      h('button', { type: 'button', class: 'btn small primary', text: 'Rate', on: { click: showRate } }),
-      h('button', { type: 'button', class: 'btn small', text: 'Not seen', on: { click: function () {
-        if (!needUser()) return;
-        if (!inList(m.id)) S.mine.watchlist.push(m.id);
-        var i = (S.mine.wtw || []).indexOf(m.id); if (i !== -1) S.mine.wtw.splice(i, 1);
-        var card = box.closest('.pc'), sec = box.closest('section'); if (card) card.remove(); if (sec && !sec.querySelector('.pc')) sec.remove();
-        saveMine('Added back to your watchlist');
-      } } })
-    ]));
-    return box;
-  }
   function followUpList() {
     if (!S.uid) return [];
     var jr = S.justRated || {};
+    var un = rateUnseen(), nope = tnNope();
     return (S.mine.wtw || []).map(function (id) { return S.byId[id]; }).filter(function (m) {
-      return m && m.data.section !== 'In theatres' && m.data.section !== 'Coming soon' && (!myVerdict(m.id) || jr[m.id]);
+      return m && un.indexOf(m.id) === -1 && nope.indexOf(m.id) === -1 && m.data.section !== 'In theatres' && m.data.section !== 'Coming soon' && (!myVerdict(m.id) || jr[m.id]);
     });
   }
 
@@ -5832,9 +5817,13 @@
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'Your watchlist titles releasing this week or next, then up to 5 picks: unwatched titles from your watchlist first, then popular releases you haven’t rated.' }),
       h('div', { class: 'grid-posters' }, wk.map(function (x) { return posterCard(x.m, x.opts); }))]));
     // Titles that were in What to watch while in theatres and have since left: Rate or Not seen.
-    if (fu.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen these? Give your verdict' }),
-      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Rate it. Not yet? Keep it on your watchlist.' }),
-      h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { followUp: true }); }))]));
+    // Same three icons as the home "Seen these?" row: Seen (then the verdict icons), Not seen, Not for me. Not seen and
+    // Not for me take the card out of this section (Undo on the toast).
+    S.rateRows = S.rateRows || {};
+    S.rateRows['Seen these? From What to watch'] = { opts: { rate: true }, dropEmpty: true, next: function () { return null; } };
+    if (fu.length) w.appendChild(h('section', { class: 'card', 'aria-label': 'Seen these? From What to watch' }, [h('h2', { text: 'Seen these? Give your verdict' }),
+      h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Tap Seen and give your verdict.' }),
+      h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { rate: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
     mine = mine.filter(released).concat(mine.filter(function (m) { return !released(m); })
       .sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }));
