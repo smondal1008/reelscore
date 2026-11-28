@@ -1790,3 +1790,8 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 /* Seen · Trailer · Not for me (and Tickets first): the first icon's tip opens to the right, the middle ones centred */
 .qv.icons.up.seenrow.n3 .qb.tr .qtip, .qv.icons.up.seenrow.n3 .qb.se .qtip { --tx: -50%; left: 50%; right: auto; }
 .qv.icons.up.seenrow.n3 > .qb:first-child .qtip { --tx: 0; left: 0; right: auto; }
+
+/* Coming soon icons with bookings open: Tickets · Trailer · Remind me · Not for me */
+.qv.icons.up.c4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.c4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
+.qv.icons.up.c4 .qb.tr .qtip, .qv.icons.up.c4 .qb.rm .qtip { --tx: -50%; left: 50%; right: auto; }

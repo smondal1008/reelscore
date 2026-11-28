@@ -986,7 +986,7 @@
     var c = (d.cast || []).filter(function (x) { return x && x.name && !CREW_RE.test(x.role || ''); })[0];
     return c ? c.name : String(d.genre || '').split(/,/)[0].trim();
   }
-  // Coming soon icon row, laid out like the verdict icons: Trailer, then Tickets when booking is open (else Remind me), then Not for me.
+  // Coming soon icon row, laid out like the verdict icons: Trailer, Remind me, Not for me; Tickets first when bookings open.
   // The word pops up on hover or keyboard focus; each tap confirms with a toast.
   function upRow(m) {
     var d = m.data, t = d.title;
@@ -996,19 +996,18 @@
       'aria-label': tr ? 'Play the trailer of ' + t : 'No trailer for ' + t + ' yet',
       on: { click: function (e) { e.preventDefault(); if (tr) openTrailerOverlay(m, tr, trB, titleQueue(m, tr)); else toast('No trailer for ' + t + ' yet'); } } },
       [icon('play', 18), tip(tr ? 'Trailer' : 'No trailer yet')]);
-    var mid = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
-    if (mid) { mid.textContent = ''; mid.appendChild(icon('ticket', 18)); mid.appendChild(tip('Tickets')); }
-    else {
-      var rem = hasReminder(m.id);
-      mid = h('button', { type: 'button', class: 'qb rm' + (rem ? ' on' : ''), 'aria-pressed': String(rem),
+    // Bookings open: Tickets first, so four icons (Tickets · Trailer · Remind me · Not for me).
+    var tk = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
+    if (tk) { tk.textContent = ''; tk.appendChild(icon('ticket', 18)); tk.appendChild(tip('Tickets')); }
+    var rem = hasReminder(m.id);
+    var mid = h('button', { type: 'button', class: 'qb rm' + (rem ? ' on' : ''), 'aria-pressed': String(rem),
         'aria-label': rem ? 'Reminder set for ' + t + '. Tap to turn it off' : 'Remind me when ' + t + ' releases',
         on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 18), tip(rem ? 'Reminder set' : 'Remind me')]);
-    }
     var no = isNope(m.id);
     var skB = h('button', { type: 'button', class: 'qb sk' + (no ? ' on' : ''), 'aria-pressed': String(no),
       'aria-label': no ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
       on: { click: function () { notForMe(m); } } }, [icon('skip', 18), tip('Not for me')]);
-    return h('div', { class: 'qv icons up', role: 'group', 'aria-label': 'Your plan for ' + t }, [trB, mid, skB]);
+    return h('div', { class: 'qv icons up' + (tk ? ' c4' : ''), role: 'group', 'aria-label': 'Your plan for ' + t }, [tk, trB, mid, skB]);
   }
   function posterCard(m, opts) {
     opts = opts || {};
@@ -1031,7 +1030,7 @@
       if (bt) top = h('span', { class: 'badge' }, [h('i'), bt]);
     }
     var meta = isTv(m) ? [d.platform || 'TV', tvYears(d)].filter(Boolean).join(' · ') : isOtt(m) ? (d.platform || 'OTT') + (streamDate(d) ? ' · ' + fmtDate(streamDate(d)) : '') : (d.languages || '').split(/[,;]/)[0] + ' · ' + (d.genre || fmtDate(d.releaseDate));
-    // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me or Tickets / Not for me icons.
+    // Coming soon cards (upIcons): lead actor · language, a days-to-go pill and the Trailer / Remind me / Not for me icons (Tickets first when bookings open).
     var up = !!opts.upIcons && !isTv(m) && !released(m), due = up ? dueLabel(d) : '';
     if (up) meta = [upLead(d), (d.languages || '').split(/[,;]/)[0].trim()].filter(Boolean).join(' · ');
     if (opts.ottMeta) meta = opts.ottMeta(m);
@@ -1056,7 +1055,7 @@
     var tagTxt = opts.tagFor ? opts.tagFor(m) : opts.tag;
     if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
     if (up) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
-    // My Watchlist (not out yet) and Release reminders: the Coming soon icons (Trailer, Remind me or Tickets, Not for me), films and series.
+    // My Watchlist (not out yet) and Release reminders: the Coming soon icons (Trailer, Remind me, Not for me; Tickets first when bookings open), films and series.
     if (opts.upRowOnly && (!released(m) || opts.upRowAll)) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
@@ -2274,13 +2273,14 @@
           } } }, [icon('eyeoff', 18), tip('Not seen'), qlab('Not seen')]));
         box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q]));
       } else {
-        // Design board "My List rows · the three icons": Seen, Not seen, Not for me, as in the home rows.
+        // Seen · Trailer · Not for me, as in the home rows (Not seen is only a first choice in the "Seen these?" rows).
         var nf = isNope(m.id);
-        box.appendChild(h('div', { class: 'qv icons up seenrow n3 c2' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+        box.appendChild(h('div', { class: 'qv icons up seenrow n3 c3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t, on: { click: function () {
             S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); rateDelUnseen(m.id);
             show(true); var b = box.querySelector('.qb'); if (b) b.focus();
           } } }, [icon('eye', 18), tip('Seen'), qlab('Seen')]),
+          trailerQb(m, true),
           h('button', { type: 'button', class: 'qb sk' + (nf ? ' on' : ''), 'aria-pressed': String(nf), 'aria-label': nf ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
             on: { click: function () { notForMe(m); } } }, [icon('skip', 18), tip('Not for me'), qlab('Not for me')])
         ]));
@@ -5312,7 +5312,7 @@
   // Card actions by status: Book tickets for theatre titles, Watch now for released titles with a streaming link, reminders for upcoming ones.
   function actOpts(m) {
     var sec = m.data.section, inTh = (S.route === 'browse' && S.browse && S.browse.status === 'In theatres') || (S.route === 'movies' && S.cat.movies.status === 'In theatres');
-    // Upcoming films: the Coming soon icon row (Trailer, Remind me or Tickets, Not for me), as on the home page.
+    // Upcoming films: the Coming soon icon row (Trailer, Remind me, Not for me; Tickets first when bookings open), as on the home page.
     if (!released(m)) return isTv(m) ? { dateBadge: true, remind: true } : { dateBadge: true, upIcons: true };
     return sec === 'In theatres' ? { book: true, inTheatresList: inTh, seenIcons: S.route === 'browse' } : { stream: true };
   }
@@ -5762,6 +5762,19 @@
   // Quick verdict buttons on poster cards (home "Seen these?" row, My List): icon only. The word shows on hover,
   // and for a moment after a tap (phones can't hover). Stored values stay a / b / c, so earlier verdicts are unchanged.
   var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Meh, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' } };
+  // A Trailer icon for the card icon rows: plays in the mini player (or over the page); greyed when there's no trailer yet.
+  // lab: add the short word shown under the icon on phones (My List rows).
+  function trailerQb(m, lab) {
+    var t = m.data.title, tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
+    var b = h('button', { type: 'button', class: 'qb tr' + (tr ? '' : ' off'), 'aria-disabled': tr ? null : 'true',
+      'aria-label': tr ? 'Play the trailer of ' + t + (tovMiniOk() ? ' in the mini player' : '') : 'No trailer for ' + t + ' yet',
+      on: { click: function (e) {
+        e.preventDefault();
+        if (!tr) { toast('No trailer for ' + t + ' yet'); return; }
+        if (tovMiniOk()) toMini(m, tr); else openTrailerOverlay(m, tr, b, titleQueue(m, tr));
+      } } }, [icon('play', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: tr ? 'Trailer' : 'No trailer yet' }), lab ? qlab('Trailer') : null]);
+    return b;
+  }
   // Short words under the icons on phones (My List rows), where there's no hover.
   var VSHORT = { theatre: { a: 'Theatre', b: 'OTT', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
   function qlab(t) { return h('span', { class: 'qlab', 'aria-hidden': 'true', text: t }); }
@@ -5902,7 +5915,7 @@
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
       rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) {
-        // The Coming soon icons (Trailer, Remind me or Tickets when booking is open, Not for me), as in My Watchlist.
+        // The Coming soon icons (Trailer, Remind me, Not for me; Tickets first when bookings open), as in My Watchlist.
         return posterCard(m, { dateBadge: true, upRowOnly: true, upRowAll: true });
       })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
     // Titles you said you've seen but haven't rated yet (newest first). One you rate shows its verdict for a moment, then
