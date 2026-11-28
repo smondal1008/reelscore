@@ -2042,7 +2042,7 @@ window.ReelAdmin = function (env) {
   }
 
   // ---------- list ----------
-  var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', section: 'Section', star: 'Star power' };
+  var SORTS = { release: 'Release date', title: 'Title', complete: 'Completeness', updated: 'Last edited', added: 'Date added', section: 'Section', star: 'Star power' };
   var SEC_SLUG = { 'In theatres': 'in-theatres', 'Coming soon': 'coming-soon', 'On OTT': 'on-ott', 'Older releases': 'older-releases', 'TV shows': 'tv-shows', 'Films not in Google': 'films-not-in-google', 'TV not in Google': 'tv-not-in-google', 'Missing info': 'missing-info', 'Missing photos': 'missing-photos', 'Missing posters': 'missing-posters', 'Missing trailers': 'missing-trailers', 'Missing songs': 'missing-songs', 'Missing interviews': 'missing-interviews', 'Missing cast': 'missing-cast', 'Missing characters': 'missing-characters', 'Missing synopsis': 'missing-synopsis', 'Missing OTT name': 'missing-ott-name', 'No OTT link': 'no-ott-link' };
   // SEO status of a title page, same rules as scripts/build.mjs (seoTier): only "Good substance" pages are in Google.
   // Star power: how many lead roles a title's two leads have. A lead role is a published title where the person is one of
@@ -2244,7 +2244,7 @@ window.ReelAdmin = function (env) {
     st.innerHTML = '';
     Object.keys(STATUS_OPTS).forEach(function (k) { st.appendChild(h('option', { value: k, text: STATUS_OPTS[k] + ' (' + sc[k] + ')', selected: k === statusF })); });
     var ss = $('sortSel'); ss.innerHTML = '';
-    [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section'], ['star', 'desc', 'Highest star power first']].forEach(function (o) {
+    [['release', 'desc', 'Newest release first'], ['release', 'asc', 'Oldest release first'], ['title', 'asc', 'Title A–Z'], ['added', 'desc', 'Recently added'], ['updated', 'desc', 'Recently edited'], ['complete', 'asc', 'Least complete first'], ['section', 'asc', 'Section'], ['star', 'desc', 'Highest star power first']].forEach(function (o) {
       ss.appendChild(h('option', { value: o[0] + ':' + o[1], text: o[2], selected: sortKey === o[0] && sortDir === o[1] }));
     });
     if (!ss.value) ss.appendChild(h('option', { value: sortKey + ':' + sortDir, text: SORTS[sortKey] + (sortDir === 'asc' ? ' ↑' : ' ↓'), selected: true }));
@@ -2293,6 +2293,7 @@ window.ReelAdmin = function (env) {
       if (sortKey === 'title') return (d.title || '').toLowerCase();
       if (sortKey === 'complete') return pct(d, m.id);
       if (sortKey === 'updated') return d.updatedAt || '';
+      if (sortKey === 'added') return addedAt(d);
       if (sortKey === 'section') return secIdx[d.section] != null ? secIdx[d.section] : 9;
       if (sortKey === 'star') return starOf(m.id);
       return d.releaseDate || '';
@@ -2304,6 +2305,8 @@ window.ReelAdmin = function (env) {
       return (a.data.title || '').localeCompare(b.data.title || '');
     });
   }
+  // When a title was added: createdAt (set on the first save in Admin) or importedAt (scripted imports). Older hand-added titles have neither.
+  function addedAt(d) { return d.createdAt || d.importedAt || ''; }
   function fmtAgo(iso) {
     if (!iso) return '—';
     var t = Date.parse(iso); if (isNaN(t)) return '—';
@@ -2375,7 +2378,7 @@ window.ReelAdmin = function (env) {
           h('a', { class: 'tt', href: href, text: d.title || 'Untitled' }),
           isFeatured(m.id) ? h('span', { class: 'star', title: 'On the home banner', text: ' ★' }) : null,
           d.published === false ? h('span', { class: 'unpub', title: 'Visitors can’t see this title', text: 'Not published' }) : null,
-          h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m)].filter(Boolean).join(' · ') }),
+          h('div', { class: 'ts', text: [(d.section === 'On OTT' || d.section === 'TV shows') && d.platform ? d.platform : '', d.director ? 'Dir. ' + d.director : '', pathBase(d) + slugOf(m), sortKey === 'added' ? (addedAt(d) ? 'Added ' + fmtAgo(addedAt(d)).replace(/^(Today|Yesterday)$/, function (x) { return x.toLowerCase(); }) : 'Date added not known') : ''].filter(Boolean).join(' · ') }),
           missF.indexOf('Missing info') !== -1 && miss.length ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + miss.map(function (r) { return r[1].toLowerCase(); }).join(', ') }) : null,
           missF.indexOf('Missing photos') !== -1 && missF.indexOf('Missing info') === -1 ? h('div', { class: 'ts', style: 'color:var(--warn,#b45309)', text: 'Missing: ' + [safeUrl(d.posterUrl) ? '' : 'poster', safeUrl(d.bannerUrl) ? '' : 'banner'].filter(Boolean).join(' and ') }) : null
         ]),
@@ -4298,6 +4301,7 @@ window.ReelAdmin = function (env) {
     if (clash) { saving = false; setDirty(true); setStatus('The page URL ' + pathBase(draft) + slug + ' is already used by ' + (clash.data.title || clash.id) + '. Change it before saving.'); var f = $('f_slug'); if (f) f.focus(); return Promise.resolve(false); }
     if (isNew) currentId = slugify(draft.title) + '-' + Math.random().toString(36).slice(2, 6);
     var body = clone(draft); body.updatedAt = new Date().toISOString();
+    if (isNew && !body.createdAt) body.createdAt = body.updatedAt; // for Titles › Recently added
     ['seoTitle', 'seoDescription'].forEach(function (k) { var v = String(body[k] || '').replace(/\s+/g, ' ').trim(); if (v) body[k] = v; else delete body[k]; });
     if (body.nowPlaying && body.section !== 'TV shows') body.section = npSection(body); // dates may have changed since it was picked
     body.slug = slug;
