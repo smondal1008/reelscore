@@ -2411,7 +2411,7 @@ window.ReelAdmin = function (env) {
     return movies.find(function (m) { return m.id === k || slugOf(m) === k; }) ||
       movies.find(function (m) { return (m.data.slugHistory || []).indexOf(k) !== -1; }) || null;
   }
-  var PAGE_GROUP = { titles: 'titles', people: 'people', popular: 'people', banner: 'home', moviesbanner: 'home', tvbanner: 'home', rows: 'home', buttons: 'home',
+  var PAGE_GROUP = { titles: 'titles', ottdates: 'titles', people: 'people', popular: 'people', banner: 'home', moviesbanner: 'home', tvbanner: 'home', rows: 'home', buttons: 'home',
     news: 'writing', blog: 'writing', lists: 'writing', messages: 'messages' }, LAST_IN_GROUP = {};
   // Writing tab: drafts waiting across News, Blog and Lists.
   function writeCountEl() {
@@ -2434,7 +2434,7 @@ window.ReelAdmin = function (env) {
     document.querySelectorAll('#asub .asubg').forEach(function (d) { d.hidden = d.getAttribute('data-g') !== grp; });
     var asub = $('asub'); if (asub) asub.hidden = !document.querySelector('#asub .asubg:not([hidden])');
     document.querySelectorAll('#asub a[data-p]').forEach(function (a) { a.setAttribute('aria-current', a.getAttribute('data-p') === sub ? 'page' : 'false'); });
-    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', lists: 'Lists', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog' };
+    var names = { titles: 'All titles', title: (draft && draft.title) || 'Edit title', people: 'Cast & crew', lists: 'Lists', person: (pe && pe.d.name ? pe.d.name : 'Edit person'), popular: 'Popular cast', banner: 'Home banner', tvbanner: 'TV Shows banner', moviesbanner: 'Movies banner', rows: 'Home rows', buttons: 'Buttons', messages: 'Messages', news: 'News', blog: 'Blog', ottdates: 'OTT dates' };
     document.title = names[page] + ' · Admin · Reelscore';
   }
   function resolveTitle() {
@@ -2448,7 +2448,7 @@ window.ReelAdmin = function (env) {
   }
   function route(sub) {
     var parts = String(sub || '').split('/').filter(Boolean);
-    featuredMode = false; pbMode = null; peopleMode = false; personEdMode = false; listsMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
+    featuredMode = false; pbMode = null; odMode = false; peopleMode = false; personEdMode = false; listsMode = false; popularMode = false; rowsMode = false; btnMode = false; msgMode = false; newsMode = false; wantSlug = null;
     if (parts[0] === 'people' && parts[1]) { page = 'person'; personEdMode = true; var pk = personKey(decodeURIComponent(parts[1])); if (pk !== peWant) pe = null; peWant = pk; }
     else if (parts[0] === 'people') { page = 'people'; peopleMode = true; }
     else if (parts[0] === 'lists') { page = 'lists'; listsMode = true; var lw = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (lw !== lsWant) { lsEd = null; lsDirty = false; } lsWant = lw; }
@@ -2458,6 +2458,7 @@ window.ReelAdmin = function (env) {
     else if (parts[0] === 'movies-banner') { page = 'moviesbanner'; pbMode = 'movies'; }
     else if (parts[0] === 'home-rows') { page = 'rows'; rowsMode = true; }
     else if (parts[0] === 'buttons') { page = 'buttons'; btnMode = true; }
+    else if (parts[0] === 'ott-dates') { page = 'ottdates'; odMode = true; }
     else if (parts[0] === 'messages') { page = 'messages'; msgMode = true; }
     else if (parts[0] === 'news' || parts[0] === 'blog') { if (newsKind !== parts[0]) { newsEd = null; newsDirty = false; } newsKind = parts[0]; page = parts[0]; newsMode = true; newsWant = (parts[1] || '').replace(/[^A-Za-z0-9-]/g, ''); if (newsWant !== (newsEd && (newsEd.id || 'new'))) { newsEd = null; newsDirty = false; } }
     else if (parts[0] === 'titles' && parts[1]) { page = 'title'; wantSlug = parts[1].toLowerCase(); }
@@ -2720,38 +2721,187 @@ window.ReelAdmin = function (env) {
     if (d.ottDateStatus === 'confirmed' && d.ottPlatform) d.platform = d.ottPlatform;
     return '';
   }
-  // Admin > Titles: films in theatres or coming soon whose OTT date still needs filling, most-awaited first.
-  var ottQTab = 'none', ottQOpen = false;
+  // Admin > Titles: one line pointing to OTT dates when films are waiting for an OTT date (the work happens there).
   function renderOttQueue() {
     var box = $('ottQueue'); if (!box) return;
-    box.innerHTML = '';
-    var td = npToday(), pub = movies.filter(function (m) { return m.data.published !== false && ottCardFor(m.data); });
-    var pop = function (m) { return (m.data.order != null && m.data.order < 100000 ? 100000 - m.data.order : 0) + (m.data.posterUrl ? 5 : 0) + ((m.data.cast || []).length); };
-    var tabs = {
-      none: pub.filter(function (m) { return !ottStatusOf(m.data) && m.data.releaseDate && m.data.releaseDate <= ottAddDays(td, 14); }),
+    var n = odGroups().waiting.length, c = $('ottCount'); if (c) c.textContent = n ? String(n) : '';
+    box.innerHTML = ''; box.hidden = !n;
+    if (!n) return;
+    box.appendChild(h('div', { class: 'odnote' }, [h('b', { text: n + (n === 1 ? ' film is' : ' films are') + ' waiting for an OTT date' }),
+      h('span', { class: 'note', text: 'Out of theatres, or 4+ weeks since release, with no OTT date yet.' }), h('a', { class: 'btn small primary', href: '/admin/ott-dates', text: 'Fill them →' })]));
+  }
+
+  // ---------- OTT dates: /admin/ott-dates (design board "Admin · OTT dates to fill · option B (fill in place)") ----------
+  // Every film that needs an OTT date, with the service and the date (or expected month) filled right in the row.
+  // A row saves only the Coming to OTT fields of that title (the same ones as the title page's Coming to OTT card).
+  var odTab = 'waiting', odLast = {}, odEd = {}, odDone = {}, odWiki = {}, odWikiQ = [], odWikiBusy = false, odMode = false;
+  var OD_TILE = { 'Netflix': ['#E50914', 'N'], 'Prime Video': ['#00A8E1', 'P'], 'JioHotstar': ['#1F80E0', 'JH'], 'ZEE5': ['#8230C6', 'Z5'], 'SonyLIV': ['#E8B10B', 'S'],
+    'Sun NXT': ['#F2A900', 'SN'], 'aha': ['#FF6A00', 'aha'], 'Hoichoi': ['#C0392B', 'h'], 'ALTT': ['#D81B60', 'A'], 'Amazon MX Player': ['#1E5BD7', 'MX'], 'Apple TV': ['#555', 'tv'],
+    'YouTube': ['#C4302B', 'YT'], 'Lionsgate Play': ['#E87722', 'LP'], 'ShemarooMe': ['#E04A2F', 'Me'], 'ManoramaMAX': ['#1A0F4A', 'M'], 'Chaupal': ['#E8214B', 'C'],
+    'Airtel Xstream Play': ['#8B0000', 'X'], 'Tata Play Binge': ['#24003F', 'B'], 'Eros Now': ['#2B2F3D', 'E'] };
+  function odPop(m) { return (m.data.order != null && m.data.order < 100000 ? 100000 - m.data.order : 0) + (m.data.posterUrl ? 5 : 0) + ((m.data.cast || []).length); }
+  function odGroups() {
+    var td = npToday(), w4 = ottAddDays(td, -28), oldest = ottAddDays(td, -180), isDay = function (x) { return /^\d{4}-\d{2}-\d{2}$/.test(x || ''); };
+    var pub = movies.filter(function (m) { var d = m.data; return d.published !== false && d.section !== 'TV shows'; });
+    var g = {
+      // The same rule as the OTT release dates page: marked out of theatres, or 4+ weeks since release.
+      waiting: pub.filter(function (m) { var d = m.data; return !ottStatusOf(d) && d.nowPlaying !== 'ott' && d.nowPlaying !== 'direct' && isDay(d.releaseDate) && d.releaseDate <= td && d.releaseDate >= oldest &&
+        (d.nowPlaying === 'out' || (ottCardFor(d) && d.releaseDate <= w4)); }),
+      theatres: pub.filter(function (m) { var d = m.data; return ottCardFor(d) && !ottStatusOf(d) && d.nowPlaying !== 'out' && isDay(d.releaseDate) && d.releaseDate > w4 && d.releaseDate <= ottAddDays(td, 14); }),
       expected: pub.filter(function (m) { return ottStatusOf(m.data) === 'expected'; }),
-      passed: movies.filter(function (m) { var d = m.data; return d.published !== false && d.section === 'Coming soon' && /^\d{4}-\d{2}-\d{2}$/.test(d.releaseDate || '') && d.releaseDate < td; })
+      passed: pub.filter(function (m) { var d = m.data; return d.section === 'Coming soon' && isDay(d.releaseDate) && d.releaseDate < td; })
     };
-    Object.keys(tabs).forEach(function (k) { tabs[k].sort(function (a, b) { return pop(b) - pop(a) || String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')); }); });
-    var list = tabs[ottQTab] || [];
-    var head = h('button', { type: 'button', class: 'ottqh', 'aria-expanded': String(ottQOpen), on: { click: function () { ottQOpen = !ottQOpen; renderOttQueue(); } } }, [
-      h('b', { text: 'OTT dates to fill' }), h('span', { class: 'cnt', text: tabs.none.length + ' films' }), h('span', { class: 'note', text: ottQOpen ? 'Hide' : 'Show' })]);
-    box.appendChild(head);
-    if (!ottQOpen) return;
-    box.appendChild(h('div', { class: 'note', style: 'margin:6px 0 10px', text: 'Films in theatres or coming soon with no OTT date, most-awaited first. Fill one in and it moves onto the OTT release dates page at the next build.' }));
-    box.appendChild(h('div', { class: 'chips', role: 'group', 'aria-label': 'OTT dates to fill' }, [['none', 'No date'], ['expected', 'Expected, not confirmed'], ['passed', 'Date passed, still Coming soon']].map(function (t) {
-      return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(ottQTab === t[0]), text: t[1] + ' · ' + tabs[t[0]].length, on: { click: function () { ottQTab = t[0]; renderOttQueue(); } } });
+    Object.keys(g).forEach(function (k) { g[k].sort(function (a, b) { return odPop(b) - odPop(a) || String(b.data.releaseDate || '').localeCompare(String(a.data.releaseDate || '')); }); });
+    return g;
+  }
+  function odInit(d) {
+    var st = ottStatusOf(d), n = new Date(); n.setMonth(n.getMonth() + 1);
+    return { p: d.ottPlatform || '', mode: st === 'confirmed' ? 'date' : st === 'expected' ? 'exp' : 'none', date: d.ottReleaseDate || '',
+      month: (d.ottExpected || '').slice(0, 7) || n.toISOString().slice(0, 7), part: (d.ottExpected || '').slice(8) || 'mid', src: d.ottSource || '' };
+  }
+  function odChanged(d, e) { var i = odInit(d); return ['p', 'mode', 'date', 'src'].some(function (k) { return i[k] !== e[k]; }) || (e.mode === 'exp' && (i.mode !== 'exp' || i.month !== e.month || i.part !== e.part)); }
+  var OD_FIELDS = ['ottPlatform', 'ottReleaseDate', 'ottDateStatus', 'ottExpected', 'ottSource', 'platform', 'section'];
+  function odSave(m, e, btn) {
+    if (!canWrite) { setStatus('You can’t make changes with this account.'); return; }
+    var d = clone(m.data);
+    d.ottPlatform = e.p; d.ottSource = e.src;
+    if (e.mode === 'date') { if (!e.date) { setStatus('Pick the day ' + d.title + ' starts streaming.'); return; } d.ottReleaseDate = e.date; d.ottDateStatus = 'confirmed'; delete d.ottExpected; }
+    else if (e.mode === 'exp') { if (!/^\d{4}-\d{2}$/.test(e.month)) { setStatus('Pick the expected month for ' + d.title + '.'); return; } d.ottDateStatus = 'expected'; d.ottExpected = e.month + '-' + e.part; d.ottReleaseDate = ''; }
+    else { delete d.ottDateStatus; delete d.ottExpected; d.ottReleaseDate = ''; }
+    var err = ottTidy(d); if (err) { setStatus(err); return; }
+    if (d.nowPlaying && d.section !== 'TV shows') d.section = npSection(d);
+    var up = {}, prev = {};
+    OD_FIELDS.forEach(function (k) { var a = d[k] == null ? '' : d[k], b = m.data[k] == null ? '' : m.data[k]; if (a !== b) { up[k] = a; prev[k] = b; } });
+    if (!Object.keys(up).length) { setStatus('Nothing to save for ' + d.title + '.'); return; }
+    up.updatedAt = new Date().toISOString();
+    if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+    db.doc('movies/' + m.id).update(up).then(function () {
+      odDone[m.id] = { prev: prev, tab: odTab, where: ottWhere(d), idx: (odLast[odTab] || []).indexOf(m.id) }; delete odEd[m.id];
+      setStatus('Saved ' + d.title + '.'); renderOttDates();
+    }).catch(function (x) { if (btn) { btn.disabled = false; btn.textContent = 'Save'; } setStatus('Couldn’t save ' + d.title + (x && x.message ? ': ' + x.message : '') + '.'); });
+  }
+  function odUndo(m) {
+    var dn = odDone[m.id]; if (!dn || !canWrite) return;
+    var up = clone(dn.prev); up.updatedAt = new Date().toISOString();
+    db.doc('movies/' + m.id).update(up).then(function () { delete odDone[m.id]; setStatus('Put back ' + m.data.title + '.'); renderOttDates(); })
+      .catch(function (x) { setStatus('Couldn’t undo' + (x && x.message ? ': ' + x.message : '') + '.'); });
+  }
+  // Wikipedia hint: when the film's English Wikipedia page names the streaming service, it shows under the picker.
+  // Only the service; the date always comes from the platform's own announcement.
+  function odWikiFind(m) {
+    var d = m.data, y = String(d.releaseDate || '').slice(0, 4), lang = String(d.languages || '').split(/[,;]/)[0].trim();
+    var api = 'https://en.wikipedia.org/w/api.php?origin=*&format=json&';
+    var names = OTT_LIST.slice().sort(function (a, b) { return b.length - a.length; });
+    return fetch(api + 'action=query&list=search&srlimit=3&srsearch=' + encodeURIComponent('"' + d.title + '" ' + y + ' ' + lang + ' film')).then(function (r) { return r.json(); }).then(function (j) {
+      var key = String(d.title || '').toLowerCase().split(':')[0].slice(0, 6);
+      var hit = ((j.query && j.query.search) || []).filter(function (x) { return x.title.toLowerCase().indexOf(key) !== -1; })[0];
+      if (!hit) return null;
+      return fetch(api + 'action=parse&prop=wikitext&redirects=1&page=' + encodeURIComponent(hit.title)).then(function (r) { return r.json(); }).then(function (p) {
+        var t = (p.parse && p.parse.wikitext && p.parse.wikitext['*']) || '';
+        if (!y || t.indexOf(y) === -1) return null;
+        t = t.replace(/<ref[^>]*\/>/g, '').replace(/<ref[\s\S]*?<\/ref>/g, '');
+        var sents = t.split(/(?<=[.!?])\s+|\n/).filter(function (x) { return /stream|digital|OTT|post-theatrical|rights/i.test(x) && !/^\s*\|/.test(x); });
+        for (var i = 0; i < sents.length; i++) {
+          for (var k = 0; k < names.length; k++) {
+            var nm = names[k], rx = new RegExp('\\b' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/ /g, '\\s?') + '\\b', 'i');
+            if (rx.test(sents[i]) || (nm === 'JioHotstar' && /disney\+?\s?hotstar|jio\s?hotstar/i.test(sents[i]))) return { svc: nm, page: hit.title };
+          }
+        }
+        return null;
+      });
+    }).catch(function () { return null; });
+  }
+  function odWikiNext() {
+    if (odWikiBusy) return; var m = odWikiQ.shift(); if (!m) return;
+    if (odWiki.hasOwnProperty(m.id)) { odWikiNext(); return; }
+    odWikiBusy = true;
+    odWikiFind(m).then(function (r) { odWiki[m.id] = r; odWikiBusy = false; if (r && odMode) renderOttDates(); setTimeout(odWikiNext, 400); });
+  }
+  function odTileFor(name) {
+    var t = OD_TILE[name]; return h('span', { class: 'odlg', style: 'background:' + (t ? t[0] : '#3A3545'), 'aria-hidden': 'true', text: t ? t[1] : (name ? name.charAt(0) : '?') });
+  }
+  function odRow(m, i) {
+    var d = m.data, td = npToday(), dn = odDone[m.id];
+    var days = d.releaseDate ? Math.round((Date.parse(td) - Date.parse(d.releaseDate)) / 864e5) : null;
+    var lang = String(d.languages || '').split(/[,;]/)[0].trim(), rel = d.releaseDate ? (+d.releaseDate.slice(8)) + ' ' + OTT_MONTHS[+d.releaseDate.slice(5, 7) - 1].slice(0, 3) : '';
+    var film = h('div', { class: 'odfilm' }, [
+      d.posterUrl ? h('img', { class: 'odpost', src: d.posterUrl, alt: '', loading: 'lazy', width: 40, height: 60 }) : h('span', { class: 'odpost' }),
+      h('div', { style: 'min-width:0' }, [h('a', { href: titleHref(m), text: d.title }), h('div', { class: 'note', text: [lang, rel, d.nowPlaying === 'out' ? 'out of theatres' : ''].filter(Boolean).join(' · ') })])]);
+    var dayEl = h('span', { class: 'oddays' + (days !== null && days >= 28 ? ' hot' : ''), text: days === null ? '—' : days >= 0 ? days + (days === 1 ? ' day' : ' days') : 'in ' + -days + ' days' });
+    if (odTab === 'passed') {
+      return h('div', { class: 'odrow' }, [film, h('div', {}, [dayEl]), h('div', { class: 'note', style: 'grid-column:span 2', text: 'Release date has passed but it’s still Coming soon. Set Now playing on its page.' }),
+        h('div', { class: 'odact' }, [h('a', { class: 'btn small', href: titleHref(m), text: 'Fix status' })])]);
+    }
+    if (dn) {
+      return h('div', { class: 'odrow done' }, [film, h('div', {}, [dayEl]),
+        h('div', { class: 'odsaved', style: 'grid-column:span 2' }, [h('b', { text: '✓ Saved' }), h('span', { class: 'note', text: dn.where })]),
+        h('div', { class: 'odact' }, [h('button', { type: 'button', class: 'btn small', disabled: !canWrite, text: 'Undo', on: { click: function () { odUndo(m); } } })])]);
+    }
+    var e = odEd[m.id] || (odEd[m.id] = odInit(d)), id = 'od' + i, changed = odChanged(d, e), rerender = function () { renderOttDates(); };
+    var cur = e.p;
+    var sel = h('select', { id: id + 'p', class: 'in', disabled: !canWrite, 'aria-label': 'Streams on, ' + d.title },
+      [h('option', { value: '', text: 'Choose a service', selected: !cur })].concat(OTT_LIST.map(function (x) { return h('option', { value: x, text: x, selected: x === cur }); }))
+        .concat(cur && OTT_LIST.indexOf(cur) === -1 ? [h('option', { value: cur, text: cur, selected: true })] : []));
+    sel.addEventListener('change', function () { e.p = sel.value; rerender(); });
+    var pick = h('div', { class: 'odpick' + (cur ? '' : ' none') }, [odTileFor(cur), sel]);
+    var wk = odWiki[m.id], pickCol = [pick];
+    if (wk && wk.svc && wk.svc !== cur) pickCol.push(h('div', { class: 'odhint' }, [h('span', { text: 'Wikipedia: ' }), h('a', { href: 'https://en.wikipedia.org/wiki/' + encodeURIComponent(wk.page.replace(/ /g, '_')), target: '_blank', rel: 'noopener', text: wk.svc }),
+      h('button', { type: 'button', class: 'oduse', disabled: !canWrite, text: 'Use', on: { click: function () { e.p = wk.svc; rerender(); } } })]));
+    else if (!cur && !odWiki.hasOwnProperty(m.id) && odTab !== 'expected') odWikiQ.push(m);
+    var seg = h('div', { class: 'odseg', role: 'group', 'aria-label': 'When, ' + d.title }, [['date', 'Date'], ['exp', 'Expected'], ['none', 'Not yet']].map(function (o) {
+      return h('button', { type: 'button', id: id + 'm' + o[0], class: e.mode === o[0] ? 'on' : '', 'aria-pressed': String(e.mode === o[0]), disabled: !canWrite, text: o[1], on: { click: function () { e.mode = o[0]; rerender(); } } });
+    }));
+    var when = [seg];
+    if (e.mode === 'date') {
+      var di = h('input', { id: id + 'd', class: 'in', type: 'date', disabled: !canWrite, 'aria-label': 'OTT date, ' + d.title }); di.value = e.date;
+      di.addEventListener('change', function () { e.date = di.value; rerender(); }); when.push(di);
+    } else if (e.mode === 'exp') {
+      var mi = h('input', { id: id + 'mo', class: 'in', type: 'month', disabled: !canWrite, 'aria-label': 'Expected month, ' + d.title }); mi.value = e.month;
+      mi.addEventListener('change', function () { e.month = mi.value; rerender(); }); when.push(mi);
+      when.push(h('div', { class: 'odseg mini', role: 'group', 'aria-label': 'Part of the month' }, ['early', 'mid', 'late'].map(function (x) {
+        return h('button', { type: 'button', id: id + 'x' + x, class: e.part === x ? 'on' : '', 'aria-pressed': String(e.part === x), disabled: !canWrite, text: x.charAt(0).toUpperCase() + x.slice(1), on: { click: function () { e.part = x; rerender(); } } });
+      })));
+    }
+    var whenCol = [h('div', { class: 'odwhen' }, when)];
+    if (e.mode !== 'none') {
+      var si = h('input', { id: id + 's', class: 'in odsrc', type: 'url', placeholder: 'Source: the platform’s own post (optional)', disabled: !canWrite, 'aria-label': 'Source link, ' + d.title }); si.value = e.src;
+      si.addEventListener('input', function () { e.src = si.value; var b = $(id + 'b'); if (b) { var c = odChanged(d, e); b.disabled = !canWrite || !c; b.classList.toggle('primary', c); } });
+      whenCol.push(si);
+    }
+    var btn = h('button', { type: 'button', id: id + 'b', class: 'btn small' + (changed ? ' primary' : ''), disabled: !canWrite || !changed, text: 'Save', on: { click: function () { odSave(m, e, btn); } } });
+    var row = h('div', { class: 'odrow' + (changed ? ' edit' : ''), 'data-od': id }, [film, h('div', {}, [dayEl]), h('div', {}, pickCol), h('div', {}, whenCol), h('div', { class: 'odact' }, [btn])]);
+    row.addEventListener('keydown', function (ev) { if (ev.key === 'Enter' && ev.target.tagName !== 'BUTTON' && odChanged(d, e)) { ev.preventDefault(); odSave(m, e, btn); } });
+    return row;
+  }
+  function renderOttDates() {
+    if (!odMode) return;
+    var main = $('main'), a = document.activeElement, aid = a && a.id, y = window.scrollY;
+    main.innerHTML = '';
+    var g = odGroups(), c = $('ottCount'); if (c) c.textContent = g.waiting.length ? String(g.waiting.length) : '';
+    // Rows saved this visit stay in the tab they were saved from, so Undo stays in reach.
+    Object.keys(odDone).sort(function (a, b) { return odDone[a].idx - odDone[b].idx; }).forEach(function (id) { var dn = odDone[id], m = movies.find(function (x) { return x.id === id; }); if (m && g[dn.tab] && g[dn.tab].indexOf(m) === -1) g[dn.tab].splice(dn.idx < 0 ? g[dn.tab].length : Math.min(dn.idx, g[dn.tab].length), 0, m); });
+    main.appendChild(h('section', { class: 'card' }, [
+      h('div', { class: 'head' }, [h('div', {}, [h('div', { class: 'sub', text: 'Titles' }), h('h1', { text: 'OTT dates to fill' })])]),
+      h('div', { class: 'note', text: 'Pick the service and the date (or the expected month) right in the list and save the row. The OTT release dates page picks it up at the next build. Dates come from the platform’s own announcement; the Wikipedia hint only names the service.' })
+    ]));
+    var TILES = [['waiting', 'Waiting for OTT', 'Out of theatres, or 4+ weeks since release. These show on the OTT page now.'], ['theatres', 'Still in theatres', 'Under 4 weeks. Fill early if a service has announced a date.'],
+      ['expected', 'Expected, not confirmed', 'Has a month. Swap in the exact day when it’s announced.'], ['passed', 'Date passed, still Coming soon', 'Release date is over. Set Now playing.']];
+    main.appendChild(h('div', { class: 'odtiles', role: 'group', 'aria-label': 'Which films' }, TILES.map(function (t) {
+      var n = g[t[0]].filter(function (m) { return !odDone[m.id]; }).length;
+      return h('button', { type: 'button', class: 'odtile' + (odTab === t[0] ? ' on' : '') + (n ? '' : ' zero'), 'aria-pressed': String(odTab === t[0]), on: { click: function () { odTab = t[0]; window.scrollTo(0, 0); renderOttDates(); } } },
+        [h('b', { text: String(n) }), h('span', { text: t[1] }), h('small', { text: t[2] })]);
     })));
-    if (!list.length) { box.appendChild(h('div', { class: 'note', text: 'Nothing here.' })); return; }
-    box.appendChild(h('div', { class: 'ottqlist' }, list.slice(0, 40).map(function (m) {
-      var d = m.data, days = d.releaseDate ? Math.round((Date.parse(td) - Date.parse(d.releaseDate)) / 864e5) : null;
-      return h('div', { class: 'ottqrow' }, [
-        h('div', { style: 'min-width:0' }, [h('a', { href: titleHref(m), text: d.title }), h('div', { class: 'note', text: [String(d.languages || '').split(/[,;]/)[0], d.section, d.releaseDate ? 'released ' + d.releaseDate : '', ottQTab === 'expected' ? 'expected ' + String(d.ottExpected || '') : '', d.ottPlatform ? 'on ' + d.ottPlatform : ''].filter(Boolean).join(' · ') })]),
-        h('span', { class: 'note', text: days === null ? '' : days >= 0 ? days + ' days out' : 'in ' + -days + ' days' }),
-        h('a', { class: 'btn small', href: titleHref(m) + '#ottCard', text: ottQTab === 'passed' ? 'Fix status' : 'Add date' })
-      ]);
-    })));
-    if (list.length > 40) box.appendChild(h('div', { class: 'note', text: 'And ' + (list.length - 40) + ' more.' }));
+    var list = g[odTab] || []; odLast[odTab] = list.map(function (m) { return m.id; });
+    if (!moviesLoaded && !list.length) { main.appendChild(h('div', { class: 'empty', text: 'Loading…' })); return; }
+    if (!list.length) { main.appendChild(h('div', { class: 'empty', text: 'Nothing here right now.' })); return; }
+    odWikiQ = [];
+    var box = h('div', { class: 'odlist' }, [h('div', { class: 'odrow odhead', 'aria-hidden': 'true' }, [h('span', { text: 'Film' }), h('span', { text: 'Released' }), h('span', { text: odTab === 'passed' ? '' : 'Streams on' }), h('span', { text: odTab === 'passed' ? '' : 'When' }), h('span', { text: '' })])]);
+    list.slice(0, 60).forEach(function (m, i) { box.appendChild(odRow(m, i)); });
+    main.appendChild(box);
+    main.appendChild(h('div', { class: 'note', style: 'margin-top:10px' }, [list.length > 60 ? 'Showing the first 60 of ' + list.length + '. ' : '', 'Most awaited first, then newest. Enter saves a row.']));
+    window.scrollTo(0, y);
+    if (aid) { var b = $(aid); if (b && b !== document.activeElement) b.focus({ preventScroll: true }); }
+    odWikiNext();
   }
   function platformField(label, withTv, note) {
     var cur = draft.platform || '', used = {};
@@ -3748,6 +3898,7 @@ window.ReelAdmin = function (env) {
     if (pbMode) { renderPageBanner(pbMode); return; }
     if (rowsMode) { renderRows(); return; }
     if (btnMode) { renderButtons(); return; }
+    if (odMode) { renderOttDates(); return; }
     if (msgMode) { renderMessages(); return; }
     if (newsMode) { renderNews(); return; }
     var main = $('main'); main.innerHTML = '';
