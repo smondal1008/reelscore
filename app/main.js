@@ -5886,7 +5886,7 @@
     var p = String(d.platform || 'OTT'), first = p.split('/')[0].trim(), hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
     var name = hit ? hit[1] : first;
     return h('a', { class: 'qb ot', href: url, target: '_blank', rel: 'noopener', 'aria-label': 'Watch ' + d.title + ' on ' + first },
-      [hit && hit[3] ? h('img', { class: 'otlogo', src: hit[3], alt: '', width: 20, height: 20, loading: 'lazy' }) : h('span', { class: 'otname', text: name }), tipFn('Watch on ' + name)]);
+      [hit && hit[3] ? h('img', { class: 'otlogo', src: hit[3], alt: '', width: 20, height: 20, loading: 'lazy' }) : icon('tv', 18), tipFn('Watch on ' + name)]);
   }
   // Short words under the icons on phones (My List rows), where there's no hover.
   var VSHORT = { theatre: { a: 'Must', b: 'Liked', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };

@@ -524,7 +524,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .pr-vids { list-style: none; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 14px; }
   .pr-vids img { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: 10px; margin-bottom: 6px; }
   footer.ft a { color: var(--muted); }
-  .qv { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .qv { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .qb { padding: 8px 4px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .qb:hover { border-color: var(--muted); }
   .qb[aria-pressed="true"].a { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
@@ -1777,14 +1777,14 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 }
 
 /* Home In theatres: Tickets · Seen · Not seen · Not for me */
-.qv.icons.up.seenrow.n4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.seenrow.n4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .qv.icons.up.seenrow.n4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
 .qv.icons.up.seenrow.n4 .qb.se .qtip { --tx: -50%; left: 50%; right: auto; }
 
 /* Seen · Not for me rows: as many columns as icons (2, 3 with Tickets or Not yet, 4 with both) */
-.qv.icons.up.seenrow.c2 { grid-template-columns: repeat(2, 1fr); }
-.qv.icons.up.seenrow.c3 { grid-template-columns: repeat(3, 1fr); }
-.qv.icons.up.seenrow.c4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.seenrow.c2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.qv.icons.up.seenrow.c3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.qv.icons.up.seenrow.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .qv.icons.up.seenrow.c3 .qb.nv .qtip, .qv.icons.up.seenrow.c4 .qb.nv .qtip { --tx: -50%; left: 50%; right: auto; }
 .qv.icons.up.seenrow .qb.sk .qtip { --tx: 0; left: auto; right: 0; }
 
@@ -1793,14 +1793,14 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .qv.icons.up.seenrow.n3 > .qb:first-child .qtip { --tx: 0; left: 0; right: auto; }
 
 /* Coming soon icons with bookings open: Tickets · Trailer · Remind me · Not for me */
-.qv.icons.up.c4 { grid-template-columns: repeat(4, 1fr); }
-.qv.icons.w4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.c4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.qv.icons.w4 { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 .qv.icons.w4 .qb.ot .qtip { --tx: 0; left: 0; right: auto; }
 .qv.icons.up.c4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
 .qv.icons.up.c4 .qb.tr .qtip, .qv.icons.up.c4 .qb.rm .qtip { --tx: -50%; left: 50%; right: auto; }
 
 /* Tonight's picks: Seen · Not tonight · Not for me as icons */
-.qv.icons.up.seenrow.tnq { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.qv.icons.up.seenrow.tnq { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .qv.icons.up.seenrow.tnq .qb { min-height: 40px; }
 .qv.icons.up.seenrow.tnq .qb.nt { color: #A39FB0; }
 .qv.icons.up.seenrow.tnq .qb.nt .qtip { --tx: -50%; left: 50%; right: auto; }
@@ -1819,8 +1819,10 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 /* Streaming cards: the service's logo as the first icon (like Tickets) */
 .qv.icons .qb.ot { text-decoration: none; }
 .qv.icons .qb.ot .otlogo { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; display: block; }
-.qv.icons .qb.ot .otname { font-size: 10.5px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .qv.icons.up.seenrow.n3 > .qb.ot:first-child .qtip { --tx: 0; left: 0; right: auto; }
 
 /* Poster corner once rated: your verdict in its colour (opens the title page at Your verdict) */
 .addl[hidden] { display: none; }
+
+/* No icon can widen its row (the grids above use minmax(0, 1fr)), whatever is inside a button. */
+.qv.icons .qb { min-width: 0; }
