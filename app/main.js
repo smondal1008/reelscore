@@ -1565,14 +1565,14 @@
               t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; }); markSeen(id, true);
               var next = tnSwap(t, i); toast(title + ' marked as seen' + (next ? '. Here’s a new pick.' : '.')); onChange();
             } } }),
-            h('button', { type: 'button', class: 'linkbtn', text: 'Haven’t seen it', on: { click: function () { t.rating = null; onChange(); } } })])
+            h('button', { type: 'button', class: 'linkbtn', text: 'Not seen', on: { click: function () { t.rating = null; onChange(); } } })])
         ]);
       } else {
         body = h('div', { class: 'tnbody2' }, [
           h('div', { class: 'tnwhy', text: o.pinned ? 'From your shortlist' : tnReason(o, t) }),
           tnCta(m, t),
           h('div', { class: 'tnacts' }, [
-            h('button', { type: 'button', class: 'tnact', on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } }, [icon('eye', 17), h('span', { text: 'Seen it' })]),
+            h('button', { type: 'button', class: 'tnact', on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } }, [icon('eye', 17), h('span', { text: 'Seen' })]),
             h('button', { type: 'button', class: 'tnact dim tnmoon', on: { click: function () {
               tnSkipToday(id); t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
               var next = tnSwap(t, i); toast('Okay, not tonight.' + (next ? ' Here’s a new pick.' : '')); onChange();
@@ -1755,11 +1755,11 @@
       lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/movies-coming-soon')); }, 6),
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta }, allStreamingLink()); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta, wlVerdict: true }, allStreamingLink()); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
-      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), null, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
+      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), { wlVerdict: true }, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
       lazySection(function () { return langSection(); }, 14)
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
@@ -2131,7 +2131,7 @@
           on: { click: function () {
             if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact, .qb'); if (b) b.focus();
             toast(m.data.title + ' marked as not seen', function () { markOn(); rateRefresh(m.id); });
-          } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Haven’t seen' })]);
+          } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not seen' })]);
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
@@ -2147,7 +2147,7 @@
           } } }, [icon('play', 18), tip(tr ? 'Trailer' : 'No trailer yet')]);
         var seB = h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + m.data.title, on: { click: function () {
             markOn(); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
-          } } }, [icon('eye', 18), tip('Seen it')]);
+          } } }, [icon('eye', 18), tip('Seen')]);
         // Booking open: Trailer, Tickets, Seen it. Otherwise: Seen it, Trailer, Haven't seen.
         var tk = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
         if (tk) { tk.textContent = ''; tk.appendChild(icon('ticket', 18)); tk.appendChild(tip('Tickets')); }
@@ -2155,17 +2155,17 @@
           seB,
           trB,
           h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + m.data.title, on: { click: function () {
-            if (no) { rateDelUnseen(m.id); show(true); toast('Cleared “haven’t seen” for ' + m.data.title); return; }
+            if (no) { rateDelUnseen(m.id); show(true); toast('Cleared “not seen” for ' + m.data.title); return; }
             rateAddUnseen(m.id); markSeen(m.id, false); show(true);
             toast(m.data.title + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
-          } } }, [icon('eyeoff', 18), tip('Haven’t seen')])
+          } } }, [icon('eyeoff', 18), tip('Not seen')])
         ]);
       } else {
         face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
           h('button', { type: 'button', class: 'tnact', on: { click: function () {
             markOn(); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
-          } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
-          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Haven’t seen' })])
+          } } }, [icon('eye', 15), h('span', { text: 'Seen' })]),
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Not seen' })])
         ]);
       }
       box.appendChild(face);
@@ -2710,7 +2710,7 @@
     if (list.length < 4) return null;
     list.sort(function (a, b) { return b.date.localeCompare(a.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     var when = {}; list.forEach(function (e) { when[e.m.id] = e; });
-    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return [e.platName || 'OTT', isTv(m) ? 'Series' : '', e.date === td ? 'Today' : fmtDate(e.date)].filter(Boolean).join(' · '); } }, seeAll('/ott-release-dates'));
+    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return [e.platName || 'OTT', isTv(m) ? 'Series' : '', e.date === td ? 'Today' : fmtDate(e.date)].filter(Boolean).join(' · '); }, wlVerdict: true }, seeAll('/ott-release-dates'));
   }
   function drawOttDates() {
     var v = $('view-ottdates');
