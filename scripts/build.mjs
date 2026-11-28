@@ -65,8 +65,9 @@ const HOST_RE = /^(as\s+)?(host|co-host|judge|narrator|guest|presenter|anchor|me
 const hostOf = c => HOST_RE.test(String((c && c.role) || '').trim()) ? String(c.role).trim().replace(/^as\s+/i, '') : '';
 const charOf = c => { if (!c) return ''; const x = String(c.character || '').trim(); if (x) return x; const r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) && !HOST_RE.test(r) ? r.replace(/^as\s+/i, '') : ''; };
 const VERD = {
-  theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Meh', 'Not worth it']],
-  ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Meh']]
+  // One set of verdict words for every title (same as VERD in app/main.js).
+  theatre: [['a', 'Must watch', 'Loved it'], ['b', 'Liked it', 'Worth a watch'], ['c', 'Meh', 'Not worth it']],
+  ott: [['a', 'Must watch', 'Loved it'], ['b', 'Liked it', 'Worth a watch'], ['c', 'Meh', 'Not worth it']]
 };
 const isTv = d => d.section === 'TV shows';
 const isOtt = d => d.section === 'On OTT';
@@ -744,6 +745,8 @@ async function main() {
     body += '<h1>' + esc(d.title) + '</h1>' + (d.subtitle ? '<div class="pr-sub">' + esc(d.subtitle) + '</div>' : '');
     body += metaLine ? '<div class="pr-meta">' + metaLine + '</div>' : '';
     if (sc.tot >= 3) body += '<div class="pr-score"><b>' + sc.pct + '%</b> positive · ' + sc.tot + ' verdict' + (sc.tot === 1 ? '' : 's') + '<div class="note">' + vs.map(x => esc(x[1]) + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%').join(' · ') + '</div></div>';
+    // Films in theatres: Reelscore's suggestion from the verdict mix (as theatreCall in app/main.js).
+    if (sc.tot >= 3 && d.section === 'In theatres') { const n = sc.n, k = n.a >= n.b && n.a >= n.c ? 'a' : n.b >= n.c ? 'b' : 'c'; body += '<div class="pr-call">Reelscore says: ' + { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Skip it' }[k] + '</div>'; }
     // OTT release date and ticket links, in the page's HTML so search engines see what the title promises.
     if (!tv && d.ottReleaseDate && d.ottReleaseDate >= TODAY) body += '<div class="pr-meta">OTT release: ' + esc(fmtDate(d.ottReleaseDate)) + (String(d.platform || '').trim() ? ' on ' + esc(d.platform) : '') + '</div>';
     const tix = !tv && d.section === 'In theatres' && !(data.buttons && data.buttons.title && data.buttons.title.book === false) ? ticketsOf(d) : [];
@@ -966,7 +969,7 @@ async function main() {
   // only shows on "/" (the app switches views at once elsewhere). Titles match app/main.js BROWSE_TITLES / PEOPLE_TITLE.
   const HUBS = [
     ['movies', 'All movies', 'All Indian Movies | Reelscore', 'Every Bollywood and regional Indian film on Reelscore, old and new, with cast, crew and verdicts.'],
-    ['movies-in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts: theatre, OTT or skip.'],
+    ['movies-in-theatres', 'In theatres', 'Indian Movies in Theatres Now | Reelscore', 'Hindi, Tamil, Telugu, Malayalam and other Indian films in theatres now, with verdicts that tell you whether each is worth the theatre or can wait for OTT.'],
     ['movies-coming-soon', 'Coming soon', 'Upcoming Indian Movies | Reelscore', 'Upcoming Bollywood and regional Indian films with release dates, cast and directors.'],
     ['movies-on-ott', 'On OTT', 'Indian Movies on OTT | Reelscore', 'Indian films streaming on OTT platforms, with verdicts on whether they are worth your time.'],
     ['tv-shows', 'TV shows', 'Indian TV Shows & Series | Reelscore', 'Indian TV shows and web series in Hindi, Tamil, Telugu, Malayalam and more, with cast, trailers and verdicts.']
@@ -1008,7 +1011,7 @@ async function main() {
   // Home
   const released = m => isTv(m.data) || !(m.data.releaseDate > today);
   let homeBody = '<h1>Verdicts on Indian movies and series</h1><p>Reelscore tracks ' + movies.length + ' Bollywood and regional Indian films and shows. ' +
-    'For each one, people say whether it is worth the theatre, worth streaming on OTT, or worth skipping.</p>';
+    'For each one, people say Must watch, Liked it or Meh, and the mix tells you whether it’s worth the theatre or can wait for OTT.</p>';
   homeBody += block('In theatres now', bySection['In theatres'].slice(0, 18).map(titleLi), ['/browse/movies-in-theatres', 'All ' + bySection['In theatres'].length + ' in theatres →']);
   // As on the site: the home row lists titles with a release date (TBA ones only when pinned); the link counts them all.
   homeBody += block('Coming soon', bySection['Coming soon'].filter(m => /^\d{4}-\d{2}-\d{2}$/.test(m.data.releaseDate || '') || (data.rows.coming || []).includes(m.id)).slice(0, 18).map(titleLi), ['/browse/movies-coming-soon', 'All ' + bySection['Coming soon'].length + ' coming soon →']);
@@ -1055,7 +1058,7 @@ async function main() {
   {
     const MOVIE_HUBS = HUBS.filter(h => h[1] !== 'TV shows' && h[1] !== 'All movies');
     const films = movies.filter(m => !isTv(m.data)), shows = movies.filter(m => isTv(m.data)).sort(newest);
-    let mBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Movies</nav><h1>Indian movies</h1><p>' + films.length + ' Bollywood and regional Indian films, with verdicts on whether each is worth the theatre, OTT or a skip.</p>';
+    let mBody = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › Movies</nav><h1>Indian movies</h1><p>' + films.length + ' Bollywood and regional Indian films, with verdicts on whether each is a must watch, worth a watch or not worth it.</p>';
     MOVIE_HUBS.forEach(h => { mBody += block(h[1] + ' <span class="note">' + bySection[h[1]].length + '</span>', bySection[h[1]].slice(0, 12).map(titleLi), ['/browse/' + h[0], 'See all ' + bySection[h[1]].length + ' →']); });
     mBody += block('Recently released', (bySection['Older releases'] || []).filter(released).slice(0, 12).map(titleLi), ['/browse/movies', 'See all ' + films.length + ' movies →']);
     mBody += '<h2>By language</h2><ul>' + langList.map(l => '<li><a href="' + langHref(l) + '">' + esc(l) + ' movies</a></li>').join('') + '</ul>';
@@ -1282,9 +1285,8 @@ async function main() {
       '<h1>About Reelscore and how scores work</h1>' +
       '<p>Reelscore is an independent site, built in India, for people who watch films and series in more than one Indian language. It answers one practical question about every title: is it worth the trip to the theatre, worth streaming at home, or worth skipping? The catalogue covers ' + movies.length + ' Bollywood and regional titles in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali, Marathi and more, with pages for ' + nPeople + ' actors and filmmakers.</p>' +
       '<h2>Verdicts</h2>' +
-      '<p>Anyone signed in with a Google account can give a verdict once a title is out. Each person has one verdict per title and can change or remove it at any time. There are three choices:</p>' +
-      '<ul><li>For films in theatres: <b>' + esc(t[0][1]) + '</b> (' + esc(t[0][2].toLowerCase()) + '), <b>' + esc(t[1][1]) + '</b> (' + esc(t[1][2].toLowerCase()) + ') or <b>' + esc(t[2][1]) + '</b> (' + esc(t[2][2].toLowerCase()) + ').</li>' +
-      '<li>For films on OTT, older releases and TV shows: <b>' + esc(o[0][1]) + '</b>, <b>' + esc(o[1][1]) + '</b> or <b>' + esc(o[2][1]) + '</b>.</li></ul>' +
+      '<p>Anyone signed in with a Google account can give a verdict once a title is out. Each person has one verdict per title and can change or remove it at any time. There are three choices for every title: <b>' + esc(t[0][1]) + '</b>, <b>' + esc(t[1][1]) + '</b> or <b>' + esc(t[2][1]) + '</b> (' + esc(t[2][2].toLowerCase()) + ').</p>' +
+      '<p>For a film in theatres, the mix also gives a suggestion: mostly ' + esc(t[0][1]) + ' means watch it in theatres, mostly ' + esc(t[1][1]) + ' means wait for OTT, mostly ' + esc(t[2][1]) + ' means skip it.</p>' +
       '<p>Verdicts for upcoming films open on their release date, so a score only reflects people who could have seen the film.</p>' +
       '<h2>How the score is worked out</h2>' +
       '<p>A title’s score is the share of its verdicts that recommend watching it at all: the first two choices count as positive, Meh counts as negative. If 80 people give a verdict and 60 of them pick ' + esc(t[0][1]) + ' or ' + esc(t[1][1]) + ', the score is 75%. Below the score you can see how the verdicts split across all three choices, so a 75% made mostly of “' + esc(t[1][1]) + '” reads differently from one made mostly of “' + esc(t[0][1]) + '”.</p>' +
@@ -1458,7 +1460,7 @@ async function main() {
   const busiest = Object.keys(credits).filter(indexedPerson).sort((a, b) => titleCount(b) - titleCount(a)).slice(0, 25);
   write('llms.txt', [
     '# Reelscore', '',
-    '> Reelscore collects verdicts and reviews for Bollywood and regional Indian movies and series. Each title page shows cast, crew and release details; people say whether a film is worth the theatre, worth streaming on OTT, or worth skipping. A title shows a score once it has ' + MIN_VERDICTS + ' or more verdicts.', '',
+    '> Reelscore collects verdicts and reviews for Bollywood and regional Indian movies and series. Each title page shows cast, crew and release details; people say Must watch, Liked it or Meh, and for films in theatres whether it’s worth the theatre or can wait for OTT. A title shows a score once it has ' + MIN_VERDICTS + ' or more verdicts.', '',
     `The catalogue has ${movies.length} titles in Hindi, Tamil, Telugu, Malayalam, Kannada, Bengali and other languages, and pages for ${nPeople} actors and filmmakers.`, '',
     '## Browse', '', '- [All titles](' + SITE + '/browse)', ...sections.map(([n, u]) => '- [' + n + '](' + SITE + u + ')'), '- [People](' + SITE + '/people): actors and filmmakers', '- [About and how scores work](' + SITE + '/about)', '- [Latest trailers](' + SITE + '/trailers)', '- [Video songs](' + SITE + '/songs)', '',
     '## Recent titles', '', ...recent.map(m => '- [' + m.data.title + ' (' + (isTv(m.data) ? 'TV' : year(m.data)) + ')](' + SITE + movieUrl(m) + ')'), '',

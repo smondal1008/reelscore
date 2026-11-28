@@ -4,8 +4,10 @@
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var PAL = [['#241C3A','#E8A33A'],['#14213D','#5BA3C7'],['#3A1414','#D94A3A'],['#14283A','#F2A7A0'],['#2E1612','#E8703A'],['#16231A','#8DBF6A'],['#2A1A33','#C77FD6'],['#2E2814','#E8C547'],['#24242A','#B9B4C2'],['#183A37','#9FD8CB'],['#33141E','#F2A7A0'],['#1E2A1A','#C7843F']];
   var VERD = {
-    theatre: [['a','Theatre','Worth the big screen'],['b','OTT','Wait for streaming'],['c','Meh','Not worth it']],
-    ott: [['a','Must watch','Watch it tonight'],['b','Watch','Worth a watch'],['c','Meh','Not worth it']]
+    // One set of verdict words for every title (design board "Item 9"). Stored keys stay a / b / c, so saved verdicts and
+    // scores carry over; films in theatres get a Theatre-or-OTT suggestion worked out from the mix (theatreCall).
+    theatre: [['a','Must watch','Loved it'],['b','Liked it','Worth a watch'],['c','Meh','Not worth it']],
+    ott: [['a','Must watch','Loved it'],['b','Liked it','Worth a watch'],['c','Meh','Not worth it']]
   };
   var VCOL = { a: 'var(--accent)', b: 'var(--text)', c: '#8E8899' };
 
@@ -200,8 +202,7 @@
     if (isOld(m)) return 'Released ' + fmtDate(d.releaseDate, true) + (d.platform ? ' · on ' + d.platform : '');
     return rel ? 'In theatres' : 'Releases ' + fmtDate(d.releaseDate);
   }
-  // The Theatre / OTT / Skip scale only fits films that are in, or coming to, theatres. Streaming titles, TV shows and
-  // older releases use Must watch / Watch / Skip (same a/b/c keys, so existing verdicts keep their meaning).
+  // Films in, or coming to, theatres (both verdict sets now use the same words; see VERD).
   function bigScreen(m) { return m.data.section === 'In theatres' || m.data.section === 'Coming soon'; }
   function vset(m) { return bigScreen(m) ? VERD.theatre : VERD.ott; }
   function inList(id) { return S.mine.watchlist.indexOf(id) !== -1; }
@@ -220,6 +221,14 @@
   // A score is shown only once a title has this many verdicts; until then posters say "New".
   var MIN_SHOW = 3;
   function shownPct(sc) { return sc.tot >= MIN_SHOW ? sc.pct : null; }
+  // Films in theatres with a score: Reelscore's suggestion from the verdict mix. The biggest share decides (ties go to the
+  // better one): mostly Must watch → Watch in theatres, mostly Liked it → Wait for OTT, mostly Meh → Skip it.
+  function theatreCall(m) {
+    if (m.data.section !== 'In theatres' || !released(m)) return null;
+    var sc = score(m.id); if (shownPct(sc) === null) return null;
+    var n = sc.n, k = n.a >= n.b && n.a >= n.c ? 'a' : n.b >= n.c ? 'b' : 'c';
+    return { k: k, text: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Skip it' }[k], icon: { a: 'screen', b: 'tv', c: 'thumbdown' }[k] };
+  }
   // Poster badge: the Reelscore % once a title has MIN_SHOW verdicts; before release, the release date; "New" for the first
   // NEW_DAYS days after release (release day is day 1); after that, with no score yet, no badge. Null means no badge.
   var NEW_DAYS = 14;
@@ -1062,6 +1071,8 @@
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
     // Home In theatres: Tickets is an icon in the row (as on Browse › In theatres) instead of a Book tickets button.
     if (cta && opts.seen3 && opts.book && released(m) && !isTv(m)) cta = null;
+    // Films in theatres with a score: the Theatre-or-OTT suggestion above the buttons.
+    var tcall = theatreCall(m); if (tcall) kids.push(h('div', { class: 'thcall sm ' + tcall.k }, [icon(tcall.icon, 12), tcall.text]));
     if (cta) kids.push(cta);
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m, 'ask'));
@@ -1591,7 +1602,7 @@
         var VT = VTIP[bigScreen(m) ? 'theatre' : 'ott'];
         body = h('div', { class: 'tnrate' + (t.anim.rate === id ? ' new' : '') }, [
           h('div', { class: 'tnrate-k', text: 'You’ve seen it. How was it?' }),
-          h('div', { class: 'qv icons' + (bigScreen(m) ? ' th' : ''), role: 'group', 'aria-label': 'Your verdict on ' + title }, vset(m).map(function (x) {
+          h('div', { class: 'qv icons', role: 'group', 'aria-label': 'Your verdict on ' + title }, vset(m).map(function (x) {
             return h('button', { type: 'button', class: 'qb ' + x[0], 'data-v': x[0], 'aria-pressed': 'false', 'aria-label': VT[x[0]], on: { click: function () {
               if (!needUser()) return;
               // Swap first: saving the verdict can redraw the page, and that draw should already show the new pick.
@@ -1831,7 +1842,7 @@
     v.appendChild(h('section', { class: 'ghero', style: '--g1:' + c[0] + ';--g2:' + c[1] }, [
       h('nav', { class: 'gcrumbs', 'aria-label': 'Breadcrumb' }, [h('a', { href: '/', text: 'Home' }), ' › ', h('a', { href: '/browse', text: 'Browse' }), ' › ', g]),
       h('h1', { class: 'display', text: g }),
-      h('p', { text: S.loaded ? all.length.toLocaleString('en-IN') + ' ' + g.toLowerCase() + ' movies and series on Reelscore, with verdicts on whether each is worth the theatre, OTT or a skip.' : 'Loading…' })
+      h('p', { text: S.loaded ? all.length.toLocaleString('en-IN') + ' ' + g.toLowerCase() + ' movies and series on Reelscore, with verdicts on whether each is a must watch, worth a watch or not worth it.' : 'Loading…' })
     ]));
     v.appendChild(h('nav', { class: 'gnav', 'aria-label': 'Other genres' }, GENRES.map(function (x) {
       return h('a', { class: 'chip', href: genreUrl(x), 'aria-current': x === g ? 'page' : null, 'aria-pressed': String(x === g), text: x });
@@ -3994,7 +4005,7 @@
     s.innerHTML = '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>';
     return s;
   }
-  function vIconName(m, k) { return k === 'c' ? 'thumbdown' : !bigScreen(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
+  function vIconName(m, k) { return k === 'c' ? 'thumbdown' : k === 'a' ? 'star' : 'thumb'; }
   var SPLITCOL = { a: 'var(--accent)', b: '#7FB2FF', c: '#6B6577' };
 
   // ---------- before release: countdown, your plan, buzz ----------
@@ -4142,7 +4153,10 @@
       h('div', { class: 'kicker', text: 'Reelscore verdict' }),
       h('div', { class: 'vs-big' }, [
         h('span', { class: 'big', style: pct === null ? 'font-size:30px' : '', text: pct === null ? (rel ? 'Verdicts open' : 'Opens on release') : pct + '%' }),
-        pct !== null ? h('span', { class: 'vs-cap', text: 'say it’s worth watching' }) : null
+        pct !== null ? h('span', { class: 'vs-cap', text: 'say it’s worth watching' }) : null,
+        // Films in theatres: the Theatre-or-OTT suggestion, on its own line under the score (same grid row).
+        theatreCall(m) ? h('span', { class: 'brk', 'aria-hidden': 'true' }) : null,
+        (function () { var tc = theatreCall(m); return tc ? h('div', { class: 'thcall tp ' + tc.k }, [icon(tc.icon, 15), 'Reelscore says: ' + tc.text]) : null; })()
       ]),
       pct !== null ? h('div', { class: 'vs-bar', role: 'img', 'aria-label': vs.map(function (x) { return x[1] + ' ' + Math.round(100 * sc.n[x[0]] / sc.tot) + '%'; }).join(', ') },
         vs.map(function (x) { return h('span', { style: 'width:' + (100 * sc.n[x[0]] / sc.tot) + '%;background:' + SPLITCOL[x[0]] }); })) : null,
@@ -5765,7 +5779,7 @@
   function verdictButtons(m, after) { return qvButtons(m, after); }
   // Quick verdict buttons on poster cards (home "Seen these?" row, My List): icon only. The word shows on hover,
   // and for a moment after a tap (phones can't hover). Stored values stay a / b / c, so earlier verdicts are unchanged.
-  var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Meh, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' } };
+  var VTIP = { theatre: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' } };
   // A Trailer icon for the card icon rows: plays in the mini player (or over the page); greyed when there's no trailer yet.
   // lab: add the short word shown under the icon on phones (My List rows).
   function trailerQb(m, lab) {
@@ -5799,13 +5813,13 @@
     }).observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
   // Short words under the icons on phones (My List rows), where there's no hover.
-  var VSHORT = { theatre: { a: 'Theatre', b: 'OTT', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
+  var VSHORT = { theatre: { a: 'Must', b: 'Liked', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
   function qlab(t) { return h('span', { class: 'qlab', 'aria-hidden': 'true', text: t }); }
   function qvTip(m, k) { return VTIP[bigScreen(m) ? 'theatre' : 'ott'][k]; }
   function qvButtons(m, after) {
     var my = myVerdict(m.id), big = bigScreen(m), fl = S.qvFlash;
     var flashOn = fl && fl.id === m.id && Date.now() - fl.t < 1500 ? fl.v : '';
-    return h('div', { class: 'qv icons' + (big ? ' th' : ''), role: 'group', 'aria-label': 'Your verdict on ' + m.data.title }, vset(m).map(function (x) {
+    return h('div', { class: 'qv icons', role: 'group', 'aria-label': 'Your verdict on ' + m.data.title }, vset(m).map(function (x) {
       var tip = qvTip(m, x[0]);
       return h('button', { type: 'button', class: 'qb ' + x[0] + (flashOn === x[0] ? ' flash' : ''), 'data-v': x[0], 'aria-pressed': String(my === x[0]), 'aria-label': tip,
         on: { click: function (e) {
@@ -5821,13 +5835,9 @@
         } } }, [icon(vIconName(m, x[0]), 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: tip })]);
     }));
   }
-  // Key under the "Seen these?" row: what each icon means, for the kinds of film in the row.
+  // Key under the "Seen these?" row: what each icon means.
   function qvLegend(list) {
-    var hasTh = list.some(bigScreen), hasOtt = list.some(function (m) { return !bigScreen(m); });
-    var items = [];
-    if (hasOtt) items.push(['star', 'Must watch', 'a'], ['thumb', 'Liked it', 'b']);
-    if (hasTh) items.push(['screen', 'In theatres', 'a'], ['tv', 'Wait for OTT', 'b']);
-    items.push(['thumbdown', 'Meh, not worth it', 'c']);
+    var items = [['star', 'Must watch', 'a'], ['thumb', 'Liked it', 'b'], ['thumbdown', 'Meh, not worth it', 'c']];
     return h('span', { class: 'qlegend' }, items.map(function (x) { return h('span', { class: 'ql ' + x[2] }, [icon(x[0], 14), h('span', { text: x[1] })]); }));
   }
   // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
@@ -5958,7 +5968,7 @@
       if (ta || tb) return tb.localeCompare(ta);
       return String(S.byId[b].data.releaseDate || '').localeCompare(String(S.byId[a].data.releaseDate || ''));
     });
-    var VF = [['all', 'All'], ['a', 'Theatre / Must watch'], ['b', 'OTT / Watch'], ['c', 'Meh']], vCount = { all: myV.length, a: 0, b: 0, c: 0 };
+    var VF = [['all', 'All'], ['a', 'Must watch'], ['b', 'Liked it'], ['c', 'Meh']], vCount = { all: myV.length, a: 0, b: 0, c: 0 };
     myV.forEach(function (id) { if (vCount[vmap[id]] != null) vCount[vmap[id]]++; });
     var vf = S.vFilter && vCount[S.vFilter] ? S.vFilter : 'all';
     var shownV = vf === 'all' ? myV : myV.filter(function (id) { return vmap[id] === vf; });
