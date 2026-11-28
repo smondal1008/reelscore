@@ -5746,16 +5746,23 @@
   }
   // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
   function seenRateBox(m) {
-    return h('div', { class: 'fu' }, [qvButtons(m), myVerdict(m.id) ? null : h('button', { type: 'button', class: 'linkbtn', style: 'margin-top:6px;font-size:12px', text: 'Not seen', on: { click: function (e) {
+    // The verdict icons plus Not seen as a 4th icon (as in My Watchlist); Not seen takes it off your seen list.
+    var q = qvButtons(m);
+    if (!myVerdict(m.id)) q.classList.add('q4');
+    var nv = myVerdict(m.id) ? null : h('button', { type: 'button', class: 'qb nv', 'aria-label': 'I haven\u2019t seen ' + m.data.title, on: { click: function (e) {
       var card = e.currentTarget.closest('.pc'), grid = card && card.parentNode, after = card && card.nextSibling, sec = card && card.closest('section'), secParent = sec && sec.parentNode, secAfter = sec && sec.nextSibling, secGone = false;
       markSeen(m.id, false);
       if (card) { card.remove(); if (sec && !sec.querySelector('.pc')) { sec.remove(); secGone = true; } }
       toast(m.data.title + ' taken off your seen list', function () {
         markSeen(m.id, true);
+        // The page may have been redrawn since (the save redraws My List): then just draw it again with the title back.
+        if (!(grid && grid.isConnected) && !(secGone && secParent && secParent.isConnected)) { render(); return; }
         if (secGone && secParent) secParent.insertBefore(sec, secAfter && secAfter.parentNode === secParent ? secAfter : null);
         if (card && grid) { card.classList.add('pcflip'); grid.insertBefore(card, after && after.parentNode === grid ? after : null); }
       });
-    } } })]);
+    } } }, [icon('eyeoff', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not seen' })]);
+    if (nv) q.appendChild(nv);
+    return h('div', { class: 'fu wlv' }, [q]);
   }
   // My Watchlist filter: where you can watch a title now. Titles that fit none (older releases with no streaming
   // details) show under All only.
