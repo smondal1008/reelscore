@@ -500,7 +500,7 @@
   // Home: a title taken off the watchlist (from any row) flips, in the My List row, to the next watchlist title not shown there yet.
   // With none left, the card fades out (and the row goes when it is empty).
   function myListSwap(id) {
-    var sec = Array.prototype.filter.call(document.querySelectorAll('#view-home section.sect'), function (x) { return x.getAttribute('aria-label') === 'My List'; })[0];
+    var sec = Array.prototype.filter.call(document.querySelectorAll('#view-home section.sect'), function (x) { return x.getAttribute('aria-label') === 'My Watchlist'; })[0];
     if (!sec) return;
     var cards = Array.prototype.slice.call(sec.querySelectorAll('.pc[data-id]'));
     var card = cards.filter(function (c) { return c.getAttribute('data-id') === id; })[0]; if (!card) return;
@@ -1854,7 +1854,7 @@
     // elements, and building them all at once kept phones busy just after the hero appeared.
     [
       tonightSection(),
-      lazySection(function () { return mine.length ? rowSection('My List', mine, { max: HOME_MAX, wlVerdict: true, upRowOnly: true }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
+      lazySection(function () { return mine.length ? rowSection('My Watchlist', mine, { max: HOME_MAX, wlVerdict: true, upRowOnly: true }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
       lazySection(function () { return trailerSection(); }, 2),
       lazySection(function () { return rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
