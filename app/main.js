@@ -1068,9 +1068,10 @@
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta && released(m)) {
-      kids.push(rateBox(m));
+      kids.push(rateBox(m, 'n3'));
     }
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
+    if (opts.seen3 && released(m)) kids.push(rateBox(m, 'n3'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
     if (opts.myVerdict) {
@@ -1267,6 +1268,10 @@
   function tnAddNope(id) {
     if (S.uid && S.mineLoaded) { S.mine.nope = (S.mine.nope || []).filter(function (x) { return x !== id; }).concat([id]).slice(-500); saveMine(null); }
     else { try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) === -1) a.push(id); localStorage.setItem('rs_nope', JSON.stringify(a.slice(-500))); } catch (e) {} }
+  }
+  function tnDelNope(id) {
+    if (S.uid && S.mineLoaded && (S.mine.nope || []).indexOf(id) !== -1) { S.mine.nope = S.mine.nope.filter(function (x) { return x !== id; }); saveMine(null); }
+    try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) !== -1) localStorage.setItem('rs_nope', JSON.stringify(a.filter(function (x) { return x !== id; }))); } catch (e) {}
   }
   // "Not tonight" in Your 3 for tonight: skipped for the rest of today only, on this device; tomorrow it can come back.
   function tnSkipped() {
@@ -1747,7 +1752,7 @@
         var ra = released(a), rb = released(b);
         if (ra !== rb) return ra ? -1 : 1;
         return ra ? (b.data.releaseDate || '').localeCompare(a.data.releaseDate || '') : (a.data.releaseDate || '').localeCompare(b.data.releaseDate || '');
-      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/movies-in-theatres', text: 'All films in theatres' })])); }, 3),
+      }), rowPins('In theatres')), { book: true, max: 24, inTheatresList: true, seen3: true }, h('span', { class: 'sub' }, ['Now showing, plus this week’s releases · ', h('a', { href: '/browse/movies-in-theatres', text: 'All films in theatres' })])); }, 3),
       lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return rateSection(); }, 4),
@@ -2135,6 +2140,30 @@
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
+      } else if (icons === 'n3') {
+        // Seen these?, More like what you love and the home In theatres row: Seen, Not seen, Not for me (icons, the word
+        // on hover). Seen flips to the verdict icons. In a "Seen these?"-type row, Not seen and Not for me swap the card for
+        // the next title; elsewhere (In theatres) the card stays and the icon shows as picked (tap again to clear).
+        var t3 = m.data.title, tip3 = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
+        var inRow = function (b) { var sc = b.closest('section[aria-label]'); return !!(sc && S.rateRows && S.rateRows[sc.getAttribute('aria-label')]); };
+        var no3 = rateUnseen().indexOf(m.id) !== -1, nf3 = tnNope().indexOf(m.id) !== -1;
+        face = h('div', { class: 'qv icons up seenrow n3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [
+          h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t3, on: { click: function () {
+            markOn(); if (no3) rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
+          } } }, [icon('eye', 18), tip3('Seen')]),
+          h('button', { type: 'button', class: 'qb nv' + (no3 ? ' on' : ''), 'aria-pressed': String(no3), 'aria-label': no3 ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t3, on: { click: function (e) {
+            if (no3) { rateDelUnseen(m.id); show(true); toast('Cleared “not seen” for ' + t3); return; }
+            if (inRow(e.currentTarget)) { rateNope(m, e.currentTarget); return; }
+            rateAddUnseen(m.id); markSeen(m.id, false); show(true);
+            toast(t3 + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
+          } } }, [icon('eyeoff', 18), tip3('Not seen')]),
+          h('button', { type: 'button', class: 'qb sk' + (nf3 ? ' on' : ''), 'aria-pressed': String(nf3), 'aria-label': nf3 ? t3 + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t3, on: { click: function (e) {
+            if (nf3) { tnDelNope(m.id); show(true); toast('Cleared Not for me for ' + t3); return; }
+            if (inRow(e.currentTarget)) { rateNope(m, e.currentTarget, true); return; }
+            tnAddNope(m.id); show(true);
+            toast(t3 + ' marked Not for me', function () { tnDelNope(m.id); rateRefresh(m.id); });
+          } } }, [icon('skip', 18), tip3('Not for me')])
+        ]);
       } else if (icons) {
         var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
         var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
@@ -2233,16 +2262,17 @@
     if (S.uid && S.mineLoaded) { S.mine.unseen = (S.mine.unseen || []).filter(function (x) { return x !== id; }); saveMine(null); }
     try { var a = JSON.parse(localStorage.getItem('rs_unseen') || '[]') || []; localStorage.setItem('rs_unseen', JSON.stringify(a.filter(function (x) { return x !== id; }))); } catch (e) {}
   }
-  function rateNope(m, btn) {
-    var card = btn.closest('.pc'); rateAddUnseen(m.id);
+  // nope: "Not for me" (never suggested again, anywhere) instead of "Not seen" (not asked about in these rows again).
+  function rateNope(m, btn, nope) {
+    var card = btn.closest('.pc'); if (nope) tnAddNope(m.id); else rateAddUnseen(m.id);
     if (!card) return;
     var sec = card.closest('section[aria-label]'), R = sec && S.rateRows && S.rateRows[sec.getAttribute('aria-label')];
     var shown = sec ? Array.prototype.map.call(sec.querySelectorAll('.pc[data-id]'), function (c) { return c.getAttribute('data-id'); }) : [m.id];
     var next = R ? R.next(shown) : null, parent = card.parentNode, after = card.nextSibling, nc = null;
     if (R && R.swap) R.swap(m.id, next ? next.id : null);
     // Undo (a mis-tap): the title is asked about again and its card comes back where it was.
-    toast('Got it. We won\u2019t ask about ' + m.data.title + ' here again', function () {
-      rateDelUnseen(m.id);
+    toast(nope ? 'Got it. We won\u2019t suggest ' + m.data.title + ' again' : 'Got it. We won\u2019t ask about ' + m.data.title + ' here again', function () {
+      if (nope) tnDelNope(m.id); else rateDelUnseen(m.id);
       if (R && R.swap && next) R.swap(next.id, m.id);
       var back = posterCard(m, R ? R.opts : { rate: true }); back.classList.add('pcflip');
       if (nc && nc.parentNode) nc.parentNode.replaceChild(back, nc);
@@ -2253,7 +2283,7 @@
     if (!next) { card.classList.add('pcgone'); setTimeout(function () { if (card.parentNode) card.parentNode.removeChild(card); }, 320); return; }
     nc = posterCard(next, R.opts); nc.classList.add('pcflip');
     card.parentNode.replaceChild(nc, card);
-    var f = nc.querySelector('.rch .tnact'); if (f) f.focus({ preventScroll: true });
+    var f = nc.querySelector('.rch .tnact, .qb'); if (f) f.focus({ preventScroll: true });
   }
   function rateNote() {
     var done = S.justRated || {}, n = Object.keys(done).filter(function (id) { return myVerdict(id); }).length;
