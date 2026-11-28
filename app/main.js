@@ -4,8 +4,8 @@
   var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var PAL = [['#241C3A','#E8A33A'],['#14213D','#5BA3C7'],['#3A1414','#D94A3A'],['#14283A','#F2A7A0'],['#2E1612','#E8703A'],['#16231A','#8DBF6A'],['#2A1A33','#C77FD6'],['#2E2814','#E8C547'],['#24242A','#B9B4C2'],['#183A37','#9FD8CB'],['#33141E','#F2A7A0'],['#1E2A1A','#C7843F']];
   var VERD = {
-    theatre: [['a','Theatre','Worth the big screen'],['b','OTT','Wait for streaming'],['c','Skip','Not worth it']],
-    ott: [['a','Must watch','Watch it tonight'],['b','Watch','Worth a watch'],['c','Skip','Not worth it']]
+    theatre: [['a','Theatre','Worth the big screen'],['b','OTT','Wait for streaming'],['c','Meh','Not worth it']],
+    ott: [['a','Must watch','Watch it tonight'],['b','Watch','Worth a watch'],['c','Meh','Not worth it']]
   };
   var VCOL = { a: 'var(--accent)', b: 'var(--text)', c: '#8E8899' };
 
@@ -3935,14 +3935,16 @@
     bell: '<path d="M6 8a6 6 0 1112 0c0 7 3 8 3 8H3s3-1 3-8M10.3 20a2 2 0 003.4 0"/>',
     cal: '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>',
     star: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.8L12 16.9 6.8 19.6l1-5.8L3.5 9.7l5.9-.8z"/>',
-    thumb: '<path d="M7 10v10H4V10zM7 10l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/>'
+    thumb: '<path d="M7 10v10H4V10zM7 10l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/>',
+    // The Meh verdict: the thumb above, upside down.
+    thumbdown: '<g transform="translate(0 24) scale(1 -1)"><path d="M7 10v10H4V10zM7 10l4-7c1.5 0 2.5 1 2.2 2.6L12.6 9H19a2 2 0 012 2.3l-1.2 7A2 2 0 0117.8 20H7"/></g>'
   };
   function icon(name, size) {
     var s = h('span', { class: 'ic', 'aria-hidden': 'true' });
     s.innerHTML = '<svg width="' + (size || 18) + '" height="' + (size || 18) + '" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' + ICONS[name] + '</svg>';
     return s;
   }
-  function vIconName(m, k) { return k === 'c' ? 'skip' : !bigScreen(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
+  function vIconName(m, k) { return k === 'c' ? 'thumbdown' : !bigScreen(m) ? (k === 'a' ? 'star' : 'thumb') : (k === 'a' ? 'screen' : 'tv'); }
   var SPLITCOL = { a: 'var(--accent)', b: '#7FB2FF', c: '#6B6577' };
 
   // ---------- before release: countdown, your plan, buzz ----------
@@ -5712,7 +5714,7 @@
   function verdictButtons(m, after) { return qvButtons(m, after); }
   // Quick verdict buttons on poster cards (home "Seen these?" row, My List): icon only. The word shows on hover,
   // and for a moment after a tap (phones can't hover). Stored values stay a / b / c, so earlier verdicts are unchanged.
-  var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Skip, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Skip' } };
+  var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Meh, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' } };
   function qvTip(m, k) { return VTIP[bigScreen(m) ? 'theatre' : 'ott'][k]; }
   function qvButtons(m, after) {
     var my = myVerdict(m.id), big = bigScreen(m), fl = S.qvFlash;
@@ -5739,7 +5741,7 @@
     var items = [];
     if (hasOtt) items.push(['star', 'Must watch', 'a'], ['thumb', 'Liked it', 'b']);
     if (hasTh) items.push(['screen', 'In theatres', 'a'], ['tv', 'Wait for OTT', 'b']);
-    items.push(['skip', 'Skip', 'c']);
+    items.push(['thumbdown', 'Meh, not worth it', 'c']);
     return h('span', { class: 'qlegend' }, items.map(function (x) { return h('span', { class: 'ql ' + x[2] }, [icon(x[0], 14), h('span', { text: x[1] })]); }));
   }
   // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
@@ -5874,7 +5876,7 @@
       if (ta || tb) return tb.localeCompare(ta);
       return String(S.byId[b].data.releaseDate || '').localeCompare(String(S.byId[a].data.releaseDate || ''));
     });
-    var VF = [['all', 'All'], ['a', 'Theatre / Must watch'], ['b', 'OTT / Watch'], ['c', 'Skip']], vCount = { all: myV.length, a: 0, b: 0, c: 0 };
+    var VF = [['all', 'All'], ['a', 'Theatre / Must watch'], ['b', 'OTT / Watch'], ['c', 'Meh']], vCount = { all: myV.length, a: 0, b: 0, c: 0 };
     myV.forEach(function (id) { if (vCount[vmap[id]] != null) vCount[vmap[id]]++; });
     var vf = S.vFilter && vCount[S.vFilter] ? S.vFilter : 'all';
     var shownV = vf === 'all' ? myV : myV.filter(function (id) { return vmap[id] === vf; });

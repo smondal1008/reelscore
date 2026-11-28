@@ -65,8 +65,8 @@ const HOST_RE = /^(as\s+)?(host|co-host|judge|narrator|guest|presenter|anchor|me
 const hostOf = c => HOST_RE.test(String((c && c.role) || '').trim()) ? String(c.role).trim().replace(/^as\s+/i, '') : '';
 const charOf = c => { if (!c) return ''; const x = String(c.character || '').trim(); if (x) return x; const r = String(c.role || '').trim(); return r && !CREW_RE.test(r) && !/^(cast|actor|actress|lead|self)$/i.test(r) && !HOST_RE.test(r) ? r.replace(/^as\s+/i, '') : ''; };
 const VERD = {
-  theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Skip', 'Not worth it']],
-  ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Skip']]
+  theatre: [['a', 'Theatre', 'Worth the big screen'], ['b', 'OTT', 'Wait for streaming'], ['c', 'Meh', 'Not worth it']],
+  ott: [['a', 'Must watch'], ['b', 'Watch'], ['c', 'Meh']]
 };
 const isTv = d => d.section === 'TV shows';
 const isOtt = d => d.section === 'On OTT';
@@ -1287,7 +1287,7 @@ async function main() {
       '<li>For films on OTT, older releases and TV shows: <b>' + esc(o[0][1]) + '</b>, <b>' + esc(o[1][1]) + '</b> or <b>' + esc(o[2][1]) + '</b>.</li></ul>' +
       '<p>Verdicts for upcoming films open on their release date, so a score only reflects people who could have seen the film.</p>' +
       '<h2>How the score is worked out</h2>' +
-      '<p>A title’s score is the share of its verdicts that recommend watching it at all: the first two choices count as positive, Skip counts as negative. If 80 people give a verdict and 60 of them pick ' + esc(t[0][1]) + ' or ' + esc(t[1][1]) + ', the score is 75%. Below the score you can see how the verdicts split across all three choices, so a 75% made mostly of “' + esc(t[1][1]) + '” reads differently from one made mostly of “' + esc(t[0][1]) + '”.</p>' +
+      '<p>A title’s score is the share of its verdicts that recommend watching it at all: the first two choices count as positive, Meh counts as negative. If 80 people give a verdict and 60 of them pick ' + esc(t[0][1]) + ' or ' + esc(t[1][1]) + ', the score is 75%. Below the score you can see how the verdicts split across all three choices, so a 75% made mostly of “' + esc(t[1][1]) + '” reads differently from one made mostly of “' + esc(t[0][1]) + '”.</p>' +
       '<p>Every verdict counts the same. There are no critic weightings, no paid placements and no hidden adjustments, and nobody at Reelscore edits or removes verdicts to change a score. A score appears in search results only once a title has at least ' + MIN_VERDICTS + ' verdicts.</p>' +
       '<h2>Peer Score</h2>' +
       '<p>You can follow people whose taste you trust. On every title, the Peer Score shows the same percentage worked out only from the people you follow. It appears once at least three of them have given a verdict.</p>' +

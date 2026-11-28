@@ -659,7 +659,7 @@ a.chip[aria-pressed="true"] { color: #0B0A0F; }
   .vb2:hover .vi.i-screen svg { animation: qglow .6s ease; }
   .vb2:hover .vi.i-screen svg path:first-child { fill: currentColor; fill-opacity: .35; }
   .vb2:hover .vi.i-tv svg { animation: qtvon .5s ease; }
-  .vb2:hover .vi.i-skip svg { animation: qshake .45s ease; }
+  .vb2:hover .vi.i-skip svg, .vb2:hover .vi.i-thumbdown svg { animation: qshake .45s ease; }
 }
 @media (prefers-reduced-motion: reduce) { .vb2 .vi svg { animation: none !important; } }
 .tpage .ptabs { margin-top: 28px; }
