@@ -5994,10 +5994,16 @@
     var v = $('view-list'); v.innerHTML = '';
     var w = h('div', { class: 'wrapx' }); v.appendChild(w);
     w.appendChild(h('h1', { class: 'display', style: 'font-size:44px;margin-bottom:18px', text: 'My List' }));
+    if (S.mlObs) { S.mlObs.disconnect(); S.mlObs = null; }
     if (!S.uid) { w.appendChild(h('div', { class: 'empty', text: 'Sign in with Google to keep a list and follow people.' })); return; }
     var mine = S.mine.watchlist.map(function (id) { return S.byId[id]; }).filter(Boolean);
     var fu = followUpList(), fuIds = fu.map(function (m) { return m.id; });
-    var wk = weekendPicks(mine).filter(function (x) { return fuIds.indexOf(x.m.id) === -1; });
+    // What to watch this weekend or next week is hidden for now (a V2 is in the ideabox); set SHOW_WTW to bring it back.
+    var SHOW_WTW = false;
+    var wk = SHOW_WTW ? weekendPicks(mine).filter(function (x) { return fuIds.indexOf(x.m.id) === -1; }) : [];
+    // Jump bar: one chip per section on this page, so a long list is quick to get around.
+    var jump = h('nav', { class: 'mljump', 'aria-label': 'Sections on this page' }), jumps = [];
+    w.appendChild(jump);
     // Remember titles shown here while in theatres, so the home page can ask about them once they leave theatres.
     var newIds = wk.filter(function (x) { return x.m.data.section === 'In theatres' && (S.mine.wtw || []).indexOf(x.m.id) === -1 && !myVerdict(x.m.id); }).map(function (x) { return x.m.id; });
     if (newIds.length && S.mineLoaded) { S.mine.wtw = (S.mine.wtw || []).concat(newIds).slice(-60); saveMine(null); }
@@ -6009,7 +6015,8 @@
     // Not for me take the card out of this section (Undo on the toast).
     S.rateRows = S.rateRows || {};
     S.rateRows['Seen these? From What to watch'] = { opts: { rate: true }, dropEmpty: true, next: function () { return null; } };
-    if (fu.length) w.appendChild(h('section', { class: 'card', 'aria-label': 'Seen these? From What to watch' }, [h('h2', { text: 'Seen these? Give your verdict' }),
+    if (fu.length) jumps.push(['ml-seen', 'Seen these?', fu.length]);
+    if (fu.length) w.appendChild(h('section', { class: 'card mlsec', id: 'ml-seen', 'aria-label': 'Seen these? From What to watch' }, [h('h2', { text: 'Seen these? Give your verdict' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'These were in What to watch while in theatres. Seen one? Tap Seen and give your verdict.' }),
       h('div', { class: 'grid-posters' }, fu.map(function (m) { return posterCard(m, { rate: true }); }))]));
     // Released titles first (in the order they were added), then upcoming ones, soonest release first.
@@ -6023,7 +6030,8 @@
     var wlChips = mine.length ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter my watchlist', style: 'margin:-2px 0 14px' }, WLF.filter(function (x) { return x[0] === 'all' || wlCount[x[0]]; }).map(function (x) {
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(wlf === x[0]), text: x[1] + ' (' + wlCount[x[0]] + ')', on: { click: function () { var y = window.scrollY; S.wlFilter = x[0]; drawList(); window.scrollTo(0, y); } } });
     })) : null;
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }), wlChips,
+    jumps.push(['ml-watchlist', 'My Watchlist', mine.length]);
+    w.appendChild(h('section', { class: 'card mlsec', id: 'ml-watchlist' }, [h('h2', { text: 'My Watchlist (' + mine.length + ')' }), wlChips,
       mine.length ? h('div', { class: 'grid-posters' }, shownWl.map(function (m) {
         // Watch now for released titles out of theatres with a streaming link; Book tickets for theatre titles (incl. advance booking) with a booking link.
         var th = m.data.section === 'In theatres' || m.data.section === 'Coming soon';
@@ -6031,7 +6039,8 @@
         return posterCard(m, o);
       })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
+    jumps.push(['ml-reminders', 'Release reminders', rem.length]);
+    w.appendChild(h('section', { class: 'card mlsec', id: 'ml-reminders' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
       rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) {
         // The Coming soon icons (Trailer, Remind me, Not for me; Tickets first when bookings open), as in My Watchlist.
         return posterCard(m, { dateBadge: true, upRowOnly: true, upRowAll: true });
@@ -6041,7 +6050,8 @@
     var fl = S.qvFlash, justNow = function (id) { return fl && fl.id === id && Date.now() - fl.t < 1600; };
     var seenNR = (S.mine.seen || []).slice().reverse().map(function (id) { return S.byId[id]; })
       .filter(function (m) { return m && released(m) && (!myVerdict(m.id) || justNow(m.id)) && fuIds.indexOf(m.id) === -1; });
-    if (seenNR.length) w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
+    if (seenNR.length) jumps.push(['ml-seennr', 'Seen and Not Rated', seenNR.filter(function (m) { return !myVerdict(m.id); }).length]);
+    if (seenNR.length) w.appendChild(h('section', { class: 'card mlsec', id: 'ml-seennr' }, [h('h2', { text: 'Seen and Not Rated (' + seenNR.filter(function (m) { return !myVerdict(m.id); }).length + ')' }),
       h('div', { class: 'note', style: 'margin:-4px 0 14px', text: 'You said you\u2019ve seen these. One tap each to give your verdict.' }),
       h('div', { class: 'grid-posters' }, seenNR.map(function (m) { return posterCard(m, { seenRate: true }); }))]));
     // Your verdicts: most recently rated first (titles rated before rating dates were kept follow, newest release first),
@@ -6060,18 +6070,21 @@
     var vChips = myV.length ? h('div', { class: 'chips', role: 'group', 'aria-label': 'Filter your verdicts', style: 'margin:-2px 0 14px' }, VF.filter(function (x) { return x[0] === 'all' || vCount[x[0]]; }).map(function (x) {
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === x[0]), text: x[1] + ' (' + vCount[x[0]] + ')', on: { click: function () { var y = window.scrollY; S.vFilter = x[0]; drawList(); window.scrollTo(0, y); } } });
     })) : null;
-    w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }), vChips,
+    jumps.push(['ml-verdicts', 'Your verdicts', myV.length]);
+    w.appendChild(h('section', { class: 'card mlsec', id: 'ml-verdicts' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }), vChips,
       myV.length ? h('div', { class: 'grid-posters' }, shownV.map(function (id) { return posterCard(S.byId[id], { wlVerdict: true }); }))
         : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
     // Not for me: the titles you asked us not to suggest, folded by default. Tap ⊘ on one to bring it back.
     var nopeIds = tnNope().filter(function (id, i, a) { return S.byId[id] && a.indexOf(id) === i; }).reverse();
-    if (nopeIds.length) w.appendChild(h('section', { class: 'card nfmsec' }, [
+    if (nopeIds.length) jumps.push(['ml-nfm', 'Not for me', nopeIds.length]);
+    if (nopeIds.length) w.appendChild(h('section', { class: 'card nfmsec mlsec', id: 'ml-nfm' }, [
       h('div', { class: 'nfmh' }, [
         h('div', {}, [h('h2', { text: 'Not for me (' + nopeIds.length + ')', style: 'margin:0' }),
           h('div', { class: 'note', style: 'margin-top:4px', text: 'Titles you asked us not to suggest. Tap \u2298 on one to bring it back.' })]),
         h('button', { type: 'button', class: 'chip', 'aria-expanded': String(!!S.nopeOpen), text: S.nopeOpen ? 'Hide' : 'Show', on: { click: function () { var y = window.scrollY; S.nopeOpen = !S.nopeOpen; drawList(); window.scrollTo(0, y); } } })]),
       S.nopeOpen ? h('div', { class: 'grid-posters', style: 'margin-top:16px' }, nopeIds.map(function (id) { return posterCard(S.byId[id], { nopeOnly: true }); })) : null]));
 
+    drawListJump(jump, jumps);
     // People you follow and Find people are hidden until following is ready; set SHOW_PEOPLE to true to bring them back.
     var SHOW_PEOPLE = false;
     if (!SHOW_PEOPLE) return;
@@ -6102,6 +6115,27 @@
     if (sug.length) { findBox.appendChild(h('h3', { text: 'People rating titles here' })); findBox.appendChild(h('div', { class: 'people' }, sug.map(function (u) { return personRow(u); }))); }
     w.appendChild(findBox);
     drawHits();
+  }
+  // My List jump bar: a chip per section (with its count); the chip of the section you're reading is lit as you scroll.
+  function drawListJump(bar, jumps) {
+    if (jumps.length < 2) { bar.remove(); return; }
+    var chips = {};
+    jumps.forEach(function (j) {
+      chips[j[0]] = h('a', { class: 'chip', href: '#' + j[0], 'aria-current': 'false', on: { click: function (e) {
+        e.preventDefault();
+        var go2 = function () { var el = $(j[0]); if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' }); };
+        if (j[0] === 'ml-nfm' && !S.nopeOpen) { S.nopeOpen = true; drawList(); setTimeout(go2, 30); } else go2();
+      } } }, [j[1], h('span', { class: 'mlcnt', text: String(j[2]) })]);
+      bar.appendChild(chips[j[0]]);
+    });
+    if (!('IntersectionObserver' in window)) return;
+    var vis = {};
+    S.mlObs = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { vis[e.target.id] = e.isIntersecting; });
+      var cur = jumps.map(function (j) { return j[0]; }).filter(function (id) { return vis[id]; })[0];
+      Object.keys(chips).forEach(function (id) { chips[id].setAttribute('aria-current', String(id === cur)); });
+    }, { rootMargin: '-80px 0px -55% 0px' });
+    jumps.forEach(function (j) { var el = $(j[0]); if (el) S.mlObs.observe(el); });
   }
   function personRow(u) {
     var nV = S.verdicts[u] ? Object.keys(S.verdicts[u].v || {}).length : 0;

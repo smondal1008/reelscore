@@ -1839,3 +1839,11 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 
 /* No icon can widen its row (the grids above use minmax(0, 1fr)), whatever is inside a button. */
 .qv.icons .qb { min-width: 0; }
+
+/* My List: jump bar to each section (sticky while you scroll the page) */
+.mljump { position: sticky; top: 0; z-index: 5; display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; margin: -6px -4px 18px; padding: 10px 4px; background: rgba(11,10,15,.94); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.mljump::-webkit-scrollbar { display: none; }
+.mljump .chip { flex: none; display: inline-flex; align-items: center; gap: 8px; text-decoration: none; }
+.mljump .chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
+.mlcnt { font-size: 12px; font-weight: 800; opacity: .7; }
+.mlsec { scroll-margin-top: 76px; }
