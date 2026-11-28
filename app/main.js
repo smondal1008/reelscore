@@ -1068,7 +1068,7 @@
     if (cta) kids.push(cta);
     else if (opts.followUp) kids.push(followUpBox(m));
     if (opts.rate && !cta && released(m)) {
-      kids.push(rateBox(m, false, opts.nsLabel));
+      kids.push(rateBox(m));
     }
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
     if (opts.seenRate) kids.push(seenRateBox(m));
@@ -2120,7 +2120,7 @@
   // Haven't seen flips the whole card to the next title in the row, in the same place.
   // Seen it / Haven't seen on a card; after Seen it, the verdict icons. icons: the Browse "In theatres" look, three icons
   // like the verdict row (Seen it, Trailer in the mini player, Haven't seen), the word popping up on hover.
-  function rateBox(m, icons, nsLabel) { // nsLabel: the second button's word (My List says "Not seen")
+  function rateBox(m, icons) {
     var box = h('div', { class: 'rbox' });
     function show(anim) {
       box.textContent = '';
@@ -2165,7 +2165,7 @@
           h('button', { type: 'button', class: 'tnact', on: { click: function () {
             markOn(); show(true); var q = box.querySelector('.qb'); if (q) q.focus();
           } } }, [icon('eye', 15), h('span', { text: 'Seen it' })]),
-          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: nsLabel || 'Haven’t seen' })])
+          h('button', { type: 'button', class: 'tnact dim', on: { click: function (e) { rateNope(m, e.currentTarget); } } }, [icon('eyeoff', 15), h('span', { text: 'Haven’t seen' })])
         ]);
       }
       box.appendChild(face);
@@ -5766,19 +5766,20 @@
     var iso = function (d) { return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10); };
     var from = iso(new Date(t.getTime() - dow * 864e5)), to = iso(new Date(t.getTime() + (13 - dow) * 864e5));
     var seen = {}, out = [], jr = S.justRated || {};
-    var act = function (m, o) { o = o || {}; o.nsLabel = 'Not seen'; if (m.data.section === 'In theatres') o.book = true; else o.stream = true; return o; }; // titles rated this visit stay, showing the verdict just given
+    // Released titles: Seen / Not seen under Watch now or Book tickets, then the verdict icons, as in My Watchlist (wlVerdictBox).
+    var act = function (m, o) { o = o || {}; if (m.data.section === 'In theatres') o.book = true; else o.stream = true; return o; }; // titles rated this visit stay, showing the verdict just given
     var tagFor = function (m) { var r = m.data.releaseDate || ''; return r > today() ? 'Releases ' + fmtDate(r) : r === today() ? 'Out today' : 'Out ' + fmtDate(r); };
     mine.filter(function (m) { var r = m.data.releaseDate || ''; return r.length === 10 && r >= from && r <= to; })
       .sort(function (a, b) { return a.data.releaseDate.localeCompare(b.data.releaseDate); })
-      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? act(m, { rate: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) : { dateBadge: true, upRowOnly: true, tag: 'In your watchlist', tagClass: 'hot' } }); }); // not out yet: the date is on the poster
+      .forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: released(m) ? act(m, { wlVerdict: true, tag: tagFor(m) + ' · In your watchlist', tagClass: 'hot' }) : { dateBadge: true, upRowOnly: true, tag: 'In your watchlist', tagClass: 'hot' } }); }); // not out yet: the date is on the poster
     var rank = function (list) { var pop = popularityOf(list); return list.sort(function (a, b) { var sa = score(a.id).pct, sb = score(b.id).pct; return ((sb === null ? -1 : sb) - (sa === null ? -1 : sa)) || (pop[b.id] - pop[a.id]); }); };
     var picks = rank(mine.filter(function (m) { return !seen[m.id] && released(m) && (!myVerdict(m.id) || jr[m.id]); })).slice(0, 5);
-    picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: act(m, { rate: true, tag: 'From your watchlist' }) }); });
+    picks.forEach(function (m) { seen[m.id] = 1; out.push({ m: m, opts: act(m, { wlVerdict: true, tag: 'From your watchlist' }) }); });
     if (picks.length < 5) {
       var more = rank(S.movies.filter(function (m) {
         return !seen[m.id] && !inList(m.id) && (!myVerdict(m.id) || jr[m.id]) && released(m) && (m.data.section === 'In theatres' || m.data.section === 'On OTT');
       })).slice(0, 5 - picks.length);
-      more.forEach(function (m) { out.push({ m: m, opts: act(m, { rate: true, tag: 'Recommended' }) }); });
+      more.forEach(function (m) { out.push({ m: m, opts: act(m, { wlVerdict: true, tag: 'Recommended' }) }); });
     }
     return out;
   }
