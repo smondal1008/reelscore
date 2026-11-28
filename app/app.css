@@ -1103,7 +1103,8 @@ a.lead:hover .ln { text-decoration: underline; }
   .pc.pcflip { animation: pcflip .55s cubic-bezier(.2,.8,.2,1); }
   @keyframes pcflip { 0% { opacity: 0; transform: perspective(900px) rotateY(-85deg) scale(.94); } 60% { opacity: 1; transform: perspective(900px) rotateY(8deg); } 100% { transform: none; } }
   .pc.pcgone { transition: opacity .3s ease, transform .3s ease; opacity: 0; transform: scale(.92); }
-  .tnacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .tnacts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .tnacts .tnact { font-size: 12px; gap: 5px; padding: 0 6px; white-space: nowrap; }
   .tnact { height: 40px; border-radius: 20px; border: 1px solid var(--line2); background: transparent; color: var(--text); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: border-color .12s ease, background .12s ease; }
   .tnact .ic { display: flex; }
   .tnact:hover { border-color: var(--muted); background: rgba(244,241,234,.04); }

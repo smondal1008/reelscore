@@ -1600,11 +1600,11 @@
             } } }, [icon(vIconName(m, x[0]), 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: VT[x[0]] })]);
           })),
           h('div', { class: 'tnrate-f' }, [
-            h('button', { type: 'button', class: 'linkbtn', text: 'Don’t rate', on: { click: function () {
+            h('button', { type: 'button', class: 'linkbtn', text: 'Seen, skip rating', on: { click: function () {
               t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; }); markSeen(id, true);
               var next = tnSwap(t, i); toast(title + ' marked as seen' + (next ? '. Here’s a new pick.' : '.')); onChange();
             } } }),
-            h('button', { type: 'button', class: 'linkbtn', text: 'Not seen', on: { click: function () { t.rating = null; onChange(); } } })])
+            h('button', { type: 'button', class: 'linkbtn', text: 'Back', on: { click: function () { t.rating = null; onChange(); } } })])
         ]);
       } else {
         body = h('div', { class: 'tnbody2' }, [
@@ -1615,7 +1615,12 @@
             h('button', { type: 'button', class: 'tnact dim tnmoon', on: { click: function () {
               tnSkipToday(id); t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
               var next = tnSwap(t, i); toast('Okay, not tonight.' + (next ? ' Here’s a new pick.' : '')); onChange();
-            } } }, [icon('moon', 17), h('span', { text: 'Not tonight' })])])
+            } } }, [icon('moon', 17), h('span', { text: 'Not tonight' })]),
+            // Not for me: never suggested again (the one Not for me, see notForMe); a new pick takes its place.
+            h('button', { type: 'button', class: 'tnact dim tnnope', on: { click: function () {
+              t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
+              tnSwap(t, i); notForMe(m); onChange();
+            } } }, [icon('skip', 17), h('span', { text: 'Not for me' })])])
         ]);
       }
       return h('article', { class: 'tnpick' + (pinned ? ' on' : '') + flip + (t.anim.flash === id ? ' glow' : ''), 'data-id': id }, [
