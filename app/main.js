@@ -266,11 +266,38 @@
     S.verdicts[S.uid] = cur;
     // When each title was rated (for My List > Your verdicts, newest first). Kept in your private list document, one
     // key per title (merged in, never rewriting the rest); the public verdicts document stays as it is.
+    if (cur.v[mid]) offListAfterRating(mid, cur.v[mid]);
     if (cur.v[mid]) { S.ratedAt = S.ratedAt || {}; S.ratedAt[mid] = cur.at; var ra = {}; ra[mid] = cur.at; S.db.doc('data/users/' + S.uid + '/profile').edit([{ field: 'ratedAt', value: ra }]).catch(function () {}); }
     if (S.route === 'tonight') { /* the Tonight page redraws itself */ }
     else if (S.route === 'home' && S.lastDrawn === 'home:') patchVerdicts(); else if (!patchTitleBits()) render();
     writing.v = true;
     guard(S.db.doc('verdicts/' + S.uid).set(cur)).then(function () { writing.v = false; });
+  }
+  // A film you rate comes off My Watchlist (it's in Your verdicts now); series stay, as new seasons keep coming.
+  // On My List the card shows the verdict for a moment first. Undo on the toast puts it back on the watchlist.
+  function offListAfterRating(mid, v) {
+    var m = S.byId[mid]; if (!m || isTv(m) || !S.mineLoaded || !inList(mid)) return;
+    var t = m.data.title, w = qvTip(m, v);
+    var off = function () {
+      if (!inList(mid)) return;
+      S.mine.watchlist = S.mine.watchlist.filter(function (x) { return x !== mid; }); saveMine(null);
+      if (S.route === 'home' && S.lastDrawn === 'home:') { patchListButtons(); myListSwap(mid); } else render();
+    };
+    if (S.route === 'list') setTimeout(off, 1500); else off();
+    toast('Rated ' + w + ' · taken off your watchlist', function () {
+      if (!inList(mid)) { S.mine.watchlist.push(mid); saveMine(null); }
+      if (S.route === 'home' && S.lastDrawn === 'home:') patchListButtons(); else render();
+    });
+  }
+  // Once per account: films already rated before this change come off the watchlist too (series stay). Done from the
+  // live page with the normal list save, then marked done in the profile (ratedOffDone) so it never runs again.
+  function ratedCleanup() {
+    if (!S.uid || !S.db || !S.loaded || !S.mineLoaded || !S.verdictsIn || S.ratedOffDone) return;
+    S.ratedOffDone = true;
+    var vv = (S.verdicts[S.uid] || {}).v || {};
+    var off = S.mine.watchlist.filter(function (id) { return vv[id] && S.byId[id] && !isTv(S.byId[id]); });
+    if (off.length) { S.mine.watchlist = S.mine.watchlist.filter(function (id) { return off.indexOf(id) === -1; }); saveMine(null); }
+    S.db.doc('data/users/' + S.uid + '/profile').edit([{ field: 'ratedOffDone', value: true }]).catch(function () {});
   }
   // Home page: show a new verdict (and changed scores) on the cards already drawn, without rebuilding the page,
   // so images don't reload and rows keep their place.
@@ -279,6 +306,7 @@
     v.querySelectorAll('.pc[data-id]').forEach(function (pc) {
       var id = pc.getAttribute('data-id'), my = myVerdict(id), b = pc.querySelector('.badge');
       pc.querySelectorAll('.qb[data-v]').forEach(function (q) { q.setAttribute('aria-pressed', String(my === q.getAttribute('data-v'))); });
+      var cb = pc.querySelector('.pw > .addl'), m0 = S.byId[id]; if (cb && m0 && cb.classList.contains('vbadge') !== !!my) cb.parentNode.replaceChild(cornerBtn(m0), cb);
       if (b && b.lastChild && b.lastChild.nodeType === 3) {
         var m = S.byId[id], sc = score(id);
         var rs = pc.closest('section[aria-label]'), rl = rs ? rs.getAttribute('aria-label') : '';
@@ -488,9 +516,31 @@
     card.parentNode.replaceChild(nc, card);
     if (had) { var b = nc.querySelector('.addl'); if (b) b.focus({ preventScroll: true }); }
   }
+  // The poster corner: + / ✓ (watchlist) for titles you haven't rated; once rated, your verdict (★ / 👍 / 👎 in its
+  // colour), which opens the title page at "Your verdict" (design board "Rated titles · your verdict in the corner").
+  function cornerBtn(m) {
+    var d = m.data, k = myVerdict(m.id);
+    if (k) {
+      var w = qvTip(m, k);
+      return h('a', { class: 'addl vbadge ' + k, href: movieUrl(m) + '#verdict', title: 'Your verdict: ' + w, 'aria-label': 'Your verdict on ' + d.title + ': ' + w + '. Open to change it' }, [icon(vIconName(m, k), 18)]);
+    }
+    var on = inList(m.id);
+    return h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
+      'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
+      title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
+      on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } });
+  }
+  // Redraw the corner of every drawn card of a title (after a verdict or watchlist change, without redrawing the page).
+  function patchCorners(id) {
+    Array.prototype.forEach.call(document.querySelectorAll('.pc[data-id] .pw > .addl'), function (b) {
+      var cid = b.closest('.pc').getAttribute('data-id'); if (id && cid !== id) return;
+      var m = S.byId[cid]; if (m) b.parentNode.replaceChild(cornerBtn(m), b);
+    });
+  }
   function patchListButtons() {
     var v = $('view-home'); if (!v) return;
-    v.querySelectorAll('.pc[data-id] .addl').forEach(function (b) {
+    patchCorners();
+    v.querySelectorAll('.pc[data-id] .addl:not(.vbadge)').forEach(function (b) {
       var id = b.closest('.pc').getAttribute('data-id'), m = S.byId[id]; if (!m) return;
       var on = inList(id), t = m.data.title;
       b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '✓' : '+';
@@ -826,6 +876,7 @@
   // ---------- render scheduling ----------
   var raf = null;
   function render(force) {
+    ratedCleanup();
     if (!force) {
       var a = document.activeElement;
       if (a && a.closest && a.closest('.view') && /^(TEXTAREA|INPUT|SELECT)$/.test(a.tagName)) { S.pending = true; return; }
@@ -1053,10 +1104,7 @@
           up ? (due ? h('span', { class: 'nppill duepill', text: due }) : null)
             : npLabel(m) && !(nowPlayingOf(d) === 'ott' && d.platform) && !(opts.inTheatresList && nowPlayingOf(d) === 'theatres') ? h('span', { class: 'nppill', text: npLabel(m) }) : null
         ]),
-        h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
-          'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
-          title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
-          on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } })
+        cornerBtn(m)
       ]),
       h('a', { class: 'nm', href: movieUrl(m), text: d.title, tabindex: '-1' }),
       h('span', { class: 'mt', text: meta, title: meta })
@@ -4191,7 +4239,7 @@
       fr.length ? h('div', { class: 'faces' }, fr.slice(0, 5).map(function (u) { return avatarEl(u, 32); })) : null,
       fr.length >= 3 ? null : h('div', { class: 'note' }, ['Their score shows at 3 ratings. ', h('a', { href: '/my-list', text: 'Find people' })])
     ]);
-    return h('section', { class: 'card vstrip', 'aria-label': 'Verdict' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), boCall(m) || right]);
+    return h('section', { class: 'card vstrip', id: 'verdict', 'aria-label': 'Verdict' }, [left, h('div', { class: 'vs-sep' }), mid, h('div', { class: 'vs-sep' }), boCall(m) || right]);
   }
 
   // Box office: the tiles are in place; figures come once there's a source for them.
@@ -6403,6 +6451,7 @@
       if (writing.m) return;
       var d = snap.exists ? snap.data() : {};
       if (d.ratedAt && typeof d.ratedAt === 'object') S.ratedAt = Object.assign({}, d.ratedAt, S.ratedAt || {});
+      if (d.ratedOffDone) S.ratedOffDone = true;
       var key = function (o) { return JSON.stringify([o.watchlist || [], o.following || [], o.reminders || [], o.wtw || [], o.nope || [], o.seen || []]); };
       // Our own save coming back unchanged: nothing to redraw (a full home redraw here caused a second flicker).
       if (S.mineLoaded && key(d) === key(S.mine) && (!Array.isArray(d.apps) || JSON.stringify(d.apps) === JSON.stringify(S.mine.apps || []))) return;
