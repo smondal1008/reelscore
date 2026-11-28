@@ -3923,7 +3923,8 @@
     ghost: '<path d="M5 21V10a7 7 0 0 1 14 0v11l-2.5-2-2.3 2-2.2-2-2.2 2-2.3-2z"/><path d="M9.5 10h.01M14.5 10h.01"/>',
     screen: '<path d="M3 4h18l-2 9H5z"/><path d="M5 18h3M10.5 18h3M16 18h3M6 21h2M11 21h2M16 21h2"/>',
     tv: '<rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M10.5 8.3l4 2.2-4 2.2z" fill="currentColor"/>',
-    skip: '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+    // Not for me (an X). Only Not for me uses it; the Meh verdict has its own thumbs-down.
+    skip: '<path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/>',
     play: '<path d="M7 4.5l12.5 7.5L7 19.5z"/>',
     music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
     lang: '<path d="M4 5h9M8.5 3v2M6 5c.6 3.2 2.6 5.8 5.5 7.2M11 5c-.8 3.6-3.4 6.6-7 8"/><path d="M13 21l4-9 4 9M14.4 18h5.2"/>',
