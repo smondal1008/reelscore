@@ -198,7 +198,10 @@
     .fh { aspect-ratio: auto; min-height: 560px; margin: 8px 16px 0; background-position: 70% center; }
     .fh .scrim { background: linear-gradient(to top, rgba(10,8,10,.95) 0%, rgba(10,8,10,.7) 45%, rgba(10,8,10,.1) 80%); }
     .fh .fb { padding: 0 22px 64px; width: 100%; }
-    .fh .chipsr { position: static; justify-content: flex-start; max-width: none; }
+    .fh .chipsr { top: 14px; left: 14px; right: 14px; bottom: auto; justify-content: flex-start; max-width: none; gap: 8px; }
+    .fh .hc { gap: 6px; padding: 6px 10px; border-radius: 8px; font-size: 13px; }
+    .fh .hc svg { width: 15px; height: 15px; }
+    .fh .hc b { min-width: 22px; height: 20px; font-size: 11px; }
     .fh .fdots { left: 22px; }
     .fh .meta { font-size: 15px; } .fh .syn { font-size: 16px; } .pill { height: 48px; padding: 0 22px; font-size: 16px; }
   }
