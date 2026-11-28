@@ -1414,7 +1414,8 @@ async function main() {
     };
     const td = TODAY, wd = (new Date(td + 'T12:00:00Z').getUTCDay() + 6) % 7, ws = addD(td, -wd), we = addD(ws, 6), ne = addD(ws, 13);
     const all = movies.map(entry).filter(e => e && e.date >= addD(td, -30) && e.date <= addD(td, 120)).sort((a, b) => a.date.localeCompare(b.date) || a.m.data.title.localeCompare(b.m.data.title));
-    const tba = movies.filter(m => !isTv(m.data) && !entry(m) && nowPlayingOf(m.data, td) === 'theatres' && isDay(m.data.releaseDate) && m.data.releaseDate <= td && m.data.releaseDate >= addD(td, -70))
+    // Waiting for an OTT date: marked out of theatres, or 4+ weeks past release (same rule as the live page).
+    const tba = movies.filter(m => { const np = nowPlayingOf(m.data, td), r = m.data.releaseDate; return !isTv(m.data) && !entry(m) && isDay(r) && r <= td && r >= addD(td, -180) && (np === 'out' || (np === 'theatres' && r <= addD(td, -28))); })
       .sort((a, b) => b.data.releaseDate.localeCompare(a.data.releaseDate));
     const exLabel = e => e.expected + '-' + MF[+e.date.slice(5, 7) - 1];
     const lang = d => String(d.languages || '').split(/[,;]/)[0].trim();
@@ -1434,17 +1435,17 @@ async function main() {
     const intro = (up ? up + ' movies and series coming to ' : 'Movies and series new on ') + (svc.length ? list(svc) : 'Netflix, Prime Video, JioHotstar and more') + ', with the day each one starts streaming, how long after the theatre release it comes, and the verdict once it’s out.';
     const body = '<nav class="crumbs" aria-label="Breadcrumb"><a href="/">Home</a> › OTT release dates</nav><h1>OTT release dates: new movies and series this week</h1><p>' + esc(intro) + '</p><p class="note">Updated ' + esc(fmtDate(td)) + ' · Dates from official platform announcements</p>' +
       grp('This week', week) + grp('Coming later', later) + grp('Streaming now', now) +
-      (tba.length ? '<h2>In theatres: OTT date not announced</h2><ul>' + tba.slice(0, 24).map(m => '<li>' + tLink(m) + ' <span class="note">' + esc([lang(m.data), 'in theatres since ' + fmtDate(m.data.releaseDate)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' : '') +
+      (tba.length ? '<h2>Out of theatres: OTT date not announced</h2><ul>' + tba.slice(0, 24).map(m => '<li>' + tLink(m) + ' <span class="note">' + esc([lang(m.data), 'released ' + fmtDate(m.data.releaseDate)].filter(Boolean).join(' · ')) + '</span></li>').join('') + '</ul>' : '') +
       '<h2>OTT release dates: common questions</h2>' + faqs.map(([q, a]) => '<h3>' + esc(q) + '</h3><p>' + esc(a) + '</p>').join('');
     const n = all.length + tba.length;
     writeHub('ott-release-dates.html', { title: 'OTT Release Dates This Week: New Movies & Series | Reelscore',
-      description: clip('OTT release dates for new movies and series on Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV and more: what streams this week, what’s coming next, and films still in theatres.', 158),
+      description: clip('OTT release dates for new movies and series on Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV and more: what streams this week, what’s coming next, and films waiting for an OTT date.', 158),
       canonical: '/ott-release-dates', ogPath: '/ott-release-dates', route: 'ottdates', body, robots: n ? undefined : 'noindex,follow',
       jsonld: [crumbLd(['Home', '/'], ['OTT release dates', '/ott-release-dates']),
         { '@context': 'https://schema.org', '@type': 'FAQPage', mainEntity: faqs.map(([q, a]) => ({ '@type': 'Question', name: q, acceptedAnswer: { '@type': 'Answer', text: a } })) },
         { '@context': 'https://schema.org', '@type': 'ItemList', name: 'OTT release dates', itemListElement: all.filter(e => e.date >= ws).slice(0, 30).map((e, i) => ({ '@type': 'ListItem', position: i + 1, url: SITE + movieUrl(e.m), name: e.m.data.title })) }] });
     if (n) sitemap.push({ loc: '/ott-release-dates', pri: '0.7', lastmod: td });
-    console.log(`[seo] OTT release dates: ${week.length} this week, ${later.length} later, ${now.length} streaming now, ${tba.length} in theatres with no date`);
+    console.log(`[seo] OTT release dates: ${week.length} this week, ${later.length} later, ${now.length} streaming now, ${tba.length} out of theatres with no date`);
   }
 
   // ----- sitemap + robots -----

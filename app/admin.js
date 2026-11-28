@@ -2664,7 +2664,9 @@ window.ReelAdmin = function (env) {
   function ottWhere(d) {
     var td = npToday(), wd = (new Date(td + 'T12:00:00Z').getUTCDay() + 6) % 7, ws = ottAddDays(td, -wd), st = ottStatusOf(d);
     var date = st === 'confirmed' ? d.ottReleaseDate : st === 'expected' && /^\d{4}-\d{2}-(early|mid|late)$/.test(d.ottExpected || '') ? d.ottExpected.slice(0, 7) + '-' + { early: '05', mid: '15', late: '25' }[d.ottExpected.slice(8)] : '';
-    if (!date) return (d.section === 'In theatres' || d.nowPlaying === 'theatres') && d.releaseDate && d.releaseDate <= td ? 'In theatres: OTT date not announced' : 'Not on the page until a date or expected month is set';
+    if (!date) return (d.section === 'In theatres' || d.nowPlaying === 'theatres' || d.nowPlaying === 'out') && d.releaseDate && d.releaseDate <= td
+      ? (d.nowPlaying === 'out' || d.releaseDate <= ottAddDays(td, -28) ? 'Out of theatres: OTT date not announced' : (function (j) { var q = j.split('-'); return 'Joins “Out of theatres: OTT date not announced” on ' + (+q[2]) + ' ' + OTT_MONTHS[+q[1] - 1] + ' (4 weeks after release), or once marked out of theatres'; })(ottAddDays(d.releaseDate, 28)))
+      : 'Not on the page until a date or expected month is set';
     var g = st === 'expected' ? 'Later' : date < ottAddDays(td, -30) ? '' : date < ws ? 'Streaming now' : date <= ottAddDays(ws, 6) ? 'This week' : date <= ottAddDays(ws, 13) ? 'Next week' : date <= ottAddDays(td, 120) ? 'Later' : '';
     if (!g) return 'Outside the page’s window (last 30 days to 4 months ahead)';
     var p = date.split('-'), dt = new Date(date + 'T12:00:00Z');

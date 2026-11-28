@@ -2819,16 +2819,21 @@
   function weekStart(iso) { var t = new Date(iso + 'T12:00:00Z'), w = (t.getUTCDay() + 6) % 7; return addDays(iso, -w); }
   // Every entry from 30 days back to 120 days ahead, and the theatre films with no OTT date yet.
   function ottDatesData() {
-    var td = today(), from = addDays(td, -30), to = addDays(td, 120), out = [], tba = [];
+    var td = today(), from = addDays(td, -30), to = addDays(td, 120), out = [], tba = [], thNow = [];
+    var w4 = addDays(td, -28), oldest = addDays(td, -180);
     S.movies.forEach(function (m) {
       var e = ottEntry(m);
       if (e) { if (e.date >= from && e.date <= to) out.push(e); return; }
       var d = m.data;
-      if (!isTv(m) && nowPlayingOf(d) === 'theatres' && isoDay(d.releaseDate) && d.releaseDate <= td && d.releaseDate >= addDays(td, -70)) tba.push(m);
+      if (isTv(m) || !isoDay(d.releaseDate) || d.releaseDate > td || d.releaseDate < oldest) return;
+      // Waiting for an OTT date: marked out of theatres, or 4+ weeks past release (most films reach OTT 4–8 weeks out).
+      var np = nowPlayingOf(d);
+      if (np === 'out' || (np === 'theatres' && d.releaseDate <= w4)) tba.push(m);
+      if (np === 'theatres' && d.releaseDate >= addDays(td, -70)) thNow.push(m); // still in theatres (Most awaited)
     });
     out.sort(function (a, b) { return a.date.localeCompare(b.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     tba.sort(function (a, b) { return b.data.releaseDate.localeCompare(a.data.releaseDate) || (a.data.title || '').localeCompare(b.data.title || ''); });
-    return { all: out, tba: tba };
+    return { all: out, tba: tba, thNow: thNow };
   }
   // Home "Streaming this year": On OTT films by streaming date, newest first; ones with no known streaming date last.
   // Films that started in the last 30 days are left out (they are in Released recently on OTT), unless pinned in Admin.
@@ -2916,7 +2921,7 @@
       { id: 'od-next', h: 'Next week', chip: 'Next week', sub: span(ns, ne) + ' · ' + n(nextWeek.length, 'title', 'titles'), items: nextWeek, days: true },
       { id: 'od-later', h: laterH, chip: lm.length === 1 ? lm[0] : 'Later', sub: n(later.length, 'title', 'titles') + ' so far', items: later, days: true },
       { id: 'od-now', h: 'Streaming now', chip: 'Streaming now', sub: 'Started in the last 30 days', items: recent, days: false },
-      { id: 'od-tba', h: 'In theatres: OTT date not announced', chip: 'Not announced', sub: 'Tap the bell to hear the day it streams', items: tba, tba: true }
+      { id: 'od-tba', h: 'Out of theatres: OTT date not announced', chip: 'Not announced', sub: 'Released 4+ weeks ago · tap the bell to hear the day it streams', items: tba, tba: true }
     ].filter(function (g) { return g.items.length; });
 
     // Jump bar (sticky on phones): scrolls to a group.
@@ -2948,7 +2953,7 @@
       var e = x.m ? x : { m: x, tba: true }, m = e.m, d = m.data, t = d.title, sc = score(m.id), pct = shownPct(sc);
       var genre = String(d.genre || '').split(/,/).slice(0, 2).map(function (s) { return s.trim(); }).filter(Boolean).join(', ');
       var meta = [langOf(d), genre, isTv(m) ? 'Series' : 'Film'].filter(Boolean).join(' · ') + (g && g.id === 'od-now' ? ' · since ' + fmtDate(e.date) : '');
-      var line = e.tba ? 'In theatres since ' + fmtDate(d.releaseDate) + ' · ' + n(daysBetween(d.releaseDate, td), 'day', 'days') + ' so far'
+      var line = e.tba ? 'Released ' + fmtDate(d.releaseDate) + ' · ' + n(daysBetween(d.releaseDate, td), 'day', 'days') + ' ago'
         : e.kind === 'theatre' ? (isoDay(d.releaseDate) ? 'In theatres ' + fmtDate(d.releaseDate) + (e.expected ? ' · expected ' + expLabel(e) : ' · on OTT ' + n(daysBetween(d.releaseDate, e.date), 'day', 'days') + ' later') : 'After its theatre run')
         : e.kind === 'direct' ? 'Straight to OTT' : 'Series premiere';
       var status = e.tba ? ['', 'Not announced'] : e.expected ? ['exp', '◌ Expected ' + expLabel(e)] : e.date <= td ? ['ok', '● Streaming now'] : ['ok', '● Confirmed'];
@@ -3005,7 +3010,7 @@
     ]));
 
     // Right rail: most awaited (popularity: verdicts, then the cast's body of work), dates by platform, reminders.
-    var waitL = D.tba.concat(upcoming.filter(function (e) { return !isTv(e.m); }).map(function (e) { return e.m; })), pop = popularityOf(waitL);
+    var waitL = D.thNow.concat(D.tba, upcoming.filter(function (e) { return !isTv(e.m); }).map(function (e) { return e.m; })), pop = popularityOf(waitL);
     waitL = waitL.filter(function (m, i) { return waitL.indexOf(m) === i; }).sort(function (a, b) { return pop[b.id] - pop[a.id]; }).slice(0, 5);
     var eOf = {}; all.forEach(function (e) { eOf[e.m.id] = e; });
     if (waitL.length >= 3) rail.appendChild(h('div', { class: 'odbox' }, [h('h3', { text: 'Most awaited on OTT' })].concat(waitL.map(function (m, i) {
