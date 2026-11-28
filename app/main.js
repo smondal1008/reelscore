@@ -5744,7 +5744,7 @@
   }
   // "Seen, not rated" card on My List: the verdict icons, and a link to take the title back off the seen list.
   function seenRateBox(m) {
-    return h('div', { class: 'fu' }, [qvButtons(m), myVerdict(m.id) ? null : h('button', { type: 'button', class: 'linkbtn', style: 'margin-top:6px;font-size:12px', text: 'Haven\u2019t seen it', on: { click: function (e) {
+    return h('div', { class: 'fu' }, [qvButtons(m), myVerdict(m.id) ? null : h('button', { type: 'button', class: 'linkbtn', style: 'margin-top:6px;font-size:12px', text: 'Not seen', on: { click: function (e) {
       var card = e.currentTarget.closest('.pc'), grid = card && card.parentNode, after = card && card.nextSibling, sec = card && card.closest('section'), secParent = sec && sec.parentNode, secAfter = sec && sec.nextSibling, secGone = false;
       markSeen(m.id, false);
       if (card) { card.remove(); if (sec && !sec.querySelector('.pc')) { sec.remove(); secGone = true; } }
