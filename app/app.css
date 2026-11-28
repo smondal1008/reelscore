@@ -1779,3 +1779,10 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .qv.icons.up.seenrow.n4 { grid-template-columns: repeat(4, 1fr); }
 .qv.icons.up.seenrow.n4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
 .qv.icons.up.seenrow.n4 .qb.se .qtip { --tx: -50%; left: 50%; right: auto; }
+
+/* Seen · Not for me rows: as many columns as icons (2, 3 with Tickets or Not yet, 4 with both) */
+.qv.icons.up.seenrow.c2 { grid-template-columns: repeat(2, 1fr); }
+.qv.icons.up.seenrow.c3 { grid-template-columns: repeat(3, 1fr); }
+.qv.icons.up.seenrow.c4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.seenrow.c3 .qb.nv .qtip, .qv.icons.up.seenrow.c4 .qb.nv .qtip { --tx: -50%; left: 50%; right: auto; }
+.qv.icons.up.seenrow .qb.sk .qtip { --tx: 0; left: auto; right: 0; }

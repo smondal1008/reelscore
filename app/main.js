@@ -1065,10 +1065,10 @@
     if (cta && opts.seen3 && opts.book && released(m) && !isTv(m)) cta = null;
     if (cta) kids.push(cta);
     if (opts.rate && !cta && released(m)) {
-      kids.push(rateBox(m, 'n3'));
+      kids.push(rateBox(m, 'ask'));
     }
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
-    if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n3t' : 'n3'));
+    if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n2t' : 'n2'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.nopeOnly) kids.push(nopeRow(m));
     if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
@@ -2181,26 +2181,23 @@
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
-      } else if (icons === 'n3' || icons === 'n3t') {
-        // Seen these?, More like what you love and the home In theatres row: Seen, Not seen, Not for me (icons, the word
-        // on hover). Seen flips to the verdict icons. In a "Seen these?"-type row, Not seen and Not for me swap the card for
-        // the next title; elsewhere (In theatres) the card stays and the icon shows as picked (tap again to clear).
+      } else if (icons === 'ask' || icons === 'n2' || icons === 'n2t') {
+        // Design board "Card buttons": Not seen is only a first choice where the row asks "have you seen this?".
+        // ask (Seen these?, More like what you love): Seen · Not yet · Not for me. Not yet moves on to the next title.
+        // n2 (In theatres, the OTT rows, Catch up): Seen · Not for me; n2t adds Tickets first while bookings are open.
+        // Seen flips to the verdict icons, with the crossed-out eye to undo a mis-tapped Seen.
         var t3 = m.data.title, tip3 = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
-        var inRow = function (b) { var sc = b.closest('section[aria-label]'); return !!(sc && S.rateRows && S.rateRows[sc.getAttribute('aria-label')]); };
-        var no3 = rateUnseen().indexOf(m.id) !== -1, nf3 = isNope(m.id);
-        // n3t (home In theatres): Tickets first, as an icon, while bookings are open.
-        var tk3 = icons === 'n3t' && btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
+        var nf3 = isNope(m.id);
+        var tk3 = icons === 'n2t' && btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
         if (tk3) { tk3.textContent = ''; tk3.appendChild(icon('ticket', 18)); tk3.appendChild(tip3('Tickets')); }
-        face = h('div', { class: 'qv icons up seenrow n3' + (tk3 ? ' n4' : '') + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [tk3,
+        var ny = icons === 'ask' ? h('button', { type: 'button', class: 'qb nv', 'aria-label': 'Not yet: I haven’t seen ' + t3, on: { click: function (e) { rateNope(m, e.currentTarget); } } },
+          [icon('eyeoff', 18), tip3('Not yet')]) : null;
+        var cnt = 2 + (tk3 ? 1 : 0) + (ny ? 1 : 0);
+        face = h('div', { class: 'qv icons up seenrow n3 c' + cnt + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [tk3,
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t3, on: { click: function () {
-            markOn(); if (no3) rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
+            markOn(); rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
           } } }, [icon('eye', 18), tip3('Seen')]),
-          h('button', { type: 'button', class: 'qb nv' + (no3 ? ' on' : ''), 'aria-pressed': String(no3), 'aria-label': no3 ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t3, on: { click: function (e) {
-            if (no3) { rateDelUnseen(m.id); show(true); toast('Cleared “not seen” for ' + t3); return; }
-            if (inRow(e.currentTarget)) { rateNope(m, e.currentTarget); return; }
-            rateAddUnseen(m.id); markSeen(m.id, false); show(true);
-            toast(t3 + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
-          } } }, [icon('eyeoff', 18), tip3('Not seen')]),
+          ny,
           h('button', { type: 'button', class: 'qb sk' + (nf3 ? ' on' : ''), 'aria-pressed': String(nf3), 'aria-label': nf3 ? t3 + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t3, on: { click: function () {
             notForMe(m); // the card stays, with the icon picked, in every row
           } } }, [icon('skip', 18), tip3('Not for me')])
@@ -2208,7 +2205,6 @@
       } else if (icons) {
         var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
         var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
-        var no = rateUnseen().indexOf(m.id) !== -1;
         var trB = h('button', { type: 'button', class: 'qb tr' + (tr ? '' : ' off'), 'aria-disabled': tr ? null : 'true',
           'aria-label': tr ? 'Play the trailer of ' + m.data.title + (tovMiniOk() ? ' in the mini player' : '') : 'No trailer for ' + m.data.title + ' yet',
           on: { click: function () {
@@ -2218,17 +2214,15 @@
         var seB = h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + m.data.title, on: { click: function () {
             markOn(); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
           } } }, [icon('eye', 18), tip('Seen')]);
-        // Booking open: Trailer, Tickets, Seen it. Otherwise: Seen it, Trailer, Haven't seen.
+        // Booking open: Trailer, Tickets, Seen. Otherwise: Seen, Trailer, Not for me.
         var tk = btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
         if (tk) { tk.textContent = ''; tk.appendChild(icon('ticket', 18)); tk.appendChild(tip('Tickets')); }
         face = h('div', { class: 'qv icons up seenrow' + (tk ? ' bk' : '') + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + m.data.title + '?' }, tk ? [trB, tk, seB] : [
           seB,
           trB,
-          h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + m.data.title, on: { click: function () {
-            if (no) { rateDelUnseen(m.id); show(true); toast('Cleared “not seen” for ' + m.data.title); return; }
-            rateAddUnseen(m.id); markSeen(m.id, false); show(true);
-            toast(m.data.title + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
-          } } }, [icon('eyeoff', 18), tip('Not seen')])
+          h('button', { type: 'button', class: 'qb sk' + (isNope(m.id) ? ' on' : ''), 'aria-pressed': String(isNope(m.id)), 'aria-label': isNope(m.id) ? m.data.title + ' is marked Not for me. Tap to clear' : 'Not for me: ' + m.data.title, on: { click: function () {
+            notForMe(m);
+          } } }, [icon('skip', 18), tip('Not for me')])
         ]);
       } else {
         face = h('div', { class: 'rch' + (anim ? ' rflip' : '') }, [
@@ -2269,18 +2263,12 @@
         box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q]));
       } else {
         // Design board "My List rows · the three icons": Seen, Not seen, Not for me, as in the home rows.
-        var no = rateUnseen().indexOf(m.id) !== -1, nf = isNope(m.id);
-        box.appendChild(h('div', { class: 'qv icons up seenrow n3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+        var nf = isNope(m.id);
+        box.appendChild(h('div', { class: 'qv icons up seenrow n3 c2' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t, on: { click: function () {
-            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); if (no) rateDelUnseen(m.id);
+            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); rateDelUnseen(m.id);
             show(true); var b = box.querySelector('.qb'); if (b) b.focus();
           } } }, [icon('eye', 18), tip('Seen'), qlab('Seen')]),
-          h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t,
-            on: { click: function () {
-              if (no) { rateDelUnseen(m.id); show(false); toast('Cleared “not seen” for ' + t); return; }
-              rateAddUnseen(m.id); markSeen(m.id, false); show(false);
-              toast(t + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
-            } } }, [icon('eyeoff', 18), tip('Not seen'), qlab('Not seen')]),
           h('button', { type: 'button', class: 'qb sk' + (nf ? ' on' : ''), 'aria-pressed': String(nf), 'aria-label': nf ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
             on: { click: function () { notForMe(m); } } }, [icon('skip', 18), tip('Not for me'), qlab('Not for me')])
         ]));
@@ -2316,7 +2304,7 @@
     var next = R ? R.next(shown) : null, parent = card.parentNode, after = card.nextSibling, nc = null, secHome = sec && sec.parentNode, secAfter = sec && sec.nextSibling;
     if (R && R.swap) R.swap(m.id, next ? next.id : null);
     // Undo (a mis-tap): the title is asked about again and its card comes back where it was.
-    toast(nope ? 'Got it. We won\u2019t suggest ' + m.data.title + ' again' : 'Got it. We won\u2019t ask about ' + m.data.title + ' here again', function () {
+    toast(nope ? 'Got it. We won\u2019t suggest ' + m.data.title + ' again' : 'Not yet: we won\u2019t ask about ' + m.data.title + ' here again', function () {
       if (nope) tnDelNope(m.id); else rateDelUnseen(m.id);
       if (sec && !sec.isConnected && secHome && secHome.isConnected) secHome.insertBefore(sec, secAfter && secAfter.parentNode === secHome ? secAfter : null);
       if (R && R.swap && next) R.swap(next.id, m.id);
