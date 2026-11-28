@@ -1060,6 +1060,8 @@
     var tagTxt = opts.tagFor ? opts.tagFor(m) : opts.tag;
     if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
     if (up) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
+    // My Watchlist, not out yet: the Coming soon icons (Trailer, Remind me or Tickets, Not for me), films and series.
+    if (opts.upRowOnly && !released(m)) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
@@ -1070,6 +1072,7 @@
     }
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
     if (opts.seenRate) kids.push(seenRateBox(m));
+    if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
@@ -2166,6 +2169,48 @@
         ]);
       }
       box.appendChild(face);
+    }
+    box._show = show; box.setAttribute('data-rate', m.id);
+    show(false);
+    return box;
+  }
+  // My List › My Watchlist (design board: "My Watchlist: give a verdict on what you've seen"), films and series:
+  // Seen / Not seen under the main button. Seen flips to the verdict icons plus Not seen; once rated, the icons stay with
+  // your verdict lit up and the others dimmed (tap another to change it, the lit one to clear it). Not seen is recorded
+  // (the home "Seen these?" row stops asking) and the two buttons stay, with Not seen shown as picked.
+  function wlVerdictBox(m) {
+    var box = h('div', { class: 'rbox wlv' }), t = m.data.title;
+    var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
+    function show(anim) {
+      box.textContent = '';
+      var v = myVerdict(m.id);
+      if (v || isSeen(m.id) || (S.rateSeen && S.rateSeen[m.id])) {
+        var q = qvButtons(m, function () { show(false); });
+        q.classList.add('q4'); if (v) q.classList.add('rated');
+        q.appendChild(h('button', { type: 'button', class: 'qb nv', 'aria-label': v ? 'I haven’t seen ' + t + ' (clears your verdict)' : 'I haven’t seen ' + t,
+          on: { click: function () {
+            var had = myVerdict(m.id);
+            if (had) setVerdict(m.id, had); // tapping the same verdict again clears it
+            if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true);
+            var f = box.querySelector('.tnact'); if (f) f.focus();
+            toast(t + ' marked as not seen', function () { markSeen(m.id, true); if (had && myVerdict(m.id) !== had) setVerdict(m.id, had); rateRefresh(m.id); });
+          } } }, [icon('eyeoff', 18), tip('Not seen')]));
+        box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q]));
+      } else {
+        var no = rateUnseen().indexOf(m.id) !== -1;
+        box.appendChild(h('div', { class: 'rch wlsn' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+          h('button', { type: 'button', class: 'tnact', on: { click: function () {
+            S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); if (no) rateDelUnseen(m.id);
+            show(true); var b = box.querySelector('.qb'); if (b) b.focus();
+          } } }, [icon('eye', 15), h('span', { text: 'Seen' })]),
+          h('button', { type: 'button', class: 'tnact dim', 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t,
+            on: { click: function () {
+              if (no) { rateDelUnseen(m.id); show(false); toast('Cleared “not seen” for ' + t); return; }
+              rateAddUnseen(m.id); markSeen(m.id, false); show(false);
+              toast(t + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
+            } } }, [icon('eyeoff', 15), h('span', { text: 'Not seen' })])
+        ]));
+      }
     }
     box._show = show; box.setAttribute('data-rate', m.id);
     show(false);
@@ -5772,7 +5817,7 @@
       mine.length ? h('div', { class: 'grid-posters' }, shownWl.map(function (m) {
         // Watch now for released titles out of theatres with a streaming link; Book tickets for theatre titles (incl. advance booking) with a booking link.
         var th = m.data.section === 'In theatres' || m.data.section === 'Coming soon';
-        var o = released(m) ? { stream: !th, book: th } : { dateBadge: true, remind: true, book: th };
+        var o = released(m) ? { stream: !th, book: th, wlVerdict: true } : { dateBadge: true, upRowOnly: true };
         return posterCard(m, o);
       })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
