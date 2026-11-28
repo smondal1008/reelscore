@@ -2194,7 +2194,8 @@
         if (tk3) { tk3.textContent = ''; tk3.appendChild(icon('ticket', 18)); tk3.appendChild(tip3('Tickets')); }
         var ny = icons === 'ask' ? h('button', { type: 'button', class: 'qb nv', 'aria-label': 'Not yet: I haven’t seen ' + t3, on: { click: function (e) { rateNope(m, e.currentTarget); } } },
           [icon('eyeoff', 18), tip3('Not yet')]) : null;
-        // n2 / n2t: Trailer after Seen (greyed when there's none yet): Seen · Trailer · Not for me; with Tickets first: 4 icons.
+        // n2 / n2t: Seen · Trailer · Not for me (Trailer greyed when there's none yet); while bookings are open,
+        // Tickets · Trailer · Seen · Not for me (as on coming-soon cards: Tickets · Trailer · Remind me · Not for me).
         var tr3 = null;
         if (icons !== 'ask') {
           var trv = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
@@ -2206,11 +2207,11 @@
             } } }, [icon('play', 18), tip3(trv ? 'Trailer' : 'No trailer yet')]);
         }
         var cnt = 2 + (tk3 ? 1 : 0) + (ny ? 1 : 0) + (tr3 ? 1 : 0);
-        face = h('div', { class: 'qv icons up seenrow n3 c' + cnt + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [tk3,
+        face = h('div', { class: 'qv icons up seenrow n3 c' + cnt + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [tk3, tk3 ? tr3 : null,
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t3, on: { click: function () {
             markOn(); rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
           } } }, [icon('eye', 18), tip3('Seen')]),
-          tr3,
+          tk3 ? null : tr3,
           ny,
           h('button', { type: 'button', class: 'qb sk' + (nf3 ? ' on' : ''), 'aria-pressed': String(nf3), 'aria-label': nf3 ? t3 + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t3, on: { click: function () {
             notForMe(m); // the card stays, with the icon picked, in every row
