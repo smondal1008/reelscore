@@ -1120,7 +1120,7 @@
     // Home In theatres: Tickets is an icon in the row (as on Browse › In theatres) instead of a Book tickets button.
     if (cta && opts.seen3 && opts.book && released(m) && !isTv(m)) cta = null;
     // Streaming cards (one rule): the service's logo is the first icon in the row instead of a Watch on … button.
-    var ottIco = opts.seen3 && opts.stream && released(m) && cta && safeUrl(d.platformUrl);
+    var ottIco = (opts.seen3 || opts.wlVerdict) && opts.stream && released(m) && cta && safeUrl(d.platformUrl);
     if (ottIco) cta = null;
     // Films in theatres with a score: the Theatre-or-OTT suggestion above the buttons.
     var tcall = theatreCall(m); if (tcall) kids.push(h('div', { class: 'thcall sm ' + tcall.k }, [icon(tcall.icon, 12), tcall.text]));
@@ -1133,7 +1133,7 @@
     if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n2t' : ottIco ? 'n2w' : 'n2'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.nopeOnly) kids.push(nopeRow(m));
-    if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
+    if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m, !!ottIco));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
       if (ml) kids.push(h('span', { class: 'vtag myv', style: 'background:' + VCOL[mv], text: 'Your verdict: ' + ml[1] }));
@@ -2333,7 +2333,9 @@
   // Seen / Not seen under the main button. Seen flips to the verdict icons plus Not seen; once rated, the icons stay with
   // your verdict lit up and the others dimmed (tap another to change it, the lit one to clear it). Not seen is recorded
   // (the home "Seen these?" row stops asking) and the two buttons stay, with Not seen shown as picked.
-  function wlVerdictBox(m) {
+  // ott: a streaming title with its link (My List › My Watchlist): the service's logo is the first icon, before
+  // Seen · Trailer · Not for me, and once rated before the three verdicts (as on every streaming card).
+  function wlVerdictBox(m, ott) {
     var box = h('div', { class: 'rbox wlv' }), t = m.data.title;
     var tip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
     function show(anim) {
@@ -2343,6 +2345,8 @@
         var q = qvButtons(m, function () { show(false); });
         q.classList.add('q4'); if (v) q.classList.add('rated');
         Array.prototype.forEach.call(q.querySelectorAll('.qb[data-v]'), function (b) { b.appendChild(qlab(VSHORT[bigScreen(m) ? 'theatre' : 'ott'][b.getAttribute('data-v')])); });
+        var ob = ott && v ? ottQb(m, tip) : null;
+        if (ob) { ob.appendChild(qlab('Watch')); q.insertBefore(ob, q.firstChild); box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q])); return; }
         q.appendChild(h('button', { type: 'button', class: 'qb nv', 'aria-label': v ? 'I haven’t seen ' + t + ' (clears your verdict)' : 'I haven’t seen ' + t,
           on: { click: function () {
             var had = myVerdict(m.id);
@@ -2354,8 +2358,10 @@
         box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q]));
       } else {
         // Seen · Trailer · Not for me, as in the home rows (Not seen is only a first choice in the "Seen these?" rows).
-        var nf = isNope(m.id);
-        box.appendChild(h('div', { class: 'qv icons up seenrow n3 c3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+        var nf = isNope(m.id), ob3 = ott ? ottQb(m, tip) : null;
+        if (ob3) ob3.appendChild(qlab('Watch'));
+        box.appendChild(h('div', { class: 'qv icons up seenrow n3 ' + (ob3 ? 'c4' : 'c3') + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+          ob3,
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t, on: { click: function () {
             S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); rateDelUnseen(m.id);
             show(true); var b = box.querySelector('.qb'); if (b) b.focus();

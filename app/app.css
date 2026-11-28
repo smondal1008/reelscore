@@ -1847,3 +1847,7 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .mljump .chip[aria-current="true"] { background: var(--accent); border-color: var(--accent); color: #0B0A0F; }
 .mlcnt { font-size: 12px; font-weight: 800; opacity: .7; }
 .mlsec { scroll-margin-top: 76px; }
+/* My List › My Watchlist: the service's logo first; it stays bright once a verdict is given */
+.wlv .qv.rated .qb.ot { opacity: 1; }
+.wlv .qv .qb.ot .qtip { --tx: 0; left: 0; right: auto; }
+.wlv .qv.q4 .qb.ot + .qb.a .qtip { --tx: -50%; left: 50%; }
