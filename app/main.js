@@ -1004,14 +1004,10 @@
         'aria-label': rem ? 'Reminder set for ' + t + '. Tap to turn it off' : 'Remind me when ' + t + ' releases',
         on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 18), tip(rem ? 'Reminder set' : 'Remind me')]);
     }
-    var no = myPlan(m.id) === 'c';
+    var no = isNope(m.id);
     var skB = h('button', { type: 'button', class: 'qb sk' + (no ? ' on' : ''), 'aria-pressed': String(no),
       'aria-label': no ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
-      on: { click: function () {
-        var had = hasReminder(m.id); setPlan(m.id, 'c');
-        var now = myPlan(m.id) === 'c'; if (now === no) return;
-        if (!now) toast('Cleared Not for me for ' + t); else if (!had) toast(t + ' marked Not for me');
-      } } }, [icon('skip', 18), tip('Not for me')]);
+      on: { click: function () { notForMe(m); } } }, [icon('skip', 18), tip('Not for me')]);
     return h('div', { class: 'qv icons up', role: 'group', 'aria-label': 'Your plan for ' + t }, [trB, mid, skB]);
   }
   function posterCard(m, opts) {
@@ -1072,6 +1068,7 @@
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
     if (opts.seen3 && released(m)) kids.push(rateBox(m, 'n3'));
     if (opts.seenRate) kids.push(seenRateBox(m));
+    if (opts.nopeOnly) kids.push(nopeRow(m));
     if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
     if (opts.myVerdict) {
       var mv = myVerdict(m.id), ml = mv && vset(m).filter(function (x) { return x[0] === mv; })[0];
@@ -1162,7 +1159,7 @@
     becauseListSection.ck = ck;
     becauseListSection.draw = function () {
       // Left out: "Not for me" (Tonight) and "Haven't seen" on this row's cards (we said we won't ask about them here again).
-      var nope = tnNope(), fits = function (m) { var un = rateUnseen(); return S.byId[m.id] && nope.indexOf(m.id) === -1 && un.indexOf(m.id) === -1 && (!inList(m.id) || mlShown[m.id]); };
+      var keep = S.nopeKeep || {}, nope = tnNope().filter(function (id) { return !keep[id]; }), fits = function (m) { var un = rateUnseen(); return S.byId[m.id] && nope.indexOf(m.id) === -1 && un.indexOf(m.id) === -1 && (!inList(m.id) || mlShown[m.id]); };
       var list = out.filter(fits).slice(0, 20);
       if (list.length < 6) return null;
       var opts = { noNew: true, rate: true, tagFor: function (m) { return why[m.id]; } };
@@ -1271,6 +1268,44 @@
   function tnDelNope(id) {
     if (S.uid && S.mineLoaded && (S.mine.nope || []).indexOf(id) !== -1) { S.mine.nope = S.mine.nope.filter(function (x) { return x !== id; }); saveMine(null); }
     try { var a = JSON.parse(localStorage.getItem('rs_nope') || '[]') || []; if (a.indexOf(id) !== -1) localStorage.setItem('rs_nope', JSON.stringify(a.filter(function (x) { return x !== id; }))); } catch (e) {}
+  }
+  // "Not for me", one meaning everywhere (design board: "Not for me · one meaning everywhere"): never suggest this title.
+  // It goes on the Not for me list (before and after release), its reminder goes off and it comes off My Watchlist; a title
+  // not out yet also keeps "Not for me" as its plan, so the title page count stays right. Tapping it again clears it.
+  // Cards marked this visit stay where they are (S.nopeKeep); from the next visit the suggestion rows leave them out.
+  function isNope(id) { return tnNope().indexOf(id) !== -1 || myPlan(id) === 'c'; }
+  function notForMe(m) {
+    var id = m.id, t = m.data.title;
+    var planOn = function () { if (!released(m) && S.uid && S.verdictsIn && !writing.v && myPlan(id) !== 'c') setPlan(id, 'c'); };
+    var planOff = function () { if (S.uid && S.verdictsIn && !writing.v && myPlan(id) === 'c') setPlan(id, 'c'); };
+    if (isNope(id)) {
+      tnDelNope(id); planOff(); nopeRedraw(m);
+      toast('Cleared Not for me for ' + t, function () { notForMe(m); });
+      return;
+    }
+    S.nopeKeep = S.nopeKeep || {}; S.nopeKeep[id] = 1;
+    var wasList = S.uid && S.mineLoaded && inList(id), wasRem = S.uid && S.mineLoaded && hasReminder(id);
+    if (wasList) S.mine.watchlist = S.mine.watchlist.filter(function (x) { return x !== id; });
+    if (wasRem) S.mine.reminders = S.mine.reminders.filter(function (x) { return x !== id; });
+    tnAddNope(id); // saves the list (and the watchlist / reminder changes with it)
+    planOn(); nopeRedraw(m, wasList);
+    var what = [wasRem ? 'reminder off' : '', wasList ? 'taken off your watchlist' : ''].filter(Boolean).join(', ');
+    toast(t + ': Not for me. ' + (what ? what.charAt(0).toUpperCase() + what.slice(1) : 'We won\u2019t suggest it again'), function () {
+      tnDelNope(id); planOff();
+      if (wasList && !inList(id)) S.mine.watchlist.push(id);
+      if (wasRem && !hasReminder(id)) S.mine.reminders.push(id);
+      if (wasList || wasRem) saveMine(null);
+      nopeRedraw(m, wasList);
+    });
+  }
+  // Home: a released title's icons are redrawn in place (rows keep their place on the page); elsewhere the page redraws.
+  // A change to the watchlist redraws the page anyway (the home My List row shows it).
+  function nopeRedraw(m, all) { if (S.route === 'home' && released(m) && !all) rateRefresh(m.id); else render(); }
+  // My List › Not for me: the titles you've hidden, one ⊘ each (lit); tap it to bring the title back.
+  function nopeRow(m) {
+    return h('div', { class: 'qv icons up nfm', role: 'group', 'aria-label': 'Not for me' }, [
+      h('button', { type: 'button', class: 'qb sk on', 'aria-pressed': 'true', 'aria-label': m.data.title + ' is marked Not for me. Tap to clear', on: { click: function () { notForMe(m); } } },
+        [icon('skip', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not for me · tap to clear' })])]);
   }
   // "Not tonight" in Your 3 for tonight: skipped for the rest of today only, on this device; tomorrow it can come back.
   function tnSkipped() {
@@ -2101,7 +2136,7 @@
   // Every title the row could show, in row order; titles marked "Not for me" (Tonight) or "Haven't seen" are left out.
   function rateList() {
     var today = new Date().toISOString().slice(0, 10), cut = new Date(Date.now() - 400 * 864e5).toISOString().slice(0, 10);
-    var done = S.justRated || {}, nope = tnNope().concat(rateUnseen());
+    var keep = S.nopeKeep || {}, done = S.justRated || {}, nope = tnNope().filter(function (id) { return !keep[id]; }).concat(rateUnseen());
     var list = S.movies.filter(function (m) {
       var d = m.data, r = d.releaseDate || '';
       if (!released(m) || d.section === 'Coming soon' || nope.indexOf(m.id) !== -1) return false;
@@ -2145,7 +2180,7 @@
         // the next title; elsewhere (In theatres) the card stays and the icon shows as picked (tap again to clear).
         var t3 = m.data.title, tip3 = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
         var inRow = function (b) { var sc = b.closest('section[aria-label]'); return !!(sc && S.rateRows && S.rateRows[sc.getAttribute('aria-label')]); };
-        var no3 = rateUnseen().indexOf(m.id) !== -1, nf3 = tnNope().indexOf(m.id) !== -1;
+        var no3 = rateUnseen().indexOf(m.id) !== -1, nf3 = isNope(m.id);
         face = h('div', { class: 'qv icons up seenrow n3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t3, on: { click: function () {
             markOn(); if (no3) rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
@@ -2156,11 +2191,8 @@
             rateAddUnseen(m.id); markSeen(m.id, false); show(true);
             toast(t3 + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
           } } }, [icon('eyeoff', 18), tip3('Not seen')]),
-          h('button', { type: 'button', class: 'qb sk' + (nf3 ? ' on' : ''), 'aria-pressed': String(nf3), 'aria-label': nf3 ? t3 + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t3, on: { click: function (e) {
-            if (nf3) { tnDelNope(m.id); show(true); toast('Cleared Not for me for ' + t3); return; }
-            if (inRow(e.currentTarget)) { rateNope(m, e.currentTarget, true); return; }
-            tnAddNope(m.id); show(true);
-            toast(t3 + ' marked Not for me', function () { tnDelNope(m.id); rateRefresh(m.id); });
+          h('button', { type: 'button', class: 'qb sk' + (nf3 ? ' on' : ''), 'aria-pressed': String(nf3), 'aria-label': nf3 ? t3 + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t3, on: { click: function () {
+            notForMe(m); // the card stays, with the icon picked, in every row
           } } }, [icon('skip', 18), tip3('Not for me')])
         ]);
       } else if (icons) {
@@ -3993,6 +4025,7 @@
     if (off) delete cur.bo[k]; else cur.bo[k] = val;
     cur.at = new Date().toISOString(); S.verdicts[S.uid] = cur;
     // First weekend / Day one sets the release-day reminder; either plan to watch saves it to the watchlist; Not for me turns the reminder off.
+    if (!off && val !== 'c') tnDelNope(mid); // planning to watch it takes it off the Not for me list
     if (!off) {
       S.mine.reminders = S.mine.reminders || [];
       var ri = S.mine.reminders.indexOf(mid), wi = S.mine.watchlist.indexOf(mid), msg = '';
@@ -4056,12 +4089,12 @@
     var fol = S.mine.following || [], fw = planCounts(m.id, fol).who.filter(function (x) { return x[1] !== 'c'; });
     var foot = fw.length ? h('div', { class: 'note pre-fr' }, [h('span', { class: 'faces' }, fw.slice(0, 3).map(function (x) { return avatarEl(x[0], 24); })),
       h('span', {}, [personEl(fw[0][0]), fw.length > 1 ? ' and ' + (fw.length - 1) + (fw.length > 2 ? ' others' : ' other') + ' you follow plan to watch it' : ', who you follow, plans to watch it'])])
-      : h('div', { class: 'note', text: my === 'a' ? 'Reminder set for release day · tap again to clear' : my === 'b' ? 'Saved to your watchlist · tap again to clear' : my === 'c' ? 'No reminders for this one · tap again to clear'
+      : h('div', { class: 'note', text: my === 'a' ? 'Reminder set for release day · tap again to clear' : my === 'b' ? 'Saved to your watchlist · tap again to clear' : my === 'c' ? 'Not for me: we won\u2019t suggest it, and it\u2019s off your watchlist · tap again to clear'
         : (o ? 'Day one' : 'First weekend') + ' sets a release-day reminder; ' + (o ? 'Later' : 'On OTT') + ' saves it to your watchlist.' });
     var mid = h('div', { class: 'vs-mine pre-plan', role: 'group', 'aria-label': 'Your plan' }, [
       h('div', { class: 'kicker', text: 'Your plan · how will you watch it?' }),
       h('div', { class: 'vbtns' }, ps.map(function (x) {
-        return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { setPlan(m.id, x[0]); } } },
+        return h('button', { type: 'button', class: 'vb2 ' + x[0], 'aria-pressed': String(my === x[0]), on: { click: function () { if (x[0] === 'c') notForMe(m); else setPlan(m.id, x[0]); } } },
           [h('span', { class: 'vi i-' + planIcon(m, x[0]) }, [icon(planIcon(m, x[0]), 20)]), h('span', { class: 'vt' }, [h('b', { text: x[1] }), h('small', { text: x[2] })])]);
       })),
       foot
@@ -5776,7 +5809,7 @@
   function followUpList() {
     if (!S.uid) return [];
     var jr = S.justRated || {};
-    var un = rateUnseen(), nope = tnNope();
+    var keep = S.nopeKeep || {}, un = rateUnseen(), nope = tnNope().filter(function (id) { return !keep[id]; });
     return (S.mine.wtw || []).map(function (id) { return S.byId[id]; }).filter(function (m) {
       return m && un.indexOf(m.id) === -1 && nope.indexOf(m.id) === -1 && m.data.section !== 'In theatres' && m.data.section !== 'Coming soon' && (!myVerdict(m.id) || jr[m.id]);
     });
@@ -5882,6 +5915,14 @@
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }), vChips,
       myV.length ? h('div', { class: 'grid-posters' }, shownV.map(function (id) { return posterCard(S.byId[id], { wlVerdict: true }); }))
         : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
+    // Not for me: the titles you asked us not to suggest, folded by default. Tap ⊘ on one to bring it back.
+    var nopeIds = tnNope().filter(function (id, i, a) { return S.byId[id] && a.indexOf(id) === i; }).reverse();
+    if (nopeIds.length) w.appendChild(h('section', { class: 'card nfmsec' }, [
+      h('div', { class: 'nfmh' }, [
+        h('div', {}, [h('h2', { text: 'Not for me (' + nopeIds.length + ')', style: 'margin:0' }),
+          h('div', { class: 'note', style: 'margin-top:4px', text: 'Titles you asked us not to suggest. Tap \u2298 on one to bring it back.' })]),
+        h('button', { type: 'button', class: 'chip', 'aria-expanded': String(!!S.nopeOpen), text: S.nopeOpen ? 'Hide' : 'Show', on: { click: function () { var y = window.scrollY; S.nopeOpen = !S.nopeOpen; drawList(); window.scrollTo(0, y); } } })]),
+      S.nopeOpen ? h('div', { class: 'grid-posters', style: 'margin-top:16px' }, nopeIds.map(function (id) { return posterCard(S.byId[id], { nopeOnly: true }); })) : null]));
 
     // People you follow and Find people are hidden until following is ready; set SHOW_PEOPLE to true to bring them back.
     var SHOW_PEOPLE = false;

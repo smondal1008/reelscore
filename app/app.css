@@ -1759,3 +1759,8 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .wlv .qv.rated .qb:not([aria-pressed="true"]):hover, .wlv .qv.rated .qb:not([aria-pressed="true"]):focus-visible { opacity: 1; }
 .wlv .qv .qb.nv .qtip { --tx: 0; left: auto; right: 0; }
 @media (hover: hover) { .wlv .qv .qb.nv:hover svg { animation: upshake .45s ease; } }
+
+/* My List › Not for me: one lit ⊘ per card; the heading row with Show / Hide */
+.qv.nfm { grid-template-columns: 1fr; }
+.qv.nfm .qb.sk .qtip { --tx: -50%; left: 50%; right: auto; }
+.nfmsec .nfmh { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
