@@ -2247,6 +2247,7 @@
       if (v || isSeen(m.id) || (S.rateSeen && S.rateSeen[m.id])) {
         var q = qvButtons(m, function () { show(false); });
         q.classList.add('q4'); if (v) q.classList.add('rated');
+        Array.prototype.forEach.call(q.querySelectorAll('.qb[data-v]'), function (b) { b.appendChild(qlab(VSHORT[bigScreen(m) ? 'theatre' : 'ott'][b.getAttribute('data-v')])); });
         q.appendChild(h('button', { type: 'button', class: 'qb nv', 'aria-label': v ? 'I haven’t seen ' + t + ' (clears your verdict)' : 'I haven’t seen ' + t,
           on: { click: function () {
             var had = myVerdict(m.id);
@@ -2254,21 +2255,24 @@
             if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true);
             var f = box.querySelector('.tnact'); if (f) f.focus();
             toast(t + ' marked as not seen', function () { markSeen(m.id, true); if (had && myVerdict(m.id) !== had) setVerdict(m.id, had); rateRefresh(m.id); });
-          } } }, [icon('eyeoff', 18), tip('Not seen')]));
+          } } }, [icon('eyeoff', 18), tip('Not seen'), qlab('Not seen')]));
         box.appendChild(h('div', { class: anim ? 'rflip' : '' }, [q]));
       } else {
-        var no = rateUnseen().indexOf(m.id) !== -1;
-        box.appendChild(h('div', { class: 'rch wlsn' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
-          h('button', { type: 'button', class: 'tnact', on: { click: function () {
+        // Design board "My List rows · the three icons": Seen, Not seen, Not for me, as in the home rows.
+        var no = rateUnseen().indexOf(m.id) !== -1, nf = isNope(m.id);
+        box.appendChild(h('div', { class: 'qv icons up seenrow n3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t + '?' }, [
+          h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t, on: { click: function () {
             S.rateSeen = S.rateSeen || {}; S.rateSeen[m.id] = 1; markSeen(m.id, true); if (no) rateDelUnseen(m.id);
             show(true); var b = box.querySelector('.qb'); if (b) b.focus();
-          } } }, [icon('eye', 15), h('span', { text: 'Seen' })]),
-          h('button', { type: 'button', class: 'tnact dim', 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t,
+          } } }, [icon('eye', 18), tip('Seen'), qlab('Seen')]),
+          h('button', { type: 'button', class: 'qb nv' + (no ? ' on' : ''), 'aria-pressed': String(no), 'aria-label': no ? 'Marked as not seen. Tap to clear' : 'I haven’t seen ' + t,
             on: { click: function () {
               if (no) { rateDelUnseen(m.id); show(false); toast('Cleared “not seen” for ' + t); return; }
               rateAddUnseen(m.id); markSeen(m.id, false); show(false);
               toast(t + ' marked as not seen', function () { rateDelUnseen(m.id); rateRefresh(m.id); });
-            } } }, [icon('eyeoff', 15), h('span', { text: 'Not seen' })])
+            } } }, [icon('eyeoff', 18), tip('Not seen'), qlab('Not seen')]),
+          h('button', { type: 'button', class: 'qb sk' + (nf ? ' on' : ''), 'aria-pressed': String(nf), 'aria-label': nf ? t + ' is marked Not for me. Tap to clear' : 'Not for me: ' + t,
+            on: { click: function () { notForMe(m); } } }, [icon('skip', 18), tip('Not for me'), qlab('Not for me')])
         ]));
       }
     }
@@ -5748,6 +5752,9 @@
   // Quick verdict buttons on poster cards (home "Seen these?" row, My List): icon only. The word shows on hover,
   // and for a moment after a tap (phones can't hover). Stored values stay a / b / c, so earlier verdicts are unchanged.
   var VTIP = { theatre: { a: 'Watch in theatres', b: 'Wait for OTT', c: 'Meh, not worth it' }, ott: { a: 'Must watch', b: 'Liked it', c: 'Meh, not worth it' } };
+  // Short words under the icons on phones (My List rows), where there's no hover.
+  var VSHORT = { theatre: { a: 'Theatre', b: 'OTT', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
+  function qlab(t) { return h('span', { class: 'qlab', 'aria-hidden': 'true', text: t }); }
   function qvTip(m, k) { return VTIP[bigScreen(m) ? 'theatre' : 'ott'][k]; }
   function qvButtons(m, after) {
     var my = myVerdict(m.id), big = bigScreen(m), fl = S.qvFlash;

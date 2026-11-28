@@ -1764,3 +1764,12 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .qv.nfm { grid-template-columns: 1fr; }
 .qv.nfm .qb.sk .qtip { --tx: -50%; left: 50%; right: auto; }
 .nfmsec .nfmh { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+
+/* My List rows (Seen / Not seen / Not for me, then the verdicts): a short word under each icon on phones */
+.qb .qlab { display: none; }
+@media (max-width: 640px) {
+  .wlv .qv.icons .qb { flex-direction: column; gap: 3px; padding: 6px 2px 5px; min-height: 48px; }
+  .wlv .qv.icons .qb .qlab { display: block; font-size: 10px; font-weight: 600; line-height: 1; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+  .wlv .qv.icons .qb[aria-pressed="true"] .qlab, .wlv .qv.icons .qb.on .qlab { color: inherit; }
+  .wlv .qv.icons .qb .qtip { display: none; }
+}
