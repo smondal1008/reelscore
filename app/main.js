@@ -2955,9 +2955,12 @@
       var tp = e.tba && String(d.ottPlatform || '').trim(), tpk = tp ? ottOf({ platform: tp }) : '';
       var plat = e.tba ? (tp ? h('span', { class: 'odplat', style: 'border-left-color:' + (OTT_COL[tpk] || '#8E8899') }, [platLogo(tp), ottName(tpk) || tp]) : h('span', { class: 'odplat none', text: 'Platform not announced' })) : h('span', { class: 'odplat', style: 'border-left-color:' + (OTT_COL[e.plat] || '#8E8899') }, [platLogo(e.platName), e.platName || 'OTT']);
       var tr = vidItems(m).filter(function (x) { return x.cat === 'trailers' && (x.yt || x.clip); })[0] || null;
-      var trB = h('button', { type: 'button', class: 'qb odtr' + (tr ? '' : ' off'), 'aria-label': tr ? 'Play the trailer of ' + t : 'No trailer for ' + t + ' yet', title: tr ? 'Trailer' : 'No trailer yet',
-        on: { click: function () { if (tr) openTrailerOverlay(m, tr, trB, titleQueue(m, tr)); else toast('No trailer for ' + t + ' yet'); } } }, [icon('play', 18)]);
+      var odTip = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
+      var trB = h('button', { type: 'button', class: 'qb odtr' + (tr ? '' : ' off'), 'aria-label': tr ? 'Play the trailer of ' + t : 'No trailer for ' + t + ' yet',
+        on: { click: function () { if (tr) openTrailerOverlay(m, tr, trB, titleQueue(m, tr)); else toast('No trailer for ' + t + ' yet'); } } }, [icon('play', 18), odTip(tr ? 'Trailer' : 'No trailer yet')]);
       var rem = hasReminder(m.id), future = e.tba || e.date > td;
+      // Streaming now and we have its link: the service's logo before the trailer, opening the title there (as on cards).
+      var otB = !future ? ottQb(m, odTip) : null; if (otB) otB.className += ' odot';
       var bell = future ? h('button', { type: 'button', class: 'qb odbell' + (rem ? ' on' : ''), 'aria-pressed': String(rem), title: rem ? 'Reminder set' : 'Remind me when it streams',
         'aria-label': rem ? 'Reminder set for ' + t + '. Tap to turn it off' : 'Remind me when ' + t + ' streams', on: { click: function () { toggleRemind(m.id); } } }, [icon('bell', 18)]) : null;
       var pa = artLazy(m, 'poster', 120);
@@ -2970,7 +2973,7 @@
           h('div', { class: 'odpm' }, [plat.cloneNode(true), h('span', { class: 'odst ' + status[0], text: status[1] })])
         ]),
         h('div', { class: 'odpc' }, [plat, h('span', { class: 'odst ' + status[0], text: status[1] })]),
-        h('div', { class: 'odact' }, [pct !== null ? h('span', { class: 'odsc', title: 'Reelscore', text: pct + '%' }) : null, trB, bell])
+        h('div', { class: 'odact' }, [pct !== null ? h('span', { class: 'odsc', title: 'Reelscore', text: pct + '%' }) : null, otB, trB, bell])
       ]);
     };
     var dayHead = function (iso) {

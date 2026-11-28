@@ -1658,6 +1658,19 @@ textarea.fbin { resize: vertical; min-height: 96px; }
   .odact { display: flex; gap: 6px; justify-content: flex-end; align-items: center; min-width: 92px; }
   .odact .qb { display: flex; align-items: center; justify-content: center; width: 40px; height: 38px; border-radius: 10px; border: 1px solid var(--line2); background: transparent; color: var(--text); cursor: pointer; }
   .odact .qb.off { opacity: .4; }
+  .odact .qb { position: relative; overflow: visible; }
+  .odact .qb.ot { text-decoration: none; }
+  .odact .qb.ot .otlogo { width: 22px; height: 22px; border-radius: 5px; object-fit: contain; display: block; }
+  .odact .qb .ic, .odact .qb .otlogo { display: block; }
+  .odact .qb:focus-visible .qtip { opacity: 1; transform: translate(var(--tx), 0); }
+  .odact .qb:last-child .qtip { --tx: 0; left: auto; right: 0; }
+  @media (hover: hover) {
+    .odact .qb:hover .qtip { opacity: 1; transform: translate(var(--tx), 0); }
+    .odact .qb.odtr:not(.off):hover svg { animation: upplay .5s ease; }
+    .odact .qb.ot:hover .otlogo, .odact .qb.ot:hover svg { animation: otpop .5s ease; }
+  }
+  @keyframes otpop { 0% { transform: none; } 35% { transform: translateY(-3px) scale(1.22); } 65% { transform: translateY(0) scale(.94); } 100% { transform: none; } }
+  @media (prefers-reduced-motion: reduce) { .odact .qb svg, .odact .qb .otlogo { animation: none !important; } }
   .odact .odbell { color: #7FB2FF; }
   .odact .odbell.on { background: #7FB2FF; border-color: #7FB2FF; color: #0B0A0F; }
   .odsc { height: 38px; padding: 0 10px; border-radius: 10px; background: rgba(245,165,36,.14); color: var(--accent); font-size: 14px; font-weight: 800; display: flex; align-items: center; }
@@ -1702,7 +1715,7 @@ textarea.fbin { resize: vertical; min-height: 96px; }
     .odrow { grid-template-columns: 52px minmax(0, 1fr) 44px; gap: 12px; }
     .odpost { width: 52px; height: 78px; }
     .odt { font-size: 16px; }
-    .odpc, .odact .odsc, .odact .odtr { display: none; }
+    .odpc, .odact .odsc, .odact .odtr, .odact .odot { display: none; }
     .odact { min-width: 0; }
     .odact .qb { width: 44px; height: 44px; }
     .odpm { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin-top: 6px; }
