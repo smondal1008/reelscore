@@ -1863,7 +1863,7 @@
       lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/movies-coming-soon')); }, 6),
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return genreSection(); }, 8),
-      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta, seen3: true }, allStreamingLink()); }, 9),
+      lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta, stream: true, seen3: true }, allStreamingLink()); }, 9),
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), maxOpts(HOME_MAX), seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
@@ -2852,7 +2852,7 @@
     if (list.length < 4) return null;
     list.sort(function (a, b) { return b.date.localeCompare(a.date) || (a.m.data.title || '').localeCompare(b.m.data.title || ''); });
     var when = {}; list.forEach(function (e) { when[e.m.id] = e; });
-    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return [e.platName || 'OTT', isTv(m) ? 'Series' : '', e.date === td ? 'Today' : fmtDate(e.date)].filter(Boolean).join(' · '); }, seen3: true }, seeAll('/ott-release-dates'));
+    return rowSection('Released recently on OTT', list.map(function (e) { return e.m; }), { max: HOME_MAX, ottNew: true, ottMeta: function (m) { var e = when[m.id]; return [e.platName || 'OTT', isTv(m) ? 'Series' : '', e.date === td ? 'Today' : fmtDate(e.date)].filter(Boolean).join(' · '); }, stream: true, seen3: true }, seeAll('/ott-release-dates'));
   }
   function drawOttDates() {
     var v = $('view-ottdates');
