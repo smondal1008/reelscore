@@ -5852,7 +5852,7 @@
       return h('button', { type: 'button', class: 'chip', 'aria-pressed': String(vf === x[0]), text: x[1] + ' (' + vCount[x[0]] + ')', on: { click: function () { var y = window.scrollY; S.vFilter = x[0]; drawList(); window.scrollTo(0, y); } } });
     })) : null;
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Your verdicts (' + myV.length + ')' }), vChips,
-      myV.length ? h('div', { class: 'grid-posters' }, shownV.map(function (id) { return posterCard(S.byId[id], { myVerdict: true }); }))
+      myV.length ? h('div', { class: 'grid-posters' }, shownV.map(function (id) { return posterCard(S.byId[id], { wlVerdict: true }); }))
         : h('div', { class: 'note', text: 'You haven’t rated anything yet.' })]));
 
     // People you follow and Find people are hidden until following is ready; set SHOW_PEOPLE to true to bring them back.
