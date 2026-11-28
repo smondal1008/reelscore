@@ -1821,9 +1821,4 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .qv.icons.up.seenrow.n3 > .qb.ot:first-child .qtip { --tx: 0; left: 0; right: auto; }
 
 /* Poster corner once rated: your verdict in its colour (opens the title page at Your verdict) */
-.addl.vbadge { display: flex; align-items: center; justify-content: center; text-decoration: none; border: 0; color: #0B0A0F; box-shadow: 0 0 0 2px rgba(11,10,15,.55); }
-.addl.vbadge .ic { display: flex; }
-.addl.vbadge.a { background: var(--accent); }
-.addl.vbadge.a svg path { fill: currentColor; }
-.addl.vbadge.b { background: #7FB2FF; }
-.addl.vbadge.c { background: #8E8899; }
+.addl[hidden] { display: none; }

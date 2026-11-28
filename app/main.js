@@ -306,7 +306,7 @@
     v.querySelectorAll('.pc[data-id]').forEach(function (pc) {
       var id = pc.getAttribute('data-id'), my = myVerdict(id), b = pc.querySelector('.badge');
       pc.querySelectorAll('.qb[data-v]').forEach(function (q) { q.setAttribute('aria-pressed', String(my === q.getAttribute('data-v'))); });
-      var cb = pc.querySelector('.pw > .addl'), m0 = S.byId[id]; if (cb && m0 && cb.classList.contains('vbadge') !== !!my) cb.parentNode.replaceChild(cornerBtn(m0), cb);
+      var cb = pc.querySelector('.pw > .addl'), m0 = S.byId[id]; if (cb && m0 && cb.hidden !== (!!my && !inList(id))) cb.parentNode.replaceChild(cornerBtn(m0), cb);
       if (b && b.lastChild && b.lastChild.nodeType === 3) {
         var m = S.byId[id], sc = score(id);
         var rs = pc.closest('section[aria-label]'), rl = rs ? rs.getAttribute('aria-label') : '';
@@ -516,16 +516,11 @@
     card.parentNode.replaceChild(nc, card);
     if (had) { var b = nc.querySelector('.addl'); if (b) b.focus({ preventScroll: true }); }
   }
-  // The poster corner: + / ✓ (watchlist) for titles you haven't rated; once rated, your verdict (★ / 👍 / 👎 in its
-  // colour), which opens the title page at "Your verdict" (design board "Rated titles · your verdict in the corner").
+  // The poster corner: + / ✓ (watchlist). A rated title that's off your watchlist gets no corner: the lit verdict in
+  // its icon row already says it's rated (design board "Rated titles"). A rated title still on the list keeps its ✓.
   function cornerBtn(m) {
-    var d = m.data, k = myVerdict(m.id);
-    if (k) {
-      var w = qvTip(m, k);
-      return h('a', { class: 'addl vbadge ' + k, href: movieUrl(m) + '#verdict', title: 'Your verdict: ' + w, 'aria-label': 'Your verdict on ' + d.title + ': ' + w + '. Open to change it' }, [icon(vIconName(m, k), 18)]);
-    }
-    var on = inList(m.id);
-    return h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on),
+    var d = m.data, on = inList(m.id), gone = !!myVerdict(m.id) && !on;
+    return h('button', { type: 'button', class: 'addl', 'aria-pressed': String(on), hidden: gone ? 'hidden' : null,
       'aria-label': on ? 'Remove ' + d.title + ' from my watchlist' : 'Add ' + d.title + ' to my watchlist',
       title: on ? 'In my watchlist' : 'Add to my watchlist', text: on ? '✓' : '+',
       on: { click: function (e) { e.preventDefault(); e.stopPropagation(); toggleList(m.id); } } });
@@ -540,7 +535,7 @@
   function patchListButtons() {
     var v = $('view-home'); if (!v) return;
     patchCorners();
-    v.querySelectorAll('.pc[data-id] .addl:not(.vbadge)').forEach(function (b) {
+    v.querySelectorAll('.pc[data-id] .addl:not([hidden])').forEach(function (b) {
       var id = b.closest('.pc').getAttribute('data-id'), m = S.byId[id]; if (!m) return;
       var on = inList(id), t = m.data.title;
       b.setAttribute('aria-pressed', String(on)); b.textContent = on ? '✓' : '+';
