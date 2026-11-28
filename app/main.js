@@ -5779,6 +5779,25 @@
       } } }, [icon('play', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: tr ? 'Trailer' : 'No trailer yet' }), lab ? qlab('Trailer') : null]);
     return b;
   }
+  // Every card icon row gets a short word under each icon, shown on phones only (CSS), where there's no hover: taken from
+  // the icon's hover word, shortened. Rows are drawn in many places, so new rows are labelled as they appear.
+  var QSHORT = { 'Must watch': 'Must', 'Liked it': 'Liked', 'Meh, not worth it': 'Meh', 'Watch in theatres': 'Theatre', 'Wait for OTT': 'OTT',
+    'No trailer yet': 'Trailer', 'Reminder set': 'Reminder', 'Remind me': 'Remind', 'Not for me · tap to clear': 'Not for me' };
+  function labelIcons(root) {
+    if (!root || !root.querySelectorAll) return;
+    Array.prototype.forEach.call(root.querySelectorAll('.qv.icons .qb'), function (b) {
+      if (b.querySelector('.qlab')) return;
+      var tp = b.querySelector('.qtip'); if (!tp) return;
+      var w = tp.textContent; b.appendChild(qlab(QSHORT[w] || w));
+    });
+  }
+  try {
+    var qlabQ = false;
+    new MutationObserver(function () {
+      if (qlabQ) return; qlabQ = true;
+      requestAnimationFrame(function () { qlabQ = false; labelIcons(document.body); });
+    }).observe(document.documentElement, { childList: true, subtree: true });
+  } catch (e) {}
   // Short words under the icons on phones (My List rows), where there's no hover.
   var VSHORT = { theatre: { a: 'Theatre', b: 'OTT', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
   function qlab(t) { return h('span', { class: 'qlab', 'aria-hidden': 'true', text: t }); }
