@@ -2240,9 +2240,18 @@
             if (S.rateSeen) delete S.rateSeen[m.id]; markSeen(m.id, false); show(true); var b = box.querySelector('.rch .tnact, .qb'); if (b) b.focus();
             toast(m.data.title + ' marked as not seen', function () { markOn(); rateRefresh(m.id); });
           } } }, [icon('eyeoff', 15), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not seen' })]);
-        face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
+        // Streaming cards (n2w) once rated: the service's logo stays first, then the verdict icons (4 in all).
+        var withOtt = function (q) {
+          if (icons !== 'n2w' || !myVerdict(m.id) || !q || q.querySelector('.qb.ot')) return;
+          var o = ottQb(m, function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); });
+          if (o) { q.insertBefore(o, q.firstChild); q.classList.add('w4'); }
+        };
+        var qv0 = qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
-        }), back]);
+          withOtt(box.querySelector('.rvq > .qv'));
+        });
+        withOtt(qv0);
+        face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qv0, back]);
       } else if (icons === 'ask' || icons === 'n2' || icons === 'n2t' || icons === 'n2w') {
         // Design board "Card buttons": Not seen is only a first choice where the row asks "have you seen this?".
         // ask (Seen these?, More like what you love): Seen · Not yet · Not for me. Not yet moves on to the next title.
