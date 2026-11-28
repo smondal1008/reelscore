@@ -1746,7 +1746,7 @@
     // elements, and building them all at once kept phones busy just after the hero appeared.
     [
       tonightSection(),
-      lazySection(function () { return mine.length ? rowSection('My List', mine, { max: HOME_MAX }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
+      lazySection(function () { return mine.length ? rowSection('My List', mine, { max: HOME_MAX, wlVerdict: true }, h('span', { class: 'sub' }, [h('a', { href: '/my-list', text: 'See all' })])) : null; }, 0),
       lazySection(function () { return trailerSection(); }, 2),
       lazySection(function () { return rowSection('In theatres', pinFirst(homeSection('In theatres').slice().sort(function (a, b) {
         var ra = released(a), rb = released(b);
