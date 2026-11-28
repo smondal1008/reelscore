@@ -1061,12 +1061,14 @@
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
+    // Home In theatres: Tickets is an icon in the row (as on Browse › In theatres) instead of a Book tickets button.
+    if (cta && opts.seen3 && opts.book && released(m) && !isTv(m)) cta = null;
     if (cta) kids.push(cta);
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m, 'n3'));
     }
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
-    if (opts.seen3 && released(m)) kids.push(rateBox(m, 'n3'));
+    if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n3t' : 'n3'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.nopeOnly) kids.push(nopeRow(m));
     if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
@@ -2179,14 +2181,17 @@
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
-      } else if (icons === 'n3') {
+      } else if (icons === 'n3' || icons === 'n3t') {
         // Seen these?, More like what you love and the home In theatres row: Seen, Not seen, Not for me (icons, the word
         // on hover). Seen flips to the verdict icons. In a "Seen these?"-type row, Not seen and Not for me swap the card for
         // the next title; elsewhere (In theatres) the card stays and the icon shows as picked (tap again to clear).
         var t3 = m.data.title, tip3 = function (x) { return h('span', { class: 'qtip', 'aria-hidden': 'true', text: x }); };
         var inRow = function (b) { var sc = b.closest('section[aria-label]'); return !!(sc && S.rateRows && S.rateRows[sc.getAttribute('aria-label')]); };
         var no3 = rateUnseen().indexOf(m.id) !== -1, nf3 = isNope(m.id);
-        face = h('div', { class: 'qv icons up seenrow n3' + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [
+        // n3t (home In theatres): Tickets first, as an icon, while bookings are open.
+        var tk3 = icons === 'n3t' && btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
+        if (tk3) { tk3.textContent = ''; tk3.appendChild(icon('ticket', 18)); tk3.appendChild(tip3('Tickets')); }
+        face = h('div', { class: 'qv icons up seenrow n3' + (tk3 ? ' n4' : '') + (anim ? ' rflip' : ''), role: 'group', 'aria-label': 'Have you seen ' + t3 + '?' }, [tk3,
           h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + t3, on: { click: function () {
             markOn(); if (no3) rateDelUnseen(m.id); show(true); var q = box.querySelector('.qv:not(.up) .qb'); if (q) q.focus();
           } } }, [icon('eye', 18), tip3('Seen')]),

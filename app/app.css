@@ -1774,3 +1774,8 @@ textarea.fbin { resize: vertical; min-height: 96px; }
   .wlv .qv.icons .qb[aria-pressed="true"] .qlab, .wlv .qv.icons .qb.on .qlab { color: inherit; }
   .wlv .qv.icons .qb .qtip { display: none; }
 }
+
+/* Home In theatres: Tickets · Seen · Not seen · Not for me */
+.qv.icons.up.seenrow.n4 { grid-template-columns: repeat(4, 1fr); }
+.qv.icons.up.seenrow.n4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
+.qv.icons.up.seenrow.n4 .qb.se .qtip { --tx: -50%; left: 50%; right: auto; }
