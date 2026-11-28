@@ -1715,14 +1715,17 @@
     w.appendChild(p.empty || p.list);
     w.appendChild(h('div', { class: 'tnfoot' }, [p.again, h('button', { type: 'button', class: 'btn ghost', text: 'Change answers', on: { click: function () { t.step = 'ask'; drawTonight(); } } })]));
   }
+  // opts: the same options for every card, or a function giving each title its own (actOpts); a function's .max caps the row.
   function rowSection(title, items, opts, link) {
     if (!items.length) return null;
     if (opts && opts.max && items.length > opts.max) items = items.slice(0, opts.max);
     return h('section', { class: 'sect', 'aria-label': title }, [
       h('div', { class: 'sect-h' }, [h('h2', { text: title }), link || null]),
-      h('div', { class: 'rowx' }, items.map(function (m) { return posterCard(m, opts); }))
+      h('div', { class: 'rowx' }, items.map(function (m) { return posterCard(m, typeof opts === 'function' ? opts(m) : opts); }))
     ]);
   }
+  // actOpts with a cap on the number of cards (for rowSection).
+  function maxOpts(n) { var f = function (m) { return actOpts(m); }; f.max = n; return f; }
   function sectionOf(name) { return S.movies.filter(function (m) { return m.data.section === name; }); }
   function homeSection(name) { return sectionOf(name); }
   // Titles the admin pins to the front of a homescreen row (Admin > Home rows); the rest keep their usual order after them.
@@ -1810,12 +1813,12 @@
       lazySection(function () { return becauseListSection(); }, 1),
       lazySection(function () { return songSection(); }, 7),
       lazySection(function () { return rateSection(); }, 4),
-      lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks) : null; }, 5),
+      lazySection(function () { return friendPicks.length ? rowSection('Rated by people you follow', friendPicks, actOpts) : null; }, 5),
       lazySection(function () { return rowSection('Coming soon', pinFirst(withDate(homeSection('Coming soon'), 'Coming soon').sort(function (a, b) { return (a.data.releaseDate || '9999').localeCompare(b.data.releaseDate || '9999'); }), rowPins('Coming soon')), { dateBadge: true, upIcons: true, max: 24 }, seeAll('/browse/movies-coming-soon')); }, 6),
       lazySection(function () { return recentOttSection(); }, 15),
       lazySection(function () { return genreSection(); }, 8),
       lazySection(function () { return rowSection('Streaming this year', streamingYearList(), { max: HOME_MAX, ottNew: true, ottMeta: streamingYearMeta, seen3: true }, allStreamingLink()); }, 9),
-      lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), { max: HOME_MAX }, seeAll('/browse/tv-shows')); }, 10),
+      lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), maxOpts(HOME_MAX), seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
       lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), { seen3: true }, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
@@ -1866,7 +1869,7 @@
     syncListUrl(genreHref(G, G.page));
     var from = (G.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' titles' : list.length + (list.length === 1 ? ' title' : ' titles') }));
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null); })));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
     if (pages > 1) w.appendChild(pagerNav(G.page, pages, function (n) { return genreHref(G, n); }));
     v.appendChild(footer());
   }
@@ -3120,7 +3123,7 @@
     syncListUrl(yearHref(Y, Y.page));
     var from = (Y.page - 1) * PER;
     w.appendChild(h('div', { class: 'sub', style: 'margin-bottom:14px', text: list.length > PER ? 'Showing ' + (from + 1) + '–' + Math.min(from + PER, list.length) + ' of ' + list.length.toLocaleString('en-IN') + ' movies' : list.length + (list.length === 1 ? ' movie' : ' movies') }));
-    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, m.data.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null); })));
+    w.appendChild(h('div', { class: 'grid-posters' }, list.slice(from, from + PER).map(function (m) { return posterCard(m, actOpts(m)); })));
     if (pages > 1) w.appendChild(pagerNav(Y.page, pages, function (n) { return yearHref(Y, n); }));
     v.appendChild(footer());
   }
@@ -3586,7 +3589,7 @@
     var posters = postersBlock(m);
     if (reviews) { reviews.classList.remove('card'); reviews.classList.add('tsec'); }
     var more = pinFirst(S.movies.filter(function (x) { return x.data.section === d.section && x.id !== m.id; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }), rowPins(d.section)).slice(0, 24);
-    var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, d.section === 'Coming soon' ? { dateBadge: true, upIcons: true } : null);
+    var r = rowSection('More ' + (isTv(m) ? 'TV shows' : d.section.toLowerCase().replace('on ott', 'on OTT')), more, actOpts);
     if (r) r.id = 'more';
     // Titles sharing cast or crew with this one: more shared people (top-billed weigh more) first, then newest.
     var ppl = {};
@@ -3596,7 +3599,7 @@
       (x.data.cast || []).forEach(function (c) { var k = personSlug(c.name); if (k && ppl[k] && !seen[k]) { seen[k] = 1; w += ppl[k]; } });
       return { m: x, w: w };
     }).filter(function (o) { return o.w > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 20).map(function (o) { return o.m; }) : [];
-    var rc = byCrew.length ? rowSection('More from Cast & Crew', byCrew, null) : null;
+    var rc = byCrew.length ? rowSection('More from Cast & Crew', byCrew, actOpts) : null;
     if (rc) rc.id = 'morecast';
     // 10 titles most like this one: shared genre words, same language, close release year. Skips titles already in the cast row.
     var gw = function (x) { return String(x.data.genre || '').toLowerCase().split(/[^a-z-]+/).filter(function (t) { return t.length > 2 && t !== 'and'; }); };
@@ -3608,7 +3611,7 @@
       var y = +(String(x.data.releaseDate || x.data.year || '').slice(0, 4)) || 0;
       return { m: x, shared: shared, w: shared * 3 + (lang(x) === myL ? 2 : 0) + (myY && y ? Math.max(0, 2 - Math.abs(myY - y) / 3) : 0) };
     }).filter(function (o) { return o.shared > 0; }).sort(function (a, b) { return b.w - a.w || (b.m.data.releaseDate || '').localeCompare(a.m.data.releaseDate || ''); }).slice(0, 10).map(function (o) { return o.m; }) : [];
-    var rs = similar.length ? rowSection(inList(m.id) ? 'Because it’s on your list' : 'More like ' + d.title, similar, null) : null;
+    var rs = similar.length ? rowSection(inList(m.id) ? 'Because it’s on your list' : 'More like ' + d.title, similar, actOpts) : null;
     if (rs) rs.id = 'similar';
     var nRev = 0;
     Object.keys(S.reviews).forEach(function (uid) { var it = (S.reviews[uid].items || {})[m.id]; if (it && it.text) nRev++; });
@@ -5330,9 +5333,12 @@
   // Card actions by status: Book tickets for theatre titles, Watch now for released titles with a streaming link, reminders for upcoming ones.
   function actOpts(m) {
     var sec = m.data.section, inTh = (S.route === 'browse' && S.browse && S.browse.status === 'In theatres') || (S.route === 'movies' && S.cat.movies.status === 'In theatres');
-    // Upcoming films: the Coming soon icon row (Trailer, Remind me, Not for me; Tickets first when bookings open), as on the home page.
-    if (!released(m)) return isTv(m) ? { dateBadge: true, remind: true } : { dateBadge: true, upIcons: true };
-    return sec === 'In theatres' ? { book: true, inTheatresList: inTh, seenIcons: S.route === 'browse' } : { stream: true };
+    // One rule for every card (design board "Card icons · home and other pages vs Browse"), from what the title is:
+    // not out yet (films and series): Trailer · Remind me · Not for me, Tickets first while bookings are open;
+    // in theatres: Seen · Trailer · Not for me, Tickets first while bookings are open;
+    // streaming, older films and series: Watch on … (when we have the link), then Seen · Trailer · Not for me.
+    if (!released(m)) return { dateBadge: true, upIcons: true, upRowOnly: true }; // upRowOnly: series get the same icons
+    return sec === 'In theatres' ? { book: true, inTheatresList: inTh, seenIcons: true } : { stream: true, seen3: true };
   }
   // ---------- Browse: status tabs with counts, a filter column (a sheet on phones), active filters as chips ----------
   // Language, Streaming on and Genre take several values (comma-separated in the URL; any of them matches); Released takes one.
