@@ -1872,7 +1872,7 @@
       lazySection(function () { return rowSection('TV shows', homeSection('TV shows'), maxOpts(HOME_MAX), seeAll('/browse/tv-shows')); }, 10),
       lazySection(function () { return tvPromoSection(); }, 11),
       lazySection(function () { return yearSection(); }, 12),
-      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), { seen3: true }, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
+      lazySection(function () { return rowSection('Catch up on 2025–26 releases', homeSection('Older releases').filter(function (m) { return (m.data.releaseDate || '') >= '2025' && nowPlayingOf(m.data) !== 'out'; }).sort(function (a, b) { return (b.data.releaseDate || '').localeCompare(a.data.releaseDate || ''); }).slice(0, 30), { stream: true, seen3: true }, h('span', { class: 'sub' }, [h('a', { href: '/browse/movies', text: 'Browse all' })])); }, 13),
       lazySection(function () { return langSection(); }, 14)
     ].forEach(function (s) { if (s) v.appendChild(s); });
     v.appendChild(footer());
