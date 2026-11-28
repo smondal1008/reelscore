@@ -1066,7 +1066,8 @@
     if (opts.rate && !cta && released(m)) {
       kids.push(rateBox(m, 'ask'));
     }
-    if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, true));
+    // Browse › In theatres: the same icons as the home In theatres row (Seen · Trailer · Not for me; Tickets first while bookings are open).
+    if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, 'n2t'));
     if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n2t' : 'n2'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.nopeOnly) kids.push(nopeRow(m));
