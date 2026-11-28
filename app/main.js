@@ -5754,7 +5754,7 @@
     rows.push(['Reality & game shows', by(function (m) { return /reality|talk|game|quiz|talent/i.test(m.data.genre || ''); }), null]);
     rows.forEach(function (r) {
       if (r[1].length < 4) return;
-      var sec = rowSection(r[0], r[1], { max: TV_ROW_MAX }, r[2] ? seeAll(r[2]) : null);
+      var sec = rowSection(r[0], r[1], maxOpts(TV_ROW_MAX), r[2] ? seeAll(r[2]) : null); // same icons as the home TV shows row
       if (sec) v.appendChild(sec);
     });
     v.appendChild(h('div', { class: 'wrapx', style: 'padding-top:8px' }, [h('a', { class: 'btn', href: tvHref(''), text: 'Browse all ' + all.length.toLocaleString('en-IN') + ' TV shows →' })]));
@@ -5798,7 +5798,8 @@
     add('Popular from the 2010s', out.filter(yr('2010', '2019')).sort(byPop), null, null);
     add('’90s classics', out.filter(yr('1990', '1999')).sort(byPop), null, null);
     rows.forEach(function (r) {
-      var o = Object.assign({ max: TV_ROW_MAX }, r[2] || {});
+      // Every card picks its icons from what the title is (actOpts), like the home rows; a row's own options add to that.
+      var o = function (m) { return Object.assign(actOpts(m), r[2] || {}); }; o.max = TV_ROW_MAX;
       var sec = rowSection(r[0], r[1], o, r[3] ? seeAll(r[3]) : null);
       if (sec) v.appendChild(sec);
     });
