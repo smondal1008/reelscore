@@ -1071,6 +1071,9 @@
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
     // Home In theatres: Tickets is an icon in the row (as on Browse › In theatres) instead of a Book tickets button.
     if (cta && opts.seen3 && opts.book && released(m) && !isTv(m)) cta = null;
+    // Streaming cards (one rule): the service's logo is the first icon in the row instead of a Watch on … button.
+    var ottIco = opts.seen3 && opts.stream && released(m) && cta && safeUrl(d.platformUrl);
+    if (ottIco) cta = null;
     // Films in theatres with a score: the Theatre-or-OTT suggestion above the buttons.
     var tcall = theatreCall(m); if (tcall) kids.push(h('div', { class: 'thcall sm ' + tcall.k }, [icon(tcall.icon, 12), tcall.text]));
     if (cta) kids.push(cta);
@@ -1079,7 +1082,7 @@
     }
     // Browse › In theatres: the same icons as the home In theatres row (Seen · Trailer · Not for me; Tickets first while bookings are open).
     if (opts.seenIcons && released(m) && !isTv(m)) kids.push(rateBox(m, 'n2t'));
-    if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n2t' : 'n2'));
+    if (opts.seen3 && released(m)) kids.push(rateBox(m, opts.book ? 'n2t' : ottIco ? 'n2w' : 'n2'));
     if (opts.seenRate) kids.push(seenRateBox(m));
     if (opts.nopeOnly) kids.push(nopeRow(m));
     if (opts.wlVerdict && released(m)) kids.push(wlVerdictBox(m));
@@ -2197,7 +2200,7 @@
         face = h('div', { class: 'rvq' + (back ? ' wb' : '') + (anim ? ' rflip' : '') }, [qvButtons(m, function () {
           var r = box.querySelector('.rvq'); if (myVerdict(m.id) && r && r.querySelector('.rback')) { r.removeChild(r.querySelector('.rback')); r.classList.remove('wb'); }
         }), back]);
-      } else if (icons === 'ask' || icons === 'n2' || icons === 'n2t') {
+      } else if (icons === 'ask' || icons === 'n2' || icons === 'n2t' || icons === 'n2w') {
         // Design board "Card buttons": Not seen is only a first choice where the row asks "have you seen this?".
         // ask (Seen these?, More like what you love): Seen · Not yet · Not for me. Not yet moves on to the next title.
         // n2 (In theatres, the OTT rows, Catch up): Seen · Not for me; n2t adds Tickets first while bookings are open.
@@ -2206,6 +2209,8 @@
         var nf3 = isNope(m.id);
         var tk3 = icons === 'n2t' && btnOn(btnPlace(), 'book') ? bookBtn(m, 'qb tk') : null;
         if (tk3) { tk3.textContent = ''; tk3.appendChild(icon('ticket', 18)); tk3.appendChild(tip3('Tickets')); }
+        // n2w (streaming): the service's logo first, linking to the title there, like Tickets for films in theatres.
+        if (icons === 'n2w' && !tk3) tk3 = ottQb(m, tip3);
         var ny = icons === 'ask' ? h('button', { type: 'button', class: 'qb nv', 'aria-label': 'Not yet: I haven’t seen ' + t3, on: { click: function (e) { rateNope(m, e.currentTarget); } } },
           [icon('eyeoff', 18), tip3('Not yet')]) : null;
         // n2 / n2t: Seen · Trailer · Not for me (Trailer greyed when there's none yet); while bookings are open,
@@ -5808,7 +5813,7 @@
     Array.prototype.forEach.call(root.querySelectorAll('.qv.icons .qb'), function (b) {
       if (b.querySelector('.qlab')) return;
       var tp = b.querySelector('.qtip'); if (!tp) return;
-      var w = tp.textContent; b.appendChild(qlab(QSHORT[w] || w));
+      var w = tp.textContent; b.appendChild(qlab(QSHORT[w] || (/^Watch on /.test(w) ? 'Watch' : w)));
     });
   }
   try {
@@ -5818,6 +5823,14 @@
       requestAnimationFrame(function () { qlabQ = false; labelIcons(document.body); });
     }).observe(document.documentElement, { childList: true, subtree: true });
   } catch (e) {}
+  // The streaming service as an icon: its logo (or short name), opening the title on the service in a new tab.
+  function ottQb(m, tipFn) {
+    var d = m.data, url = safeUrl(d.platformUrl); if (!url) return null;
+    var p = String(d.platform || 'OTT'), first = p.split('/')[0].trim(), hit = PLAT.filter(function (x) { return x[0].test(first); })[0];
+    var name = hit ? hit[1] : first;
+    return h('a', { class: 'qb ot', href: url, target: '_blank', rel: 'noopener', 'aria-label': 'Watch ' + d.title + ' on ' + first },
+      [hit && hit[3] ? h('img', { class: 'otlogo', src: hit[3], alt: '', width: 20, height: 20, loading: 'lazy' }) : h('span', { class: 'otname', text: name }), tipFn('Watch on ' + name)]);
+  }
   // Short words under the icons on phones (My List rows), where there's no hover.
   var VSHORT = { theatre: { a: 'Must', b: 'Liked', c: 'Meh' }, ott: { a: 'Must', b: 'Liked', c: 'Meh' } };
   function qlab(t) { return h('span', { class: 'qlab', 'aria-hidden': 'true', text: t }); }

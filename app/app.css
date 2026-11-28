@@ -1813,3 +1813,9 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .vs-big .brk { flex-basis: 100%; height: 0; }
 .thcall.tp { margin: 0; }
 .thcall.sm { font-size: 10.5px; gap: 5px; padding: 3px 8px; border-radius: 10px; margin: 0 0 7px; }
+
+/* Streaming cards: the service's logo as the first icon (like Tickets) */
+.qv.icons .qb.ot { text-decoration: none; }
+.qv.icons .qb.ot .otlogo { width: 20px; height: 20px; border-radius: 5px; object-fit: contain; display: block; }
+.qv.icons .qb.ot .otname { font-size: 10.5px; font-weight: 800; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.qv.icons.up.seenrow.n3 > .qb.ot:first-child .qtip { --tx: 0; left: 0; right: auto; }
