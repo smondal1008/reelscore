@@ -1795,3 +1795,10 @@ textarea.fbin { resize: vertical; min-height: 96px; }
 .qv.icons.up.c4 { grid-template-columns: repeat(4, 1fr); }
 .qv.icons.up.c4 .qb.tk .qtip { --tx: 0; left: 0; right: auto; }
 .qv.icons.up.c4 .qb.tr .qtip, .qv.icons.up.c4 .qb.rm .qtip { --tx: -50%; left: 50%; right: auto; }
+
+/* Tonight's picks: Seen · Not tonight · Not for me as icons */
+.qv.icons.up.seenrow.tnq { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.qv.icons.up.seenrow.tnq .qb { min-height: 40px; }
+.qv.icons.up.seenrow.tnq .qb.nt { color: #A39FB0; }
+.qv.icons.up.seenrow.tnq .qb.nt .qtip { --tx: -50%; left: 50%; right: auto; }
+@media (hover: hover) { .qv.icons.up.seenrow.tnq .qb.nt:hover svg { animation: tnmoon .5s ease; } }

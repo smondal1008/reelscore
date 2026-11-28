@@ -1611,17 +1611,19 @@
         body = h('div', { class: 'tnbody2' }, [
           h('div', { class: 'tnwhy', text: o.pinned ? 'From your shortlist' : tnReason(o, t) }),
           tnCta(m, t),
-          h('div', { class: 'tnacts' }, [
-            h('button', { type: 'button', class: 'tnact', on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } }, [icon('eye', 17), h('span', { text: 'Seen' })]),
-            h('button', { type: 'button', class: 'tnact dim tnmoon', on: { click: function () {
+          // Icons only, the word on hover (design board "Card buttons", set F): Seen · Not tonight · Not for me.
+          h('div', { class: 'qv icons up seenrow tnq', role: 'group', 'aria-label': 'Your answer for ' + title }, [
+            h('button', { type: 'button', class: 'qb se', 'aria-label': 'I’ve seen ' + title, on: { click: function () { t.rating = i; t.anim.rate = id; onChange(); } } },
+              [icon('eye', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Seen' })]),
+            h('button', { type: 'button', class: 'qb nt tnmoon', 'aria-label': 'Not tonight: ' + title, on: { click: function () {
               tnSkipToday(id); t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
               var next = tnSwap(t, i); toast('Okay, not tonight.' + (next ? ' Here’s a new pick.' : '')); onChange();
-            } } }, [icon('moon', 17), h('span', { text: 'Not tonight' })]),
+            } } }, [icon('moon', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not tonight' })]),
             // Not for me: never suggested again (the one Not for me, see notForMe); a new pick takes its place.
-            h('button', { type: 'button', class: 'tnact dim tnnope', on: { click: function () {
+            h('button', { type: 'button', class: 'qb sk tnnope', 'aria-label': 'Not for me: ' + title, on: { click: function () {
               t.gone.push(id); t.pins = t.pins.filter(function (x) { return x !== id; });
               tnSwap(t, i); notForMe(m); onChange();
-            } } }, [icon('skip', 17), h('span', { text: 'Not for me' })])])
+            } } }, [icon('skip', 18), h('span', { class: 'qtip', 'aria-hidden': 'true', text: 'Not for me' })])])
         ]);
       }
       return h('article', { class: 'tnpick' + (pinned ? ' on' : '') + flip + (t.anim.flash === id ? ' glow' : ''), 'data-id': id }, [
