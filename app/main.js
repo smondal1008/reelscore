@@ -1060,8 +1060,8 @@
     var tagTxt = opts.tagFor ? opts.tagFor(m) : opts.tag;
     if (tagTxt) kids.push(h('span', { class: 'pctag' + (opts.tagClass ? ' ' + opts.tagClass : ''), text: tagTxt, title: tagTxt }));
     if (up) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
-    // My Watchlist, not out yet: the Coming soon icons (Trailer, Remind me or Tickets, Not for me), films and series.
-    if (opts.upRowOnly && !released(m)) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
+    // My Watchlist (not out yet) and Release reminders: the Coming soon icons (Trailer, Remind me or Tickets, Not for me), films and series.
+    if (opts.upRowOnly && (!released(m) || opts.upRowAll)) { kids.push(upRow(m)); return h('div', { class: 'pc' + (img ? ' img' : ''), 'data-id': m.id }, kids); }
     var cta = opts.stream && safeUrl(d.platformUrl) ? h('a', { class: 'btn small cta watch', href: d.platformUrl, target: '_blank', rel: 'noopener', 'aria-label': 'Watch now' + (d.platform ? ' on ' + d.platform : '') }, [platLogo(d.platform), h('span', { text: 'Watch now' })]) : opts.book ? bookBtn(m, 'btn small cta book') : null;
     // Browse In theatres cards carry Tickets inside their icon row instead of a Book tickets button.
     if (cta && opts.seenIcons && released(m) && !isTv(m) && !(opts.stream && safeUrl(d.platformUrl))) cta = null;
@@ -5822,7 +5822,10 @@
       })) : h('div', { class: 'note', text: 'Nothing yet. Tap + on any poster to add it.' })]));
     var rem = (S.mine.reminders || []).map(function (id) { return S.byId[id]; }).filter(Boolean).sort(function (a, b) { return (a.data.releaseDate || '').localeCompare(b.data.releaseDate || ''); });
     w.appendChild(h('section', { class: 'card' }, [h('h2', { text: 'Release reminders (' + rem.length + ')' }),
-      rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) { return posterCard(m, { dateBadge: true, remind: true, book: m.data.section === 'In theatres' || m.data.section === 'Coming soon' }); })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
+      rem.length ? h('div', { class: 'grid-posters' }, rem.map(function (m) {
+        // The Coming soon icons (Trailer, Remind me or Tickets when booking is open, Not for me), as in My Watchlist.
+        return posterCard(m, { dateBadge: true, upRowOnly: true, upRowAll: true });
+      })) : h('div', { class: 'note', text: 'Tap Remind me on anything coming soon to get a nudge on release day.' })]));
     // Titles you said you've seen but haven't rated yet (newest first). One you rate shows its verdict for a moment, then
     // leaves the section (it is in Your verdicts below).
     var fl = S.qvFlash, justNow = function (id) { return fl && fl.id === id && Date.now() - fl.t < 1600; };
